@@ -1,0 +1,1026 @@
+"""
+apps/accounts/views.py
+All auth API views.
+
+Customer:  CustomerRegisterView, CustomerVerifyOTPView, CustomerResendOTPView
+Staff:     StaffLoginView, StaffVerifyEmailView, StaffForgotPasswordView, StaffResetPasswordView
+Admin:     AdminLoginView, CreateBranchAdminView, CreateStaffView
+Common:    MeView
+"""
+
+import logging
+from django.conf   import settings
+from django.utils  import timezone
+from django.core.mail import send_mail
+
+from rest_framework             import status
+from rest_framework.views       import APIView
+from rest_framework.response    import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.views import TokenRefreshView
+
+from apps.accounts.models import User, Role, OTPPurpose
+from apps.accounts.serializers import (
+    CustomerRegisterSerializer,
+    CustomerVerifyOTPSerializer,
+    CustomerResendOTPSerializer,
+    StaffLoginSerializer,
+    StaffVerifyEmailSerializer,
+    StaffForgotPasswordSerializer,
+    StaffResetPasswordSerializer,
+    AdminLoginSerializer,
+    CreateBranchAdminSerializer,
+    CreateStaffSerializer,
+    UserProfileSerializer,
+    get_tokens_for_user,
+)
+from apps.accounts.permissions import IsSuperAdminOnly, IsAdminOrAbove
+from apps.branches.models import Branch
+from utils.otp import (
+    create_otp_record,
+    validate_otp,
+    can_resend,
+    send_otp_whatsapp,
+    send_otp_email,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ── Response helpers ──────────────────────────────────────────────────────────
+
+def ok(data=None, message="", code=status.HTTP_200_OK):
+    body = {"success": True}
+    if message:
+        body["message"] = message
+    if data:
+        body.update(data)
+    return Response(body, status=code)
+
+
+def err(message, code=status.HTTP_400_BAD_REQUEST):
+    return Response({"success": False, "error": message}, status=code)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CUSTOMER
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CustomerRegisterView(APIView):
+    """
+    POST /api/v1/auth/customer/register/
+    { name, phone }
+
+    Creates account on first call. Sends OTP via WhatsApp → SMS fallback.
+    Returns: { success, message, is_new_user, [dev_otp in dev mode] }
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+    throttle_classes   = []  # Applied below via get_throttles
+
+    def get_throttles(self):
+        from apps.accounts.throttles import OTPSendThrottle
+        return [OTPSendThrottle()]
+
+    def post(self, request):
+        s = CustomerRegisterSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        name  = s.validated_data["name"]
+        phone = s.validated_data["phone"]
+
+        user, is_new = User.objects.get_or_create(
+            phone    = phone,
+            defaults = {"name": name, "role": Role.CUSTOMER, "is_verified": False},
+        )
+        if not is_new and user.name != name:
+            user.name = name
+            user.save(update_fields=["name"])
+
+        # Resend cooldown check
+        from apps.accounts.models import OTPRecord
+        existing = OTPRecord.objects.filter(
+            user=user, purpose=OTPPurpose.CUSTOMER_REGISTER, is_used=False
+        ).first()
+        if existing:
+            allowed, wait = can_resend(existing)
+            if not allowed:
+                return err(f"Please wait {wait} seconds before requesting a new OTP.")
+
+        otp  = create_otp_record(user, OTPPurpose.CUSTOMER_REGISTER)
+        sent = send_otp_whatsapp(phone, otp)
+
+        if not sent and not getattr(settings, "OTP_BYPASS", False):
+            logger.error(f"OTP delivery failed: {phone}")
+            return err("Failed to send OTP. Please try again.", 503)
+
+        data = {"is_new_user": is_new}
+        if getattr(settings, "OTP_BYPASS", False):
+            data["dev_otp"] = otp
+
+        return ok(data, "OTP sent to your phone.")
+
+
+class CustomerVerifyOTPView(APIView):
+    """
+    POST /api/v1/auth/customer/verify-otp/
+    { phone, otp }
+
+    Verifies OTP → marks user verified → returns JWT tokens + profile.
+    Response: { success, tokens: {access, refresh}, user: {...} }
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+
+    def get_throttles(self):
+        from apps.accounts.throttles import OTPVerifyThrottle
+        return [OTPVerifyThrottle()]
+
+    def post(self, request):
+        s = CustomerVerifyOTPSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        phone = s.validated_data["phone"]
+        otp   = s.validated_data["otp"]
+
+        try:
+            user = User.objects.get(phone=phone, role=Role.CUSTOMER)
+        except User.DoesNotExist:
+            return err("No account found. Please register first.")
+
+        if not user.is_active:
+            return err("This account has been suspended.")
+
+        ok_flag, message = validate_otp(user, OTPPurpose.CUSTOMER_REGISTER, otp)
+        if not ok_flag:
+            return err(message)
+
+        user.is_verified = True
+        user.last_login  = timezone.now()
+        user.save(update_fields=["is_verified", "last_login"])
+
+        return ok({
+            "tokens": get_tokens_for_user(user),
+            "user":   UserProfileSerializer(user).data,
+        }, "Login successful.")
+
+
+class CustomerResendOTPView(APIView):
+    """POST /api/v1/auth/customer/resend-otp/  { phone }"""
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+
+    def get_throttles(self):
+        from apps.accounts.throttles import OTPSendThrottle
+        return [OTPSendThrottle()]
+
+    def post(self, request):
+        s = CustomerResendOTPSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        phone = s.validated_data["phone"]
+
+        try:
+            user = User.objects.get(phone=phone, role=Role.CUSTOMER)
+        except User.DoesNotExist:
+            return err("No account found with this phone number.")
+
+        from apps.accounts.models import OTPRecord
+        existing = OTPRecord.objects.filter(
+            user=user, purpose=OTPPurpose.CUSTOMER_REGISTER, is_used=False
+        ).first()
+        if existing:
+            allowed, wait = can_resend(existing)
+            if not allowed:
+                return err(f"Please wait {wait} seconds before requesting a new OTP.")
+
+        otp  = create_otp_record(user, OTPPurpose.CUSTOMER_REGISTER)
+        send_otp_whatsapp(phone, otp)
+
+        data = {}
+        if getattr(settings, "OTP_BYPASS", False):
+            data["dev_otp"] = otp
+
+        return ok(data, "OTP resent to your phone.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STAFF
+# ══════════════════════════════════════════════════════════════════════════════
+
+class StaffLoginView(APIView):
+    """
+    POST /api/v1/auth/staff/login/
+    { user_id, password, lat?, lng?, addr? }
+    Response: { success, tokens, user }
+    Creates a StaffSession record for activity tracking.
+
+    throttle_classes=[] — exempted from global AnonRateThrottle so staff
+    can log in without hitting 429 errors during normal use.
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+    throttle_classes   = []   # no throttle — staff login is trusted
+
+    def post(self, request):
+        s = StaffLoginSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        user = s.validated_data["user"]
+
+        # Unverified staff: send OTP now (on first login attempt) and ask them to verify.
+        # OTP is never sent at account-creation time — only triggered here.
+        if not user.is_verified:
+            otp = create_otp_record(user, OTPPurpose.STAFF_EMAIL_VERIFY)
+            send_otp_email(user.email, otp, OTPPurpose.STAFF_EMAIL_VERIFY)
+            data = {
+                "requires_verification": True,
+                "email": user.email,
+            }
+            if getattr(settings, "OTP_BYPASS", False):
+                data["dev_otp"] = otp
+            return ok(data, "A verification OTP has been sent to your email. Please verify to continue.")
+
+        now  = timezone.now()
+        user.last_login = now
+
+        # Store login location if provided
+        lat  = request.data.get("lat")
+        lng  = request.data.get("lng")
+        addr = request.data.get("addr", "")
+        if lat and lng:
+            try:
+                user.last_login_lat  = float(lat)
+                user.last_login_lng  = float(lng)
+                user.last_login_addr = str(addr)[:255]
+            except (ValueError, TypeError):
+                pass
+
+        user.save(update_fields=["last_login", "last_login_lat", "last_login_lng", "last_login_addr"])
+
+        ip_address = (
+            request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+            or request.META.get("HTTP_X_REAL_IP", "")
+            or request.META.get("REMOTE_ADDR", "")
+        )
+
+        from apps.accounts.models import StaffSession
+        session = StaffSession.objects.create(
+            user=user,
+            login_at=now,
+            lat=user.last_login_lat,
+            lng=user.last_login_lng,
+            addr=user.last_login_addr or ip_address,
+        )
+
+        return ok({
+            "tokens":     get_tokens_for_user(user),
+            "user":       UserProfileSerializer(user).data,
+            "session_id": str(session.id),
+        }, "Login successful.")
+
+
+class StaffVerifyEmailView(APIView):
+    """
+    POST /api/v1/auth/staff/verify-email/
+    { email, otp, new_password }
+    Verifies email OTP and sets the staff member's own password in one step.
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        s = StaffVerifyEmailSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        email    = s.validated_data["email"]
+        otp      = s.validated_data["otp"]
+        new_pass = s.validated_data.get("new_password", "").strip()
+
+        try:
+            user = User.objects.get(email__iexact=email, role=Role.STAFF)
+        except User.DoesNotExist:
+            return err("No staff account found with this email.")
+
+        if user.is_verified:
+            return ok(message="Account already verified. Please login.")
+
+        ok_flag, message = validate_otp(user, OTPPurpose.STAFF_EMAIL_VERIFY, otp)
+        if not ok_flag:
+            logger.warning(f"verify-email failed: user={user.id} email={email} reason={message!r}")
+            return err(message)
+
+        if not new_pass:
+            return err("Please set a password to complete your account setup.")
+
+        user.is_verified = True
+        user.set_password(new_pass)
+        user.save(update_fields=["is_verified", "password"])
+        logger.info(f"Staff account activated: user={user.id} email={email}")
+        return ok(message="Account verified and password set. You can now login.")
+
+
+class StaffResendOTPView(APIView):
+    """
+    POST /api/v1/auth/staff/resend-otp/
+    { email }
+    Sends (or resends) the verification OTP for an unverified staff account.
+    Called from the verify-email page when staff hasn't received their OTP.
+    Always returns 200 to prevent email enumeration.
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        if not email:
+            return err("Email address is required.")
+
+        try:
+            user = User.objects.get(email=email, role=Role.STAFF, is_active=True)
+            if user.is_verified:
+                return ok(message="Account is already verified. Please login.")
+
+            from apps.accounts.models import OTPRecord
+            existing = OTPRecord.objects.filter(
+                user=user, purpose=OTPPurpose.STAFF_EMAIL_VERIFY, is_used=False
+            ).first()
+            if existing:
+                allowed, wait = can_resend(existing)
+                if not allowed:
+                    return err(f"Please wait {wait} seconds before requesting a new OTP.")
+
+            otp = create_otp_record(user, OTPPurpose.STAFF_EMAIL_VERIFY)
+            send_otp_email(user.email, otp, OTPPurpose.STAFF_EMAIL_VERIFY)
+
+            data = {}
+            if getattr(settings, "OTP_BYPASS", False):
+                data["dev_otp"] = otp
+            return ok(data, "Verification OTP sent to your email.")
+        except User.DoesNotExist:
+            pass  # Silent — prevent enumeration
+
+        return ok(message="If a staff account exists for this email, an OTP has been sent.")
+
+
+class StaffForgotPasswordView(APIView):
+    """
+    POST /api/v1/auth/staff/forgot-password/
+    { email }
+    Always returns 200 (prevents email enumeration).
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        s = StaffForgotPasswordSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        email = s.validated_data["email"]
+        try:
+            user = User.objects.get(email=email, role=Role.STAFF, is_active=True)
+            otp  = create_otp_record(user, OTPPurpose.PASSWORD_RESET)
+            send_otp_email(email, otp, OTPPurpose.PASSWORD_RESET)
+        except User.DoesNotExist:
+            pass  # Silent — prevents enumeration
+
+        return ok(message="If an account exists for this email, a reset OTP has been sent.")
+
+
+class StaffResetPasswordView(APIView):
+    """
+    POST /api/v1/auth/staff/reset-password/
+    { email, otp, new_password }
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        s = StaffResetPasswordSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        email    = s.validated_data["email"]
+        otp      = s.validated_data["otp"]
+        new_pass = s.validated_data["new_password"]
+
+        try:
+            user = User.objects.get(email=email, role=Role.STAFF, is_active=True)
+        except User.DoesNotExist:
+            return err("No active staff account found with this email.")
+
+        ok_flag, message = validate_otp(user, OTPPurpose.PASSWORD_RESET, otp)
+        if not ok_flag:
+            return err(message)
+
+        user.set_password(new_pass)
+        user.save(update_fields=["password"])
+        return ok(message="Password reset successful. Please login with your new password.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADMIN
+# ══════════════════════════════════════════════════════════════════════════════
+
+class AdminLoginView(APIView):
+    """
+    POST /api/v1/auth/admin/login/
+    { email, password }
+    Works for both branch_admin and super_admin.
+
+    throttle_classes=[] — explicitly exempted from the global AnonRateThrottle
+    (100/day) so branch admins and super admins can log in freely.
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+    throttle_classes   = []   # no throttle — admin logins are trusted
+
+    def post(self, request):
+        s = AdminLoginSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        user = s.validated_data["user"]
+        user.last_login = timezone.now()
+        user.save(update_fields=["last_login"])
+
+        return ok({
+            "tokens": get_tokens_for_user(user),
+            "user":   UserProfileSerializer(user).data,
+        }, "Login successful.")
+
+
+class CreateBranchAdminView(APIView):
+    """
+    POST /api/v1/auth/admin/branch-admins/
+    { name, email, password, branch_id }
+    SuperAdmin only.
+    Creates a Branch Admin, sends welcome email.
+    Response: { success, user, message }
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdminOnly]
+
+    def post(self, request):
+        s = CreateBranchAdminSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        data   = s.validated_data
+        branch = Branch.objects.get(id=data["branch_id"])
+
+        # Auto-generate a secure temporary password
+        import secrets, string
+        alphabet = string.ascii_letters + string.digits + "!@#$"
+        temp_password = (
+            secrets.choice(string.ascii_uppercase) +
+            secrets.choice(string.ascii_lowercase) +
+            secrets.choice(string.digits) +
+            secrets.choice("!@#$") +
+            "".join(secrets.choice(alphabet) for _ in range(6))
+        )
+
+        user = User.objects.create_branch_admin(
+            email    = data["email"],
+            name     = data["name"],
+            branch   = branch,
+            password = temp_password,
+        )
+
+        # Force password change on first login
+        user.must_change_password = True
+        user.save(update_fields=["must_change_password"])
+
+        # Welcome email with temporary credentials
+        try:
+            send_mail(
+                subject    = f"Your KNFC Branch Admin account — {branch.name}",
+                message    = (
+                    f"Hi {user.name},\n\n"
+                    f"Your KNFC Branch Admin account has been created.\n\n"
+                    f"Branch:   {branch.name}\n"
+                    f"Email:    {user.email}\n"
+                    f"Password: {temp_password}\n\n"
+                    f"IMPORTANT: You will be required to change your password\n"
+                    f"on your first login for security.\n\n"
+                    f"Login at: http://localhost:3000/login/admin\n\n"
+                    f"— KNFC Team"
+                ),
+                from_email     = settings.DEFAULT_FROM_EMAIL,
+                recipient_list = [user.email],
+                fail_silently  = True,
+            )
+        except Exception as e:
+            logger.warning(f"Welcome email failed for {user.email}: {e}")
+
+        return ok(
+            {"user": UserProfileSerializer(user).data},
+            "Branch Admin account created successfully.",
+            code=status.HTTP_201_CREATED,
+        )
+
+
+class CreateStaffView(APIView):
+    """
+    POST /api/v1/auth/admin/staff/
+    { name, email, user_id_login, password, mobile?, branch_id? }
+
+    BranchAdmin → branch taken from their own branch
+    SuperAdmin  → must provide branch_id in body
+    Creates staff, sends email verification OTP.
+    Response: { success, user, message }
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrAbove]
+
+    def post(self, request):
+        s = CreateStaffSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        data = s.validated_data
+
+        # Resolve branch
+        if request.user.role == Role.BRANCH_ADMIN:
+            branch = request.user.branch
+        else:
+            branch_id = request.data.get("branch_id")
+            if not branch_id:
+                return err("branch_id is required when creating staff as Super Admin.")
+            try:
+                branch = Branch.objects.get(id=branch_id, is_active=True)
+            except Branch.DoesNotExist:
+                return err("Branch not found.")
+
+        user = User.objects.create_staff(
+            email         = data["email"],
+            user_id_login = data["user_id_login"],
+            name          = data["name"],
+            branch        = branch,
+            password      = data["password"],
+        )
+
+        # Optional mobile
+        if data.get("mobile"):
+            user.phone = data["mobile"]
+            user.save(update_fields=["phone"])
+
+        # No OTP sent at creation time for any role.
+        # Staff will receive their verification OTP when they attempt their first login.
+        return ok(
+            {"user": UserProfileSerializer(user).data},
+            f"Staff account created for {user.name}. They must verify their email on first login.",
+            code=status.HTTP_201_CREATED,
+        )
+
+
+class MeView(APIView):
+    """GET /api/v1/auth/me/  — Returns current user profile."""
+    permission_classes = [IsAuthenticated]
+    throttle_classes   = []   # called on every page load — must not throttle
+
+    def get(self, request):
+        return ok({"user": UserProfileSerializer(request.user).data})
+
+    def patch(self, request):
+        """PATCH /auth/me/ — update is_on_duty and other profile fields."""
+        user   = request.user
+        fields = []
+        if "is_on_duty" in request.data:
+            user.is_on_duty = bool(request.data["is_on_duty"])
+            fields.append("is_on_duty")
+        if "name" in request.data:
+            user.name = request.data["name"]
+            fields.append("name")
+        if fields:
+            user.save(update_fields=fields)
+        return ok({"user": UserProfileSerializer(user).data})
+
+
+class ChangePasswordView(APIView):
+    """
+    POST /api/v1/auth/change-password/
+    { current_password, new_password }
+    Changes the user's password and clears must_change_password flag.
+    Works for all authenticated roles.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current = request.data.get("current_password", "")
+        new_pw  = request.data.get("new_password", "")
+
+        if not current or not new_pw:
+            return Response(
+                {"success": False, "error": "Both current_password and new_password are required."},
+                status=400,
+            )
+
+        if not request.user.check_password(current):
+            return Response(
+                {"success": False, "error": "Current password is incorrect."},
+                status=400,
+            )
+
+        if len(new_pw) < 8:
+            return Response(
+                {"success": False, "error": "New password must be at least 8 characters."},
+                status=400,
+            )
+
+        if current == new_pw:
+            return Response(
+                {"success": False, "error": "New password must be different from current password."},
+                status=400,
+            )
+
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            validate_password(new_pw, request.user)
+        except DjangoValidationError as e:
+            return Response(
+                {"success": False, "error": " ".join(e.messages)},
+                status=400,
+            )
+
+        request.user.set_password(new_pw)
+        request.user.must_change_password = False
+        request.user.save(update_fields=["password", "must_change_password"])
+
+        return Response({
+            "success": True,
+            "message": "Password changed successfully. Please log in again.",
+        })
+
+
+class StaffListView(APIView):
+    """
+    GET  /api/v1/auth/admin/staff-list/
+    BranchAdmin → staff for their branch
+    SuperAdmin  → ?branch_id= param, or all if omitted
+
+    DELETE /api/v1/auth/admin/staff-list/<user_id>/
+    Deactivate a staff account.
+
+    PATCH  /api/v1/auth/admin/staff-list/<user_id>/toggle/
+    Toggle is_on_duty for a staff member.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrAbove]
+
+    def get(self, request):
+        from apps.accounts.models import Role
+        if request.user.role == Role.SUPER_ADMIN:
+            branch_id = request.query_params.get("branch_id")
+            if branch_id:
+                qs = User.objects.filter(role=Role.STAFF, branch_id=branch_id)
+            else:
+                qs = User.objects.filter(role=Role.STAFF)
+        else:
+            qs = User.objects.filter(role=Role.STAFF, branch=request.user.branch)
+
+        staff = qs.select_related("branch").order_by("name")
+        data = [{
+            "id":           str(u.id),
+            "name":         u.name,
+            "email":        u.email or "",
+            "user_id_login":u.user_id_login or "",
+            "phone":        u.phone or "",
+            "branch_id":    str(u.branch_id) if u.branch_id else None,
+            "branch_name":  u.branch.name if u.branch else "—",
+            "is_active":    u.is_active,
+            "is_verified":  u.is_verified,
+            "is_on_duty":   u.is_on_duty,
+            "shift_start":  u.shift_start or "",
+            "shift_end":    u.shift_end or "",
+            "date_joined":  u.date_joined.isoformat() if u.date_joined else None,
+            "last_login":   u.last_login.isoformat() if u.last_login else None,
+        } for u in staff]
+
+        return Response({"success": True, "staff": data, "count": len(data)})
+
+
+class StaffDetailView(APIView):
+    """
+    PATCH  /api/v1/auth/admin/staff-list/<pk>/  — update (toggle active/duty)
+    DELETE /api/v1/auth/admin/staff-list/<pk>/  — deactivate account
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrAbove]
+
+    def _get_staff(self, pk, request):
+        from apps.accounts.models import Role
+        try:
+            u = User.objects.get(id=pk, role=Role.STAFF)
+        except (User.DoesNotExist, ValueError):
+            return None
+        # BranchAdmin can only manage own branch staff
+        if request.user.role == Role.BRANCH_ADMIN:
+            if str(u.branch_id) != str(request.user.branch_id):
+                return None
+        return u
+
+    def patch(self, request, pk):
+        staff = self._get_staff(pk, request)
+        if not staff:
+            return Response({"success": False, "error": "Staff not found."}, status=404)
+
+        updated = []
+        if "is_active" in request.data:
+            staff.is_active = bool(request.data["is_active"])
+            updated.append("is_active")
+            # When deactivating, always force off-duty
+            if not staff.is_active:
+                staff.is_on_duty = False
+                if "is_on_duty" not in updated:
+                    updated.append("is_on_duty")
+        if "is_on_duty" in request.data:
+            # Cannot go on duty if inactive
+            if not staff.is_active:
+                staff.is_on_duty = False
+            else:
+                staff.is_on_duty = bool(request.data["is_on_duty"])
+            if "is_on_duty" not in updated:
+                updated.append("is_on_duty")
+
+        # Shift schedule — simple HH:MM strings
+        for field in ("shift_start", "shift_end"):
+            if field in request.data:
+                val = str(request.data[field]).strip()[:5]
+                setattr(staff, field, val)
+                updated.append(field)
+
+        if updated:
+            staff.save(update_fields=updated)
+
+        return Response({
+            "success": True,
+            "message": "Staff updated.",
+            "is_active":   staff.is_active,
+            "is_on_duty":  staff.is_on_duty,
+            "shift_start": staff.shift_start,
+            "shift_end":   staff.shift_end,
+        })
+
+    def delete(self, request, pk):
+        staff = self._get_staff(pk, request)
+        if not staff:
+            return Response({"success": False, "error": "Staff not found."}, status=404)
+        name = staff.name
+        staff.is_active = False
+        staff.save(update_fields=["is_active"])
+        return Response({"success": True, "message": f"{name}'s account has been deactivated."})
+
+
+class LogoutView(APIView):
+    """
+    POST /api/v1/auth/logout/
+    Marks staff/branch_admin as off-duty, closes StaffSession.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_classes   = []   # called on every page load — must not throttle
+
+    def post(self, request):
+        user = request.user
+        fields = []
+        if user.role in ("staff", "branch_admin"):
+            user.is_on_duty = False
+            fields.append("is_on_duty")
+        if fields:
+            user.save(update_fields=fields)
+
+        # Close the most recent open session
+        from apps.accounts.models import StaffSession
+        session = StaffSession.objects.filter(user=user, logout_at__isnull=True).order_by("-login_at").first()
+        if session:
+            session.logout_at = timezone.now()
+            session.save(update_fields=["logout_at"])
+
+        return ok({"message": "Logged out."})
+
+
+class StaffSessionListView(APIView):
+    """
+    GET /api/v1/auth/sessions/
+    Branch Admin / Super Admin sees all staff sessions for their branch.
+    Returns login time, logout time, duration, location, idle flag.
+    """
+    permission_classes = [IsAdminOrAbove]
+    throttle_classes   = []
+
+    def get(self, request):
+        from apps.accounts.models import StaffSession
+        from apps.accounts.permissions import get_request_branch_id
+
+        branch_id = get_request_branch_id(request)
+        qs = StaffSession.objects.filter(
+            user__branch_id=branch_id
+        ).select_related("user").order_by("-login_at")[:200]
+
+        data = [{
+            "id":               str(s.id),
+            "staff_name":       s.user.name,
+            "staff_id":         s.user.user_id_login or "",
+            "login_at":         s.login_at.isoformat(),
+            "logout_at":        s.logout_at.isoformat() if s.logout_at else None,
+            "last_seen":        s.last_seen.isoformat(),
+            "duration_minutes": s.duration_minutes,
+            "is_active":        s.is_active,
+            "is_idle":          s.is_idle,
+            "lat":              float(s.lat) if s.lat else None,
+            "lng":              float(s.lng) if s.lng else None,
+            "addr":             s.addr,
+        } for s in qs]
+
+        return Response({"success": True, "sessions": data, "count": len(data)})
+
+
+class StaffPingView(APIView):
+    """
+    POST /api/v1/auth/ping/
+    Called every 5 minutes by any authenticated staff page.
+    Updates last_seen on the current session → prevents idle flag.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_classes   = []   # called on every page load — must not throttle
+
+    def post(self, request):
+        from apps.accounts.models import StaffSession
+        now = timezone.now()
+        session = StaffSession.objects.filter(
+            user=request.user, logout_at__isnull=True
+        ).order_by("-login_at").first()
+        if session:
+            session.last_seen = now
+            session.is_idle   = False
+            session.save(update_fields=["last_seen", "is_idle"])
+        return Response({"success": True, "last_seen": now.isoformat()})
+
+
+class SuperAdminUserListView(APIView):
+    """
+    GET /api/v1/auth/admin/users/
+    SuperAdmin only — lists ALL users across all roles and branches.
+    Supports ?role=customer|staff|branch_admin filter and ?search=
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrAbove]
+    throttle_classes   = []
+
+    def get(self, request):
+        from apps.accounts.models import User, Role
+        if request.user.role != Role.SUPER_ADMIN:
+            return err("SuperAdmin access required.", 403)
+
+        role_filter = request.query_params.get("role")
+        search      = request.query_params.get("search", "").strip()
+
+        qs = User.objects.select_related("branch").order_by("role", "name")
+        if role_filter and role_filter in [r.value for r in Role]:
+            qs = qs.filter(role=role_filter)
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone__icontains=search)
+            )
+
+        data = [{
+            "id":            str(u.id),
+            "name":          u.name,
+            "email":         u.email or "",
+            "phone":         u.phone or "",
+            "role":          u.role,
+            "branch_name":   u.branch.name if u.branch else "—",
+            "is_active":     u.is_active,
+            "is_on_duty":    u.is_on_duty,
+            "loyalty_points":u.loyalty_points,
+            "date_joined":   u.date_joined.isoformat() if u.date_joined else None,
+            "last_login":    u.last_login.isoformat() if u.last_login else None,
+            "user_id_login": u.user_id_login or "",
+        } for u in qs]
+
+        return Response({"success": True, "users": data, "count": len(data)})
+
+
+class AdminForgotPasswordView(APIView):
+    """
+    POST /api/v1/auth/admin/forgot-password/
+    { email }
+    Works for branch_admin and super_admin roles.
+    Always returns 200 to prevent email enumeration.
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+    throttle_classes   = []
+
+    def post(self, request):
+        from apps.accounts.models import OTPPurpose
+        email = (request.data.get("email") or "").strip().lower()
+        if not email:
+            return err("Email address is required.")
+
+        try:
+            user = User.objects.get(
+                email__iexact=email,
+                role__in=[Role.BRANCH_ADMIN, Role.SUPER_ADMIN],
+                is_active=True,
+            )
+            otp = create_otp_record(user, OTPPurpose.PASSWORD_RESET)
+            send_otp_email(email, otp, OTPPurpose.PASSWORD_RESET)
+        except User.DoesNotExist:
+            pass  # Silent — prevents enumeration
+
+        return ok(message="If an admin account exists for this email, a password reset OTP has been sent.")
+
+
+class AdminResetPasswordView(APIView):
+    """
+    POST /api/v1/auth/admin/reset-password/
+    { email, otp, new_password }
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+    throttle_classes   = []
+
+    def post(self, request):
+        from apps.accounts.models import OTPPurpose
+        email    = (request.data.get("email") or "").strip().lower()
+        otp_code = (request.data.get("otp") or "").strip()
+        new_pass = request.data.get("new_password", "")
+
+        if not email or not otp_code or not new_pass:
+            return err("email, otp, and new_password are required.")
+
+        if len(new_pass) < 8:
+            return err("Password must be at least 8 characters.")
+
+        try:
+            user = User.objects.get(
+                email__iexact=email,
+                role__in=[Role.BRANCH_ADMIN, Role.SUPER_ADMIN],
+                is_active=True,
+            )
+        except User.DoesNotExist:
+            return err("No admin account found with this email.")
+
+        ok_flag, message = validate_otp(user, OTPPurpose.PASSWORD_RESET, otp_code)
+        if not ok_flag:
+            return err(message)
+
+        user.set_password(new_pass)
+        user.save(update_fields=["password"])
+        return ok(message="Password reset successful. Please log in with your new password.")
+
+
+class ContactView(APIView):
+    """
+    POST /api/v1/auth/contact/
+    { name, email, subject, message }
+    Public endpoint — sends the contact form message to the site inbox via SMTP.
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+    throttle_classes   = []
+
+    def post(self, request):
+        name    = (request.data.get("name",    "") or "").strip()
+        email   = (request.data.get("email",   "") or "").strip()
+        subject = (request.data.get("subject", "") or "").strip()
+        message = (request.data.get("message", "") or "").strip()
+
+        if not name or not email or not message:
+            return err("Name, email, and message are required.")
+
+        if "@" not in email:
+            return err("Please provide a valid email address.")
+
+        inbox = getattr(settings, "EMAIL_HOST_USER", None) or getattr(settings, "DEFAULT_FROM_EMAIL", "")
+        if not inbox:
+            logger.error("ContactView: no recipient email configured (EMAIL_HOST_USER / DEFAULT_FROM_EMAIL).")
+            return err("Contact service is not configured. Please try again later.", 503)
+
+        full_subject = f"[KNFC Contact] {subject or 'Website Enquiry'} — from {name}"
+        body = (
+            f"Name:    {name}\n"
+            f"Email:   {email}\n"
+            f"Subject: {subject or 'Website Enquiry'}\n"
+            f"\n{message}"
+        )
+
+        try:
+            send_mail(
+                subject       = full_subject,
+                message       = body,
+                from_email    = settings.DEFAULT_FROM_EMAIL,
+                recipient_list= [inbox],
+                fail_silently = False,
+            )
+            logger.info(f"Contact form email sent from {email} → {inbox}")
+            return ok(message="Your message has been sent. We'll get back to you soon!")
+        except Exception as exc:
+            logger.error(f"Contact form email failed: {exc}")
+            return err("Failed to send your message. Please try again later.", 500)

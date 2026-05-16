@@ -1,0 +1,22 @@
+{
+  "name": "knfc-whatsapp-service",
+  "version": "1.0.0",
+  "description": "Baileys WhatsApp service for KNFC OTP + broadcast",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.18",
+    "express": "^4.19.2",
+    "pino": "^9.5.0",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

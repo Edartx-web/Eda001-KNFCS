@@ -1,0 +1,335 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply font-sans;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Prevent zoom on input focus on iOS */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* ============================================
+   PREMIUM ANIMATIONS & EFFECTS
+   ============================================ */
+
+/* Smooth page transitions */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Floating animation for background elements */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+/* Glowing pulse effect */
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 140, 66, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 140, 66, 0.6);
+  }
+}
+
+/* Shimmer effect for buttons */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Smooth input focus glow */
+@keyframes inputFocus {
+  0% {
+    box-shadow: 0 0 5px rgba(255, 140, 66, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(255, 140, 66, 0.5);
+  }
+}
+
+/* Morphing shapes */
+@keyframes morph {
+  0%, 100% {
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  }
+  50% {
+    border-radius: 70% 30% 46% 66% / 48% 33% 59% 50%;
+  }
+}
+
+/* Bounce in animation */
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(-50px);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Slide in from left */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ============================================
+   COMPONENT STYLES
+   ============================================ */
+
+/* Auth card styling */
+.auth-card {
+  @apply transition-all duration-300;
+  animation: pageEnter 0.8s ease-out;
+}
+
+.auth-card:hover {
+  @apply border-orange-400/40;
+  box-shadow: 0 20px 40px rgba(255, 140, 66, 0.15) !important;
+}
+
+/* Auth heading with gradient animation */
+.auth-heading {
+  animation: slideInLeft 0.6s ease-out 0.2s backwards;
+}
+
+/* Input field enhancements */
+input[type="text"]:focus,
+input[type="tel"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+select:focus,
+textarea:focus {
+  animation: inputFocus 0.3s ease-out;
+}
+
+/* Focus visible states */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+/* Button with ripple effect */
+button {
+  @apply relative overflow-hidden;
+  transition: all 0.3s ease;
+}
+
+button:hover:not(:disabled) {
+  @apply transform -translate-y-1;
+}
+
+button:active:not(:disabled) {
+  @apply transform translate-y-0;
+}
+
+/* Disabled button state */
+button:disabled {
+  @apply opacity-60 cursor-not-allowed;
+}
+
+/* Form inputs styling */
+input, select, textarea {
+  @apply transition-all duration-200;
+}
+
+/* Placeholder styling */
+::placeholder {
+  @apply text-opacity-50;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection styling */
+::selection {
+  @apply bg-orange-500 text-white;
+}
+
+::-webkit-selection {
+  @apply bg-orange-500 text-white;
+}
+
+/* ============================================
+   UTILITY ANIMATIONS
+   ============================================ */
+
+/* Float animation utility */
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Glow pulse utility */
+.animate-glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* Shimmer utility */
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Bounce in utility */
+.animate-bounce-in {
+  animation: bounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Morph utility */
+.animate-morph {
+  animation: morph 8s ease-in-out infinite;
+}
+
+/* ============================================
+   BACKDROP & GLASS MORPHISM
+   ============================================ */
+
+.backdrop-glass {
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================
+   RESPONSIVE BEHAVIORS
+   ============================================ */
+
+@media (max-width: 640px) {
+  .auth-card {
+    @apply rounded-2xl;
+  }
+
+  button {
+    @apply py-3;
+  }
+}
+
+/* ============================================
+   CUSTOM CURSOR (Optional Enhancement)
+   ============================================ */
+
+body {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="2" fill="rgba(255,140,66,0.8)"/><circle cx="16" cy="16" r="6" fill="none" stroke="rgba(255,140,66,0.4)" stroke-width="1"/></svg>')
+    16 16, auto;
+}
+
+/* Link hover effect */
+a {
+  @apply transition-colors duration-200;
+}
+
+a:hover {
+  @apply text-orange-600;
+}
+
+/* ============================================
+   LOADER STYLES
+   ============================================ */
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================
+   ERROR & SUCCESS STATES
+   ============================================ */
+
+.error-pulse {
+  animation: errorPulse 0.5s ease-out;
+}
+
+@keyframes errorPulse {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px);
+  }
+  75% {
+    transform: translateX(10px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* ============================================
+   ACCESSIBILITY & MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

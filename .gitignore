@@ -1,0 +1,71 @@
+# Environment — never commit secrets
+.env
+.env.*
+!.env.example
+!frontend/.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (frontend)
+node_modules/
+frontend/build/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# WhatsApp session credentials — never commit
+whatsapp-service/sessions/
+whatsapp-service/node_modules/
+
+# Celery beat schedule (auto-generated runtime file)
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
+
+# Local scratch / working files — not for version control
+notes.txt
+Prompt.txt
+issues_list.txt
+KNFC_PROJECT_MANUAL.txt
+
+# Claude Code session data
+.claude/
+
+# Security-related local files
+security/
+
+# Large binary assets — store outside git or use Git LFS
+frontend/src/components/videoclips/*.mp4
+frontend/src/components/videoclips/*.webm
