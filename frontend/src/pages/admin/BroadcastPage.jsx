@@ -357,7 +357,7 @@ export default function BroadcastPage() {
   return (
     <div style={{ minHeight:"100vh", background:"var(--bg,#f5f5f5)" }}>
       <Header />
-      <div style={{ paddingTop:"60px" }}>
+      <div style={{ paddingTop:"60px", paddingBottom:"calc(72px + env(safe-area-inset-bottom,0px))" }}>
         <div style={{ maxWidth:"860px", margin:"0 auto", padding:"32px clamp(16px,4vw,40px)" }}>
 
           {/* Page header */}

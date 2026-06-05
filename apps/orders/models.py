@@ -8,6 +8,7 @@ customisation capture, and placed_by audit.
 import uuid
 from django.db import models
 from django.conf import settings
+from apps.core.fields import EncryptedCharField
 from django.utils import timezone
 
 
@@ -139,7 +140,7 @@ class Order(models.Model):
         choices=[("pending","Pending"),("paid","Paid"),("waived","Waived")],
         default="pending",
     )
-    upi_ref        = models.CharField(max_length=50, blank=True, default="")
+    upi_ref        = EncryptedCharField(blank=True, default="")  # transaction ref — encrypted at rest
     payment_serial = models.CharField(max_length=20, blank=True, default="")  # staff-assigned e.g. PAY001
     payment_marked_by = models.ForeignKey(
         "accounts.User",

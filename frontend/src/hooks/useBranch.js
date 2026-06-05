@@ -16,14 +16,21 @@
 import { useAuth } from "../context/AuthContext";
 
 export default function useBranch() {
-  const { selectedBranch, selectBranch, clearBranch } = useAuth();
+  const {
+    selectedBranch, selectBranch, clearBranch,
+    suggestedBranch, dismissBranchSuggestion,
+    isLoading: authLoading,
+  } = useAuth();
 
   return {
     selectedBranch,
-    branchId:   selectedBranch?.id   || null,
-    branchName: selectedBranch?.name || "",
-    hasBranch:  Boolean(selectedBranch?.id),
+    branchId:    selectedBranch?.id   || null,
+    branchName:  selectedBranch?.name || "",
+    hasBranch:   Boolean(selectedBranch?.id),
+    authLoading,   // true while AuthContext is still detecting the branch
     selectBranch,
     clearBranch,
+    suggestedBranch,
+    dismissBranchSuggestion,
   };
 }

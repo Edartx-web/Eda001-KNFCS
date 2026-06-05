@@ -47,6 +47,11 @@ from utils.otp import (
 logger = logging.getLogger(__name__)
 
 
+def _is_console_email() -> bool:
+    """True when Django is using the console email backend (dev / no SMTP creds)."""
+    return "console" in getattr(settings, "EMAIL_BACKEND", "").lower()
+
+
 # ── Response helpers ──────────────────────────────────────────────────────────
 
 def ok(data=None, message="", code=status.HTTP_200_OK):
@@ -90,9 +95,18 @@ class CustomerRegisterView(APIView):
         name  = s.validated_data["name"]
         phone = s.validated_data["phone"]
 
+        # Reject if this phone belongs to a staff or admin account
+        conflict = User.objects.filter(phone=phone).exclude(role=Role.CUSTOMER).first()
+        if conflict:
+            return err(
+                "This number is linked to a staff or admin account. "
+                "Please use the staff login page instead."
+            )
+
         user, is_new = User.objects.get_or_create(
             phone    = phone,
-            defaults = {"name": name, "role": Role.CUSTOMER, "is_verified": False},
+            role     = Role.CUSTOMER,
+            defaults = {"name": name, "is_verified": False},
         )
         if not is_new and user.name != name:
             user.name = name
@@ -235,13 +249,17 @@ class StaffLoginView(APIView):
         # Unverified staff: send OTP now (on first login attempt) and ask them to verify.
         # OTP is never sent at account-creation time — only triggered here.
         if not user.is_verified:
-            otp = create_otp_record(user, OTPPurpose.STAFF_EMAIL_VERIFY)
-            send_otp_email(user.email, otp, OTPPurpose.STAFF_EMAIL_VERIFY)
+            otp  = create_otp_record(user, OTPPurpose.STAFF_EMAIL_VERIFY)
+            sent = send_otp_email(user.email, otp, OTPPurpose.STAFF_EMAIL_VERIFY)
+            if not sent:
+                logger.error("Staff OTP email delivery failed for user=%s email=%s", user.id, user.email)
+                return err("Failed to send verification email. Please try again or contact admin.", 503)
             data = {
                 "requires_verification": True,
                 "email": user.email,
             }
-            if getattr(settings, "OTP_BYPASS", False):
+            # Dev: expose OTP when real email can't be delivered (console backend)
+            if getattr(settings, "OTP_BYPASS", False) or _is_console_email():
                 data["dev_otp"] = otp
             return ok(data, "A verification OTP has been sent to your email. Please verify to continue.")
 
@@ -347,19 +365,28 @@ class StaffResendOTPView(APIView):
                 return ok(message="Account is already verified. Please login.")
 
             from apps.accounts.models import OTPRecord
+            # Clean up expired records first so they don't block resend
+            OTPRecord.objects.filter(
+                user=user, purpose=OTPPurpose.STAFF_EMAIL_VERIFY,
+                is_used=False, expires_at__lt=timezone.now()
+            ).delete()
+
             existing = OTPRecord.objects.filter(
                 user=user, purpose=OTPPurpose.STAFF_EMAIL_VERIFY, is_used=False
             ).first()
             if existing:
                 allowed, wait = can_resend(existing)
                 if not allowed:
-                    return err(f"Please wait {wait} seconds before requesting a new OTP.")
+                    return err(f"Please wait {wait} seconds before requesting a new code.")
 
-            otp = create_otp_record(user, OTPPurpose.STAFF_EMAIL_VERIFY)
-            send_otp_email(user.email, otp, OTPPurpose.STAFF_EMAIL_VERIFY)
+            otp  = create_otp_record(user, OTPPurpose.STAFF_EMAIL_VERIFY)
+            sent = send_otp_email(user.email, otp, OTPPurpose.STAFF_EMAIL_VERIFY)
+            if not sent:
+                logger.error("Staff resend OTP email failed for user=%s email=%s", user.id, user.email)
+                return err("Failed to send verification email. Check email config or contact admin.", 503)
 
             data = {}
-            if getattr(settings, "OTP_BYPASS", False):
+            if getattr(settings, "OTP_BYPASS", False) or _is_console_email():
                 data["dev_otp"] = otp
             return ok(data, "Verification OTP sent to your email.")
         except User.DoesNotExist:
@@ -386,7 +413,13 @@ class StaffForgotPasswordView(APIView):
         try:
             user = User.objects.get(email=email, role=Role.STAFF, is_active=True)
             otp  = create_otp_record(user, OTPPurpose.PASSWORD_RESET)
-            send_otp_email(email, otp, OTPPurpose.PASSWORD_RESET)
+            sent = send_otp_email(email, otp, OTPPurpose.PASSWORD_RESET)
+            if not sent:
+                logger.error("Password reset email failed for user=%s email=%s", user.id, email)
+                return err("Failed to send reset email. Please try again or contact admin.", 503)
+            if _is_console_email():
+                # Dev: expose OTP so it can be seen without real SMTP
+                return ok({"dev_otp": otp}, "Reset OTP sent (console backend — check terminal).")
         except User.DoesNotExist:
             pass  # Silent — prevents enumeration
 
@@ -447,8 +480,37 @@ class AdminLoginView(APIView):
             return Response({"success": False, "errors": s.errors}, status=400)
 
         user = s.validated_data["user"]
-        user.last_login = timezone.now()
-        user.save(update_fields=["last_login"])
+        now = timezone.now()
+        user.last_login = now
+
+        lat  = request.data.get("lat")
+        lng  = request.data.get("lng")
+        addr = request.data.get("addr", "")
+        if lat and lng:
+            try:
+                user.last_login_lat  = float(lat)
+                user.last_login_lng  = float(lng)
+                user.last_login_addr = str(addr)[:255]
+            except (ValueError, TypeError):
+                pass
+
+        user.save(update_fields=["last_login", "last_login_lat", "last_login_lng", "last_login_addr"])
+
+        # Record login session for branch_admin (mirrors StaffSession tracking)
+        if user.role == Role.BRANCH_ADMIN:
+            from apps.accounts.models import StaffSession
+            ip_address = (
+                request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+                or request.META.get("HTTP_X_REAL_IP", "")
+                or request.META.get("REMOTE_ADDR", "")
+            )
+            StaffSession.objects.create(
+                user=user,
+                login_at=now,
+                lat=user.last_login_lat,
+                lng=user.last_login_lng,
+                addr=user.last_login_addr or ip_address,
+            )
 
         return ok({
             "tokens": get_tokens_for_user(user),
@@ -496,24 +558,12 @@ class CreateBranchAdminView(APIView):
         user.must_change_password = True
         user.save(update_fields=["must_change_password"])
 
-        # Welcome email with temporary credentials
+        # Welcome email with HTML template
         try:
-            send_mail(
-                subject    = f"Your KNFC Branch Admin account — {branch.name}",
-                message    = (
-                    f"Hi {user.name},\n\n"
-                    f"Your KNFC Branch Admin account has been created.\n\n"
-                    f"Branch:   {branch.name}\n"
-                    f"Email:    {user.email}\n"
-                    f"Password: {temp_password}\n\n"
-                    f"IMPORTANT: You will be required to change your password\n"
-                    f"on your first login for security.\n\n"
-                    f"Login at: http://localhost:3000/login/admin\n\n"
-                    f"— KNFC Team"
-                ),
-                from_email     = settings.DEFAULT_FROM_EMAIL,
-                recipient_list = [user.email],
-                fail_silently  = True,
+            from apps.accounts.email_utils import send_branch_admin_welcome
+            send_branch_admin_welcome(
+                to=user.email, name=user.name,
+                email=user.email, password=temp_password, branch=branch.name,
             )
         except Exception as e:
             logger.warning(f"Welcome email failed for {user.email}: {e}")
@@ -569,8 +619,18 @@ class CreateStaffView(APIView):
             user.phone = data["mobile"]
             user.save(update_fields=["phone"])
 
-        # No OTP sent at creation time for any role.
-        # Staff will receive their verification OTP when they attempt their first login.
+        # Send welcome email with credentials
+        try:
+            from apps.accounts.email_utils import send_staff_welcome
+            send_staff_welcome(
+                to=user.email, name=user.name,
+                user_id=user.user_id_login,
+                password=data["password"],
+                branch=branch.name if branch else "—",
+            )
+        except Exception:
+            pass
+
         return ok(
             {"user": UserProfileSerializer(user).data},
             f"Staff account created for {user.name}. They must verify their email on first login.",
@@ -812,18 +872,38 @@ class StaffSessionListView(APIView):
     throttle_classes   = []
 
     def get(self, request):
-        from apps.accounts.models import StaffSession
+        from apps.accounts.models import StaffSession, Role
         from apps.accounts.permissions import get_request_branch_id
 
-        branch_id = get_request_branch_id(request)
-        qs = StaffSession.objects.filter(
-            user__branch_id=branch_id
-        ).select_related("user").order_by("-login_at")[:200]
+        if request.user.role == Role.SUPER_ADMIN:
+            qs = StaffSession.objects.select_related("user", "user__branch").order_by("-login_at")
+            branch_id_param = request.query_params.get("branch_id")
+            if branch_id_param:
+                qs = qs.filter(user__branch_id=branch_id_param)
+            role_param = request.query_params.get("role")
+            if role_param:
+                qs = qs.filter(user__role=role_param)
+            date_from_param = request.query_params.get("date_from")
+            if date_from_param:
+                try:
+                    from datetime import date as _date
+                    df = _date.fromisoformat(date_from_param)
+                    qs = qs.filter(login_at__date__gte=df)
+                except ValueError:
+                    pass
+            qs = qs[:500]
+        else:
+            branch_id = get_request_branch_id(request)
+            qs = StaffSession.objects.filter(
+                user__branch_id=branch_id
+            ).select_related("user", "user__branch").order_by("-login_at")[:200]
 
         data = [{
             "id":               str(s.id),
             "staff_name":       s.user.name,
-            "staff_id":         s.user.user_id_login or "",
+            "staff_id":         s.user.user_id_login or s.user.email or "",
+            "staff_role":       s.user.role,
+            "branch_name":      s.user.branch.name if s.user.branch else "—",
             "login_at":         s.login_at.isoformat(),
             "logout_at":        s.logout_at.isoformat() if s.logout_at else None,
             "last_seen":        s.last_seen.isoformat(),
@@ -904,6 +984,83 @@ class SuperAdminUserListView(APIView):
         } for u in qs]
 
         return Response({"success": True, "users": data, "count": len(data)})
+
+
+class AdminUserDetailView(APIView):
+    """
+    PATCH  /api/v1/auth/admin/users/<pk>/  — toggle is_active for a branch_admin
+    DELETE /api/v1/auth/admin/users/<pk>/  — deactivate a branch_admin account
+    SuperAdmin only.
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdminOnly]
+
+    def _get(self, pk):
+        try:
+            return User.objects.get(id=pk, role=Role.BRANCH_ADMIN)
+        except (User.DoesNotExist, ValueError):
+            return None
+
+    def patch(self, request, pk):
+        u = self._get(pk)
+        if not u:
+            return err("Branch Admin not found.", 404)
+        if "is_active" in request.data:
+            u.is_active = bool(request.data["is_active"])
+            u.save(update_fields=["is_active"])
+        return ok({"message": f"{u.name} updated.", "is_active": u.is_active})
+
+    def delete(self, request, pk):
+        u = self._get(pk)
+        if not u:
+            return err("Branch Admin not found.", 404)
+        name = u.name
+        u.is_active = False
+        u.save(update_fields=["is_active"])
+        return ok({"message": f"{name}'s account has been deactivated."})
+
+
+class TerminateUserView(APIView):
+    """
+    DELETE /api/v1/auth/admin/users/<pk>/terminate/
+    SuperAdmin only.  Permanently terminates a staff or branch_admin account.
+    Anonymises all PII so referential integrity is preserved (orders, logs, etc.
+    still exist but are no longer linked to a real identity).
+    This is irreversible.
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdminOnly]
+
+    def delete(self, request, pk):
+        try:
+            user = User.objects.get(
+                id=pk, role__in=[Role.STAFF, Role.BRANCH_ADMIN]
+            )
+        except (User.DoesNotExist, ValueError):
+            return err("User not found.", 404)
+
+        if user == request.user:
+            return err("You cannot terminate your own account.", 400)
+
+        saved_name    = user.name or "Unknown"
+        saved_user_id = user.user_id_login or str(user.id)[:8]
+
+        # Anonymise PII — preserve the row so FK references don't break
+        uid = str(user.id)[:8]
+        user.name          = "[Terminated]"
+        user.email         = f"terminated_{uid}@knfc.internal" if user.email else None
+        user.phone         = None
+        user.user_id_login = f"TRM_{uid}" if user.user_id_login else None
+        user.is_active     = False
+        user.is_verified   = False
+        user.set_unusable_password()
+        user.save()
+
+        return ok({
+            "message": (
+                f"Account for {saved_name} ({saved_user_id}) has been permanently "
+                "terminated. Their work history is preserved but all personal data "
+                "has been removed."
+            )
+        })
 
 
 class AdminForgotPasswordView(APIView):

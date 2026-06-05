@@ -33,3 +33,8 @@ whitenoise==6.7.0
 Pillow==10.4.0
 qrcode==7.4.2
 
+# ── Security / Encryption ─────────────────────────────────────────────────────
+# Fernet (AES-128-CBC + HMAC-SHA256) — field-level encryption for UPI IDs
+# and payment transaction references stored in the database.
+cryptography>=42.0.0
+

@@ -206,6 +206,7 @@ export function StaffRegisterPage() {
   const [form, setForm]     = useState({
     name: "", email: "", user_id_login: "", password: "", mobile: "", branch_id: "",
   });
+  // user_id_login is always auto-generated from name — not manually editable
 
   const [branches, setBranches] = useState([]);
   const [showPw,   setShowPw]   = useState(false);
@@ -214,6 +215,11 @@ export function StaffRegisterPage() {
   const [errors,   setErrors]   = useState({});
   const [success,  setSuccess]  = useState(null); // { name, email, user_id_login }
   const [apiError, setApiError] = useState("");
+
+  const autoUserIdFromName = (name) => {
+    const base = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    return base.length >= 2 ? `${base}001` : "";
+  };
 
   /* Load branches for SuperAdmin */
   useEffect(() => {
@@ -226,23 +232,35 @@ export function StaffRegisterPage() {
   }, [isSuperAdmin]);
 
   const set = (field, value) => {
-    setForm(f => ({ ...f, [field]: value }));
+    if (field === "name") {
+      setForm(f => ({
+        ...f,
+        name: value,
+        user_id_login: autoUserIdFromName(value),
+      }));
+    } else {
+      setForm(f => ({ ...f, [field]: value }));
+    }
     setErrors(e => ({ ...e, [field]: "" }));
   };
 
   /* Client-side validation */
   const validate = () => {
     const e = {};
-    if (!form.name.trim())                        e.name          = "Name is required";
-    else if (form.name.trim().length < 2)         e.name          = "Name must be at least 2 characters";
-    else if (/\d/.test(form.name))                e.name          = "Name should not contain numbers";
-    if (!form.email.trim())                       e.email         = "Email is required";
+    if (!form.name.trim())                         e.name          = "Name is required";
+    else if (form.name.trim().length < 2)          e.name          = "Name must be at least 2 characters";
+    else if (/\d/.test(form.name))                 e.name          = "Name should not contain numbers";
+    else if (/[!@#$%^&*()_+=[\]{};:'",<>/?\\|`~]/.test(form.name)) e.name = "Name should not contain special symbols";
+    if (!form.email.trim())                        e.email         = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = "Enter a valid email address";
     if (!form.user_id_login.trim())               e.user_id_login = "User ID is required";
     else if (form.user_id_login.length < 4)       e.user_id_login = "User ID must be at least 4 characters";
     else if (!/^[A-Z0-9_]+$/.test(form.user_id_login)) e.user_id_login = "Only letters, numbers and underscores allowed";
-    if (form.mobile.trim() && !/^\+?\d{7,15}$/.test(form.mobile.trim().replace(/\s/g, "")))
-                                                  e.mobile        = "Enter a valid mobile number (7–15 digits)";
+    if (form.mobile.trim()) {
+      const mob = form.mobile.trim();
+      if (!/^\d{10}$/.test(mob))            e.mobile = "Enter a valid 10-digit mobile number";
+      else if (!/^[6-9]/.test(mob))         e.mobile = "Indian numbers must start with 6, 7, 8, or 9";
+    }
     if (!form.password)                           e.password      = "Password is required";
     else if (form.password.length < 8)            e.password      = "Password must be at least 8 characters";
     if (isSuperAdmin && !form.branch_id)          e.branch_id     = "Select a branch";
@@ -262,7 +280,7 @@ export function StaffRegisterPage() {
         user_id_login: form.user_id_login.trim().toUpperCase(),
         password:      form.password,
       };
-      if (form.mobile.trim()) payload.mobile    = form.mobile.trim();
+      if (form.mobile.trim()) payload.mobile    = `+91${form.mobile.trim()}`;
       if (isSuperAdmin)       payload.branch_id = form.branch_id;
 
       await createStaff(payload);
@@ -270,6 +288,7 @@ export function StaffRegisterPage() {
         name:          payload.name,
         email:         payload.email,
         user_id_login: payload.user_id_login,
+        password:      form.password,
         branch:        isSuperAdmin
           ? branches.find(b => b.id === form.branch_id)?.name
           : user?.branch_name,
@@ -315,17 +334,26 @@ export function StaffRegisterPage() {
               Account details
             </div>
             {[
-              ["Name",     success.name],
-              ["Email",    success.email],
-              ["User ID",  success.user_id_login],
-              ["Branch",   success.branch || "—"],
+              ["Name",       success.name],
+              ["Email",      success.email],
+              ["User ID",    success.user_id_login],
+              ["Password",   success.password],
+              ["Branch",     success.branch || "—"],
             ].map(([label, value]) => (
               <div key={label} style={{ display:"flex", justifyContent:"space-between", padding:"var(--s2) 0", borderBottom:"1px solid var(--bd)", fontSize:".875rem" }}>
                 <span style={{ color:"var(--t3)" }}>{label}</span>
-                <span style={{ fontWeight:600, color:"var(--t1)" }}>{value}</span>
+                <span style={{ fontWeight:600, color:"var(--t1)", fontFamily: label === "User ID" || label === "Password" ? "monospace" : "inherit" }}>{value}</span>
               </div>
             ))}
           </div>
+          <button
+            onClick={() => {
+              const text = `Staff Login\nUser ID: ${success.user_id_login}\nEmail: ${success.email}\nPassword: ${success.password}\nBranch: ${success.branch || "—"}`;
+              navigator.clipboard?.writeText(text).catch(() => {});
+            }}
+            className="btn btn-s" style={{ width:"100%", marginBottom:"var(--s2)" }}>
+            Copy credentials
+          </button>
           <div style={{ display:"flex", gap:"var(--s2)" }}>
             <button onClick={() => { setSuccess(null); setForm({ name:"", email:"", user_id_login:"", password:"", mobile:"", branch_id:"" }); setErrors({}); }} className="btn btn-s" style={{ flex:1 }}>
               Add another staff
@@ -363,7 +391,7 @@ export function StaffRegisterPage() {
             error={errors.name}
           >
             <input type="text" value={form.name} onChange={e => set("name", e.target.value)}
-              placeholder="e.g. Arun Kumar" className="input-field" autoFocus />
+              placeholder="Full name" className="input-field" autoFocus />
           </InputGroup>
           <FieldError message={errors.name} />
 
@@ -378,18 +406,31 @@ export function StaffRegisterPage() {
           </InputGroup>
           <FieldError message={errors.email} />
 
-          {/* User ID */}
-          <FieldLabel required>User ID (login identifier)</FieldLabel>
+          {/* User ID — read-only, auto-generated from name */}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"6px" }}>
+            <FieldLabel required style={{ marginBottom:0 }}>User ID (login identifier)</FieldLabel>
+            {form.user_id_login && (
+              <span style={{ fontSize:".6875rem", fontWeight:700, padding:"2px 8px", borderRadius:"var(--rf)", background:"var(--ok-t)", color:"var(--ok)", border:"1px solid rgba(29,158,117,.2)" }}>
+                Auto-generated
+              </span>
+            )}
+          </div>
           <InputGroup
             icon={<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h6M7 16h8" strokeLinecap="round"/></svg>}
             error={errors.user_id_login}
           >
-            <input type="text" value={form.user_id_login} onChange={e => set("user_id_login", e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,""))}
-              placeholder="e.g. STAFF002" className="input-field" autoCapitalize="characters" autoCorrect="off" />
+            <input
+              type="text"
+              value={form.user_id_login}
+              readOnly
+              placeholder="Auto-fills when you enter a name"
+              className="input-field"
+              style={{ cursor:"default", userSelect:"all", fontFamily:"monospace", fontWeight:700, letterSpacing:".04em" }}
+            />
           </InputGroup>
           <FieldError message={errors.user_id_login} />
           <p style={{ fontSize:".75rem", color:"var(--t4)", marginBottom:"var(--s4)", marginTop:"-8px" }}>
-            Staff will use this ID to log in — letters, numbers, underscores only.
+            Auto-created from staff name. Staff use this ID to log in.
           </p>
 
           {/* Mobile (optional) */}
@@ -398,8 +439,9 @@ export function StaffRegisterPage() {
             icon={<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg>}
             error={errors.mobile}
           >
-            <input type="tel" value={form.mobile} onChange={e => set("mobile", e.target.value)}
-              placeholder="+91 98765 43210" className="input-field" />
+            <span style={{ padding:"0 8px 0 0", borderRight:"1px solid var(--bd)", marginRight:"8px", fontSize:".875rem", fontWeight:700, color:"var(--t2)", flexShrink:0, whiteSpace:"nowrap" }}>+91</span>
+            <input type="tel" inputMode="numeric" value={form.mobile} onChange={e => set("mobile", e.target.value.replace(/\D/g,"").slice(0,10))}
+              placeholder="10-digit mobile number" className="input-field" />
           </InputGroup>
           <FieldError message={errors.mobile} />
 
@@ -490,12 +532,13 @@ export function BranchAdminRegisterPage() {
 
   const validate = () => {
     const e = {};
-    if (!form.name.trim())                        e.name      = "Name is required";
-    else if (form.name.trim().length < 2)         e.name      = "Name must be at least 2 characters";
-    else if (/\d/.test(form.name))                e.name      = "Name should not contain numbers";
-    if (!form.email.trim())                       e.email     = "Email is required";
+    if (!form.name.trim())                         e.name      = "Name is required";
+    else if (form.name.trim().length < 2)          e.name      = "Name must be at least 2 characters";
+    else if (/\d/.test(form.name))                 e.name      = "Name should not contain numbers";
+    else if (/[!@#$%^&*()_+=[\]{};:'",<>/?\\|`~]/.test(form.name)) e.name = "Name should not contain special symbols";
+    if (!form.email.trim())                        e.email     = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = "Enter a valid email address";
-    if (!form.branch_id)                          e.branch_id = "Select a branch";
+    if (!form.branch_id)                           e.branch_id = "Select a branch";
     return e;
   };
 
@@ -610,7 +653,7 @@ export function BranchAdminRegisterPage() {
           {/* Name */}
           <FieldLabel required>Full name</FieldLabel>
           <InputGroup icon={<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>} error={errors.name}>
-            <input type="text" value={form.name} onChange={e => set("name",e.target.value)} placeholder="e.g. Priya Sharma" className="input-field" autoFocus />
+            <input type="text" value={form.name} onChange={e => set("name",e.target.value)} placeholder="Full name" className="input-field" autoFocus />
           </InputGroup>
           <FieldError message={errors.name} />
 
@@ -655,6 +698,7 @@ export function StaffVerifyEmailPage() {
   const navigate    = useNavigate();
   const location    = useLocation();
   const urlEmail    = new URLSearchParams(location.search).get("email") || "";
+  const stateDevOtp = location.state?.dev_otp || "";
 
   const [email,     setEmail]     = useState(urlEmail);
   const [otp,       setOtp]       = useState(["","","","","",""]);
@@ -665,17 +709,23 @@ export function StaffVerifyEmailPage() {
   const [loading,   setLoading]   = useState(false);
   const [sending,   setSending]   = useState(false);
   const [error,     setError]     = useState("");
-  const [resendMsg, setResendMsg] = useState("");
+  const [resendMsg, setResendMsg] = useState(stateDevOtp ? "Dev mode — email not sent. Use the code shown below." : "");
+  const [devOtp,    setDevOtp]    = useState(stateDevOtp);   // shown in dev when console email backend
   const otpRefs = [useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
 
   const handleSendOTP = async (e) => {
     e?.preventDefault();
     if (!email.trim()) { setError("Enter your email address"); return; }
-    setError(""); setResendMsg(""); setSending(true);
+    setError(""); setResendMsg(""); setDevOtp(""); setSending(true);
     try {
-      await staffResendOTP(email.trim().toLowerCase());
+      const r = await staffResendOTP(email.trim().toLowerCase());
       setStep("otp");
-      setResendMsg("Code sent! Check your email inbox.");
+      if (r.data?.dev_otp) {
+        setDevOtp(r.data.dev_otp);
+        setResendMsg("Dev mode — email not sent. Use the code shown below.");
+      } else {
+        setResendMsg("Code sent! Check your email inbox.");
+      }
       setTimeout(() => otpRefs[0].current?.focus(), 100);
     } catch (err) {
       const msg = err.response?.data?.error || "";
@@ -683,7 +733,7 @@ export function StaffVerifyEmailPage() {
         setStep("otp");
         setResendMsg("You already have an active code. Enter it below.");
       } else {
-        setError(msg || "Could not send code. Try again.");
+        setError(msg || "Could not send code. Check email config or try again.");
       }
     } finally { setSending(false); }
   };
@@ -710,10 +760,15 @@ export function StaffVerifyEmailPage() {
   };
 
   const handleResend = async () => {
-    setResendMsg(""); setSending(true);
+    setResendMsg(""); setDevOtp(""); setSending(true);
     try {
-      await staffResendOTP(email.trim().toLowerCase());
-      setResendMsg("New code sent! Check your inbox.");
+      const r = await staffResendOTP(email.trim().toLowerCase());
+      if (r.data?.dev_otp) {
+        setDevOtp(r.data.dev_otp);
+        setResendMsg("Dev mode — email not sent. Use the code shown below.");
+      } else {
+        setResendMsg("New code sent! Check your inbox.");
+      }
     } catch (err) {
       const msg = err.response?.data?.error || "";
       setResendMsg(msg.includes("wait") ? msg : "Could not resend. Try again shortly.");
@@ -768,18 +823,55 @@ export function StaffVerifyEmailPage() {
       >
         <form onSubmit={handleVerify} style={{ display:"flex", flexDirection:"column" }}>
           {error     && <AlertBox type="error">{error}</AlertBox>}
-          {resendMsg && <AlertBox type={resendMsg.includes("New code") ? "success" : "info"}>{resendMsg}</AlertBox>}
+          {resendMsg && <AlertBox type={resendMsg.includes("New code") || resendMsg.includes("sent") ? "success" : "info"}>{resendMsg}</AlertBox>}
 
-          {/* Info banner */}
-          <div style={{ display:"flex", gap:"var(--s2)", padding:"var(--s3)", background:"var(--info-t)", border:"1px solid rgba(55,138,221,.2)", borderRadius:"var(--r3)", fontSize:".8125rem", color:"var(--info)", marginBottom:"var(--s4)" }}>
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{ flexShrink:0, marginTop:"1px" }}>
-              <circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01" strokeLinecap="round"/>
+          {/* Dev OTP banner — shown only when console email backend is active */}
+          {devOtp && (
+            <div style={{
+              display:"flex", alignItems:"center", justifyContent:"space-between",
+              padding:"10px 14px", marginBottom:"var(--s3)",
+              background:"rgba(96,165,250,.1)", border:"1.5px solid rgba(96,165,250,.4)",
+              borderRadius:"var(--r3)",
+            }}>
+              <div>
+                <div style={{ fontSize:".6875rem", fontWeight:800, textTransform:"uppercase", letterSpacing:".08em", color:"#60a5fa", marginBottom:2 }}>
+                  Dev OTP (console backend)
+                </div>
+                <div style={{ fontFamily:"monospace", fontSize:"1.5rem", fontWeight:900, letterSpacing:"6px", color:"var(--t1)" }}>{devOtp}</div>
+              </div>
+              <button type="button"
+                onClick={() => {
+                  const digits = devOtp.split("");
+                  setOtp([...digits, ...Array(6 - digits.length).fill("")]);
+                  setTimeout(() => otpRefs[Math.min(digits.length, 5)].current?.focus(), 50);
+                }}
+                style={{ padding:"6px 12px", borderRadius:"var(--r2)", border:"1px solid rgba(96,165,250,.4)", background:"rgba(96,165,250,.12)", cursor:"pointer", fontSize:".75rem", fontWeight:700, color:"#60a5fa", fontFamily:"var(--ff-b)" }}>
+                Auto-fill
+              </button>
+            </div>
+          )}
+
+          {/* Email sent to — with change option */}
+          <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", padding:"10px 14px", background:"var(--info-t)", border:"1px solid rgba(55,138,221,.2)", borderRadius:"var(--r3)", fontSize:".8125rem", color:"var(--info)", marginBottom:"var(--s3)" }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{ flexShrink:0 }}>
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
             </svg>
-            Email: <strong style={{ marginLeft:"4px" }}>{email}</strong>
-            <button type="button" onClick={() => { setStep("email"); setOtp(["","","","","",""]); setError(""); setResendMsg(""); }}
+            Code sent to <strong style={{ marginLeft:4 }}>{email}</strong>
+            <button type="button" onClick={() => { setStep("email"); setOtp(["","","","","",""]); setError(""); setResendMsg(""); setDevOtp(""); }}
               style={{ marginLeft:"auto", background:"none", border:"none", color:"var(--brand)", fontWeight:600, fontSize:".8125rem", cursor:"pointer", fontFamily:"var(--ff-b)", padding:0, flexShrink:0 }}>
               Change
             </button>
+          </div>
+
+          {/* Spam folder hint */}
+          <div style={{ display:"flex", gap:"var(--s2)", padding:"10px 14px", background:"rgba(239,159,39,.08)", border:"1px solid rgba(239,159,39,.3)", borderRadius:"var(--r3)", fontSize:".8125rem", marginBottom:"var(--s4)" }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--warn)" strokeWidth="2" style={{ flexShrink:0, marginTop:"1px" }}>
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="3"/>
+            </svg>
+            <span style={{ color:"var(--t2)", lineHeight:1.5 }}>
+              Can't find it? Check your <strong>Spam</strong> or <strong>Promotions</strong> folder.
+              Mark as <strong>"Not spam"</strong> so future codes land in your inbox.
+            </span>
           </div>
 
           {/* OTP boxes */}
@@ -794,8 +886,8 @@ export function StaffVerifyEmailPage() {
             ))}
           </div>
           <button type="button" disabled={sending} onClick={handleResend}
-            style={{ alignSelf:"center", background:"none", border:"none", color:"var(--brand)", fontWeight:600, fontSize:".8125rem", cursor:"pointer", fontFamily:"var(--ff-b)", padding:"4px 8px", marginBottom:"var(--s4)" }}>
-            {sending ? "Sending…" : "Didn't receive it? Resend code"}
+            style={{ alignSelf:"center", background:"none", border:"none", color:"var(--brand)", fontWeight:600, fontSize:".8125rem", cursor:sending?"not-allowed":"pointer", fontFamily:"var(--ff-b)", padding:"4px 8px", marginBottom:"var(--s4)", opacity:sending?0.6:1 }}>
+            {sending ? "Sending…" : "Resend code"}
           </button>
 
           {/* Password */}

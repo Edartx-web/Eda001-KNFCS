@@ -1,0 +1,33 @@
+{% extends "emails/_base.html" %}
+{% block body %}
+<h1>Branch Admin Account Created</h1>
+<p>Hi {{ name }},</p>
+<p>You've been set up as a <strong>Branch Admin</strong> for <strong>{{ branch }}</strong> at KNFC. Use the details below to log in to your admin portal.</p>
+
+<div class="info-box brand">
+  <h2 style="margin-bottom:16px;font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:#E8521A">Your Credentials</h2>
+  <div class="kv-row">
+    <span class="kv-label">Email address</span>
+    <span class="kv-value">{{ email }}</span>
+  </div>
+  <div class="kv-row">
+    <span class="kv-label">Temporary password</span>
+    <span class="kv-value mono">{{ password }}</span>
+  </div>
+  <div class="kv-row">
+    <span class="kv-label">Your branch</span>
+    <span class="kv-value">{{ branch }}</span>
+  </div>
+</div>
+
+<div style="text-align:center;margin:28px 0">
+  <a href="{{ login_url|default:'https://knfcs.com/login/admin' }}" class="btn">Open Admin Portal →</a>
+</div>
+
+<div class="info-box">
+  <p style="font-size:14px;color:#4A433C;margin:0"><strong>As Branch Admin you can:</strong> manage staff, view orders, update stock, set operating hours, create offers, and view payment reports for your branch.</p>
+</div>
+
+<div class="divider"></div>
+<p class="small">Change your password immediately after first login. Contact your Super Admin if you need help.</p>
+{% endblock %}

@@ -45,12 +45,23 @@ function Countdown({ endAt }) {
 
 /* ── Offer type labels ──────────────────────────────────────────────── */
 const TYPE_LABELS = {
-  percentage: "% Discount",
-  flat:       "₹ Flat Off",
-  combo:      "Combo Deal",
-  free_item:  "Buy X Get Y",
-  bogo:       "Buy 1 Get 1",
+  percentage:    "% Discount",
+  flat:          "₹ Flat Off",
+  combo:         "Combo Deal",
+  free_item:     "Buy X Get Y",
+  bogo:          "Buy 1 Get 1",
+  welcome:       "Welcome Bonus",
+  referral:      "Share & Earn",
+  re_engagement: "Re-engage",
+  scratch_card:  "Scratch Card",
 };
+
+/* ── Random coupon code generator ──────────────────────────────────── */
+function genCoupon(prefix = "KNFC") {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const rand = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return `${prefix}${rand}`;
+}
 
 /* ── Drawer ─────────────────────────────────────────────────────────── */
 function Drawer({ open, onClose, title, children }) {
@@ -78,47 +89,64 @@ function Drawer({ open, onClose, title, children }) {
 /* ── Offer form (create / edit) ─────────────────────────────────────── */
 function OfferForm({ initial, branches, onSave, onClose, saving }) {
   const [form, setForm] = useState({
-    branch_id:          initial?.branch || "",
-    name:               initial?.name || "",
-    tagline:            initial?.tagline || "",
-    offer_type:         initial?.offer_type || "percentage",
-    discount_percentage:initial?.discount_percentage || "",
-    discount_flat:      initial?.discount_flat || "",
-    original_price:     initial?.original_price || "",
-    offer_price:        initial?.offer_price || "",
-    start_at:           initial?.start_at ? initial.start_at.slice(0,16) : new Date().toISOString().slice(0,16),
-    end_at:             initial?.end_at ? initial.end_at.slice(0,16) : "",
-    carousel_order:     initial?.carousel_order || 0,
-    is_active:          initial?.is_active ?? true,
-    auto_broadcast:     initial?.auto_broadcast ?? false,
-    emoji: initial?.emoji || "",
-    min_order_value:    initial?.min_order_value || "",
+    branch_id:               initial?.branch || "",
+    name:                    initial?.name || "",
+    tagline:                 initial?.tagline || "",
+    offer_type:              initial?.offer_type || "percentage",
+    discount_percentage:     initial?.discount_percentage || "",
+    discount_flat:           initial?.discount_flat || "",
+    original_price:          initial?.original_price || "",
+    offer_price:             initial?.offer_price || "",
+    start_at:                initial?.start_at ? initial.start_at.slice(0,16) : new Date().toISOString().slice(0,16),
+    end_at:                  initial?.end_at ? initial.end_at.slice(0,16) : "",
+    carousel_order:          initial?.carousel_order || 0,
+    is_active:               initial?.is_active ?? true,
+    auto_broadcast:          initial?.auto_broadcast ?? false,
+    emoji:                   initial?.emoji || "",
+    min_order_value:         initial?.min_order_value || "",
     max_redemptions_per_user: initial?.max_redemptions_per_user || 0,
-    first_order_only:   initial?.first_order_only ?? false,
-    lifetime:           !initial?.end_at,  // UI-only: true = no end date
-    category_id:        initial?.category || "",
-    coupon_code:        initial?.coupon_code || "",
+    first_order_only:        initial?.first_order_only ?? false,
+    require_coupon:          initial?.require_coupon ?? false,
+    lifetime:                !initial?.end_at,  // UI-only: true = no end date
+    category_id:             initial?.category || "",
+    coupon_code:             initial?.coupon_code || "",
+    // WELCOME
+    welcome_bonus_amount:    initial?.welcome_bonus_amount || "",
+    // REFERRAL
+    referral_reward_type:    initial?.referral_reward_type || "coupon",
+    referral_reward_value:   initial?.referral_reward_value || "",
+    referral_min_friend_order: initial?.referral_min_friend_order || "",
+    referral_reward_on_signup: initial?.referral_reward_on_signup ?? false,
+    // RE_ENGAGEMENT
+    inactive_days:           initial?.inactive_days || 7,
+    reengagement_message:    initial?.reengagement_message || "",
   });
 
-  const [image,       setImage]       = useState(null);
-  const [errors,      setErrors]      = useState({});
-  const [comboItems,  setComboItems]  = useState(
+  const [image,          setImage]          = useState(null);
+  const [video,          setVideo]          = useState(null);
+  const [errors,         setErrors]         = useState({});
+  const [comboItems,     setComboItems]     = useState(
     initial?.offer_items?.map(i => ({ menu_item_id: i.menu_item, name: i.menu_item_name || "", quantity: i.quantity, notes: i.notes || "" })) || []
   );
-  const [menuItems,   setMenuItems]   = useState([]);
-  const [itemSearch,  setItemSearch]  = useState("");
+  // applies_to: specific items that get the discount (non-combo types)
+  const [appliesTo,      setAppliesTo]      = useState(
+    initial?.applies_to_details || []  // [{id, name}]
+  );
+  const [menuItems,      setMenuItems]      = useState([]);
+  const [itemSearch,     setItemSearch]     = useState("");
+  const [appliesToSearch, setAppliesToSearch] = useState("");
 
   const [categories,  setCategories]  = useState([]);
   const COMBO_TYPES = ["combo", "free_item", "bogo"];
   const isCombo = COMBO_TYPES.includes(form.offer_type);
 
-  // Load menu items when branch is selected and offer type is combo
+  // Load menu items whenever a branch is selected (used for both combo and applies_to pickers)
   useEffect(() => {
-    if (!form.branch_id || !isCombo) return;
+    if (!form.branch_id) return;
     axiosClient.get("/menu/items/", { params: { branch_id: form.branch_id, available: "" } })
       .then(r => setMenuItems(r.data.items || []))
       .catch(() => {});
-  }, [form.branch_id, form.offer_type]);
+  }, [form.branch_id]);
 
   // Load categories when branch changes
   useEffect(() => {
@@ -155,25 +183,31 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
     const fd = new FormData();
+    const BOOL_FIELDS = ["is_active", "auto_broadcast", "first_order_only", "require_coupon", "referral_reward_on_signup"];
     const { lifetime, ...formFields } = form;
-    Object.entries(formFields).forEach(([k,v]) => {
+    Object.entries(formFields).forEach(([k, v]) => {
       if (k === "end_at" && lifetime) return; // lifetime = no end_at
+      if (BOOL_FIELDS.includes(k)) { fd.set(k, v ? "true" : "false"); return; }
       if (v !== "" && v !== null && v !== undefined) fd.append(k, v);
     });
-    fd.set("first_order_only", form.first_order_only ? "true" : "false");
     if (image) fd.append("image", image);
-    // Append combo items as JSON string — backend parses it
+    if (video) fd.append("video", video);
+    // Combo items as JSON — backend _save_offer_extras parses it
     if (isCombo && comboItems.length > 0) {
       fd.append("offer_items", JSON.stringify(
         comboItems.map(ci => ({ menu_item_id: ci.menu_item_id, quantity: Number(ci.quantity) || 1, notes: ci.notes || "" }))
       ));
     }
+    // Specific items (applies_to) as JSON — always send so backend can clear it
+    fd.append("applies_to_ids", JSON.stringify(appliesTo.map(i => i.id)));
     onSave(fd);
   };
 
   const TYPES = [
     ["percentage","% Discount"],["flat","₹ Flat Off"],
     ["combo","Combo Deal"],["free_item","Buy X Get Y"],["bogo","BOGO"],
+    ["welcome","Welcome Bonus"],["referral","Share & Earn"],
+    ["re_engagement","Re-engage"],["scratch_card","Scratch Card"],
   ];
 
   const FL = ({ children, req }) => (
@@ -182,8 +216,16 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
     </label>
   );
 
+  const SectionHead = ({ children }) => (
+    <div style={{ fontSize:".625rem", fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"var(--t4)", padding:"var(--s3) 0 var(--s2)", borderTop:"1px solid var(--bd)", marginTop:"var(--s2)", marginBottom:"var(--s3)" }}>
+      {children}
+    </div>
+  );
+
   return (
     <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:0 }}>
+
+      {/* ── Basic Info ───────────────────────────── */}
       {/* Branch */}
       <FL req>Branch</FL>
       <div className={`input-wrap${errors.branch_id?" err":""}`} style={{ marginBottom:"var(--s4)" }}>
@@ -208,8 +250,8 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
         <input value={form.tagline} onChange={e => set("tagline", e.target.value)} placeholder="e.g. Limited time deal — don't miss out!" className="input-field" />
       </div>
 
-      {/* Offer type */}
-      <FL req>Offer type</FL>
+      <SectionHead>Offer Type</SectionHead>
+      <FL req>Type</FL>
       <div style={{ display:"flex", gap:"var(--s2)", flexWrap:"wrap", marginBottom:"var(--s4)" }}>
         {TYPES.map(([val, lbl]) => (
           <button key={val} type="button" onClick={() => set("offer_type", val)}
@@ -274,39 +316,323 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
         </div>
       )}
 
-      {/* Discount values */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
-        <div>
-          <FL>Discount %</FL>
-          <div className="input-wrap">
-            <span style={{ color:"var(--t3)" }}>%</span>
-            <input type="number" min="0" max="100" value={form.discount_percentage} onChange={e => set("discount_percentage", e.target.value)} placeholder="e.g. 30" className="input-field" />
-          </div>
+      {/* ── Type description badge — explains unique mechanism ─── */}
+      {form.offer_type === "welcome" && (
+        <div style={{ padding:"var(--s3) var(--s4)", background:"rgba(55,138,221,.06)", border:"1px solid rgba(55,138,221,.2)", borderRadius:"var(--r3)", marginBottom:"var(--s4)", fontSize:".8125rem", color:"var(--info)", lineHeight:1.6 }}>
+          <strong>How this works:</strong> Auto-applied on each customer's very first order after signup. No coupon entry needed — the system checks automatically. Each customer can only use it once ever.
         </div>
-        <div>
-          <FL>Flat discount (₹)</FL>
-          <div className="input-wrap">
-            <span style={{ color:"var(--t3)" }}>₹</span>
-            <input type="number" min="0" value={form.discount_flat} onChange={e => set("discount_flat", e.target.value)} placeholder="e.g. 50" className="input-field" />
-          </div>
+      )}
+      {form.offer_type === "referral" && (
+        <div style={{ padding:"var(--s3) var(--s4)", background:"rgba(29,158,117,.06)", border:"1px solid rgba(29,158,117,.2)", borderRadius:"var(--r3)", marginBottom:"var(--s4)", fontSize:".8125rem", color:"var(--ok)", lineHeight:1.6 }}>
+          <strong>How this works:</strong> Every customer gets their own unique shareable link. We track exactly who joined through whose link. When their friend qualifies, the referrer earns a reward via WhatsApp automatically — no generic coupon, every link is tied to one specific customer.
         </div>
-        <div>
-          <FL>Original price (₹)</FL>
-          <div className="input-wrap">
-            <span style={{ color:"var(--t3)" }}>₹</span>
-            <input type="number" min="0" value={form.original_price} onChange={e => set("original_price", e.target.value)} placeholder="MRP" className="input-field" />
-          </div>
+      )}
+      {form.offer_type === "re_engagement" && (
+        <div style={{ padding:"var(--s3) var(--s4)", background:"rgba(239,159,39,.06)", border:"1px solid rgba(239,159,39,.2)", borderRadius:"var(--r3)", marginBottom:"var(--s4)", fontSize:".8125rem", color:"var(--warn)", lineHeight:1.6 }}>
+          <strong>How this works:</strong> You set an "inactive after X days" threshold. A Celery background job checks daily — any customer who hasn't ordered in that many days gets a WhatsApp message with your coupon code. Each customer only gets it once per offer cycle. You can also fire it manually from the Redemptions tab.
         </div>
-        <div>
-          <FL>Offer price (₹)</FL>
-          <div className="input-wrap">
-            <span style={{ color:"var(--t3)" }}>₹</span>
-            <input type="number" min="0" value={form.offer_price} onChange={e => set("offer_price", e.target.value)} placeholder="Deal price" className="input-field" />
-          </div>
+      )}
+      {form.offer_type === "scratch_card" && (
+        <div style={{ padding:"var(--s3) var(--s4)", background:"rgba(124,58,237,.06)", border:"1px solid rgba(124,58,237,.2)", borderRadius:"var(--r3)", marginBottom:"var(--s4)", fontSize:".8125rem", color:"#7C3AED", lineHeight:1.6 }}>
+          <strong>How this works:</strong> A digital scratch card appears on the customer's Offers page. They scratch 50%+ of the surface — the coupon code and discount are revealed underneath. They copy the code and enter it at cart checkout to claim the discount. You set the code + discount; the system handles the reveal animation. Each customer can scratch once (or per your max-uses setting).
         </div>
-      </div>
+      )}
 
-      {/* Dates */}
+      {/* ══ WELCOME — bonus amount + min order ══ */}
+      {form.offer_type === "welcome" && (
+        <>
+          <SectionHead>Welcome Bonus</SectionHead>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL req>Bonus amount (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.welcome_bonus_amount}
+                  onChange={e => set("welcome_bonus_amount", e.target.value)}
+                  placeholder="e.g. 50" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Fixed ₹ off the customer's first order</p>
+            </div>
+            <div>
+              <FL>Min. order value (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.min_order_value}
+                  onChange={e => set("min_order_value", e.target.value)}
+                  placeholder="e.g. 199 (leave blank = any)" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Minimum cart value to claim bonus</p>
+            </div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", padding:"var(--s3) var(--s4)", background:"rgba(55,138,221,.06)", border:"1px solid rgba(55,138,221,.2)", borderRadius:"var(--r3)", marginBottom:"var(--s4)", fontSize:".8125rem", color:"var(--info)" }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+            First-order restriction is always on for Welcome type — customers can only use it once.
+          </div>
+        </>
+      )}
+
+      {/* ══ REFERRAL — reward settings ══ */}
+      {form.offer_type === "referral" && (
+        <>
+          <SectionHead>Reward Settings</SectionHead>
+          <FL req>Reward type for referrer</FL>
+          <div style={{ display:"flex", gap:"var(--s2)", flexWrap:"wrap", marginBottom:"var(--s4)" }}>
+            {[["coupon","Coupon Code"],["scratch","Scratch Card"],["discount","Direct Discount"]].map(([v,l]) => (
+              <button key={v} type="button" onClick={() => set("referral_reward_type", v)}
+                style={{ padding:"8px 14px", borderRadius:"var(--r3)", fontSize:".8125rem", fontWeight:600, cursor:"pointer", transition:"all var(--d1) var(--ease)", border:`1.5px solid ${form.referral_reward_type===v?"var(--brand)":"var(--bd)"}`, background:form.referral_reward_type===v?"var(--brand-tint)":"var(--bg2)", color:form.referral_reward_type===v?"var(--brand)":"var(--t2)", fontFamily:"var(--ff-b)" }}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL req>Reward value (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.referral_reward_value}
+                  onChange={e => set("referral_reward_value", e.target.value)}
+                  placeholder="e.g. 30" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>₹ reward sent to the referrer per qualified friend</p>
+            </div>
+            <div>
+              <FL>Friend's min order (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.referral_min_friend_order}
+                  onChange={e => set("referral_min_friend_order", e.target.value)}
+                  placeholder="0 = any order" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Friend must spend this to trigger the reward</p>
+            </div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"var(--s3) var(--s4)", background:form.referral_reward_on_signup?"var(--ok-t)":"var(--bg2)", border:`1px solid ${form.referral_reward_on_signup?"rgba(29,158,117,.3)":"var(--bd)"}`, borderRadius:"var(--r3)", marginBottom:"var(--s4)", cursor:"pointer" }}
+            onClick={() => set("referral_reward_on_signup", !form.referral_reward_on_signup)}>
+            <div>
+              <div style={{ fontWeight:700, fontSize:".9375rem", color:form.referral_reward_on_signup?"var(--ok)":"var(--t1)" }}>Reward on signup (instant)</div>
+              <div style={{ fontSize:".8125rem", color:"var(--t3)", marginTop:"2px" }}>Give reward the moment friend signs up — no need to wait for first order</div>
+            </div>
+            <button type="button" className={`toggle ${form.referral_reward_on_signup?"on":"off"}`} style={{ flexShrink:0 }}><div className="toggle-knob"/></button>
+          </div>
+          <div>
+            <FL>Max uses per customer</FL>
+            <div className="input-wrap" style={{ marginBottom:"var(--s2)" }}>
+              <input type="number" min="0" value={form.max_redemptions_per_user}
+                onChange={e => set("max_redemptions_per_user", e.target.value)}
+                placeholder="0 = unlimited" className="input-field"/>
+            </div>
+            <p style={{ fontSize:".6875rem", color:"var(--t4)", marginBottom:"var(--s4)" }}>Max number of friends a customer can refer for rewards (0 = unlimited)</p>
+          </div>
+        </>
+      )}
+
+      {/* ══ RE_ENGAGEMENT — discount + coupon + inactive days ══ */}
+      {form.offer_type === "re_engagement" && (
+        <>
+          <SectionHead>Re-engagement Offer</SectionHead>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL req>Inactive after (days)</FL>
+              <div className="input-wrap">
+                <input type="number" min="1" max="365" value={form.inactive_days}
+                  onChange={e => set("inactive_days", e.target.value)}
+                  placeholder="7" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Target customers with no orders in this many days</p>
+            </div>
+            <div>
+              <FL>Discount %</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>%</span>
+                <input type="number" min="0" max="100" value={form.discount_percentage}
+                  onChange={e => set("discount_percentage", e.target.value)}
+                  placeholder="e.g. 20" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>% off to offer via WhatsApp</p>
+            </div>
+            <div>
+              <FL>Flat discount (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.discount_flat}
+                  onChange={e => set("discount_flat", e.target.value)}
+                  placeholder="e.g. 40" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Flat ₹ off (use % or ₹, not both)</p>
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL req>Coupon code</FL>
+              <div style={{ display:"flex", gap:"var(--s2)", marginBottom:0 }}>
+                <div className="input-wrap" style={{ flex:1, marginBottom:0 }}>
+                  <input value={form.coupon_code} onChange={e => set("coupon_code", e.target.value.toUpperCase())}
+                    placeholder="e.g. COMEBACK20" maxLength={30}
+                    style={{ flex:1, border:"none", background:"transparent", fontSize:".9375rem", outline:"none", fontFamily:"monospace", fontWeight:700, letterSpacing:".06em", color:"var(--t1)" }}
+                    className="input-field"/>
+                </div>
+                <button type="button" onClick={() => set("coupon_code", genCoupon("RE"))}
+                  style={{ padding:"0 var(--s3)", borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", color:"var(--t2)", fontSize:".75rem", fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+                  Generate
+                </button>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Included in the WhatsApp message so the customer can paste it at cart</p>
+            </div>
+            <div>
+              <FL>Min. order value (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.min_order_value}
+                  onChange={e => set("min_order_value", e.target.value)}
+                  placeholder="leave blank = any" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Minimum spend to redeem</p>
+            </div>
+          </div>
+          <FL>Custom WhatsApp message <span style={{ fontWeight:400, color:"var(--t4)" }}>(optional)</span></FL>
+          <textarea value={form.reengagement_message}
+            onChange={e => set("reengagement_message", e.target.value)}
+            placeholder={"We miss you, {name}! Come back and get {discount} off with code {code} 🍗"}
+            rows={3}
+            style={{ width:"100%", padding:"var(--s3) var(--s4)", border:"1px solid var(--bd)", borderRadius:"var(--r3)", background:"var(--bg2)", color:"var(--t1)", fontSize:".875rem", fontFamily:"var(--ff-b)", resize:"vertical", outline:"none", boxSizing:"border-box", marginBottom:"var(--s2)" }}/>
+          <p style={{ fontSize:".6875rem", color:"var(--t4)", marginBottom:"var(--s4)" }}>
+            Placeholders: <code>{"{name}"}</code> · <code>{"{discount}"}</code> · <code>{"{code}"}</code>
+          </p>
+        </>
+      )}
+
+      {/* ══ PERCENTAGE — discount % + original price ══ */}
+      {form.offer_type === "percentage" && (
+        <>
+          <SectionHead>Discount</SectionHead>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL req>Discount %</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>%</span>
+                <input type="number" min="0" max="100" value={form.discount_percentage}
+                  onChange={e => set("discount_percentage", e.target.value)} placeholder="e.g. 30" className="input-field"/>
+              </div>
+            </div>
+            <div>
+              <FL>Original price (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.original_price}
+                  onChange={e => set("original_price", e.target.value)} placeholder="MRP (optional)" className="input-field"/>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ══ FLAT — flat ₹ off + original price ══ */}
+      {form.offer_type === "flat" && (
+        <>
+          <SectionHead>Discount</SectionHead>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL req>Flat discount (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.discount_flat}
+                  onChange={e => set("discount_flat", e.target.value)} placeholder="e.g. 50" className="input-field"/>
+              </div>
+            </div>
+            <div>
+              <FL>Original price (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.original_price}
+                  onChange={e => set("original_price", e.target.value)} placeholder="MRP (optional)" className="input-field"/>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ══ COMBO / FREE_ITEM / BOGO — bundle pricing ══ */}
+      {isCombo && (
+        <>
+          <SectionHead>Bundle Pricing <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(optional)</span></SectionHead>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL>Original price (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.original_price}
+                  onChange={e => set("original_price", e.target.value)} placeholder="Regular price" className="input-field"/>
+              </div>
+            </div>
+            <div>
+              <FL>Bundle / deal price (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.offer_price}
+                  onChange={e => set("offer_price", e.target.value)} placeholder="Deal price" className="input-field"/>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ══ SCRATCH CARD — discount + coupon code revealed on scratch ══ */}
+      {form.offer_type === "scratch_card" && (
+        <>
+          <SectionHead>Scratch Card Prize</SectionHead>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL req>Discount %</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>%</span>
+                <input type="number" min="1" max="100" value={form.discount_percentage}
+                  onChange={e => set("discount_percentage", e.target.value)} placeholder="e.g. 15" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>This % is shown after the customer scratches</p>
+            </div>
+            <div>
+              <FL req>Coupon code revealed</FL>
+              <div style={{ display:"flex", gap:"var(--s2)" }}>
+                <div className="input-wrap" style={{ flex:1, marginBottom:0 }}>
+                  <input value={form.coupon_code} onChange={e => set("coupon_code", e.target.value.toUpperCase())}
+                    placeholder="e.g. SCRATCH15" maxLength={20}
+                    style={{ flex:1, border:"none", background:"transparent", fontSize:".9375rem", outline:"none", fontFamily:"monospace", fontWeight:700, letterSpacing:".06em", color:"var(--t1)" }}
+                    className="input-field"/>
+                </div>
+                <button type="button" onClick={() => set("coupon_code", genCoupon("SC"))}
+                  style={{ padding:"0 var(--s3)", borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", color:"var(--t2)", fontSize:".75rem", fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+                  Generate
+                </button>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>This code is hidden under the scratch surface — revealed when scratched</p>
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL>Min. order value (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.min_order_value}
+                  onChange={e => set("min_order_value", e.target.value)} placeholder="leave blank = any" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Minimum cart value to use the revealed code</p>
+            </div>
+            <div>
+              <FL>Max scratches per customer</FL>
+              <div className="input-wrap">
+                <input type="number" min="0" value={form.max_redemptions_per_user}
+                  onChange={e => set("max_redemptions_per_user", e.target.value)} placeholder="1 (recommended)" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>0 = unlimited. Set to 1 to allow one scratch per customer per offer</p>
+            </div>
+          </div>
+          <div style={{ padding:"var(--s3) var(--s4)", background:"rgba(124,58,237,.05)", border:"1px solid rgba(124,58,237,.15)", borderRadius:"var(--r3)", marginBottom:"var(--s4)", fontSize:".8125rem", color:"#7C3AED" }}>
+            <strong>Important:</strong> Create an active <em>% Discount</em> offer with the same coupon code (e.g. SCRATCH15 at 15% off) — the scratch card reveals the code but the discount logic lives in that offer. The scratch card is just the delivery/reveal mechanism.
+          </div>
+        </>
+      )}
+
+      <SectionHead>Schedule</SectionHead>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
         <div>
           <FL req>Start date & time</FL>
@@ -340,118 +666,225 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
         </div>
       </div>
 
-      {/* Emoji + carousel order */}
-      <div style={{ display:"grid", gridTemplateColumns:"80px 1fr auto", gap:"var(--s3)", alignItems:"flex-end", marginBottom:"var(--s4)" }}>
+      <SectionHead>Display</SectionHead>
+      <div style={{ display:"grid", gridTemplateColumns:"90px 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
         <div>
           <FL>Emoji</FL>
           <div className="input-wrap">
-            <input value={form.emoji} onChange={e => set("emoji", e.target.value)} maxLength={4} className="input-field" style={{ textAlign:"center", fontSize:"1.25rem" }} />
+            <input value={form.emoji} onChange={e => set("emoji", e.target.value)} maxLength={4} className="input-field" style={{ textAlign:"center", fontSize:"1.375rem" }} />
           </div>
         </div>
         <div>
           <FL>Display order</FL>
           <div className="input-wrap">
-            <input type="number" min="0" value={form.carousel_order} onChange={e => set("carousel_order", e.target.value)} className="input-field" />
-          </div>
-        </div>
-        <div style={{ paddingBottom:"2px" }}>
-          <FL>Active</FL>
-          <button type="button" onClick={() => set("is_active", !form.is_active)} className={`toggle ${form.is_active?"on":"off"}`}>
-            <div className="toggle-knob" />
-          </button>
-        </div>
-        <div style={{ paddingBottom:"2px" }}>
-          <FL>Auto-Broadcast</FL>
-          <button type="button" onClick={() => set("auto_broadcast", !form.auto_broadcast)} className={`toggle ${form.auto_broadcast?"on":"off"}`}>
-            <div className="toggle-knob" />
-          </button>
-          <div style={{ fontSize:".6875rem", color:"var(--t3)", marginTop:"4px" }}>
-            Auto-send to branch customers on activation
+            <input type="number" min="0" value={form.carousel_order} onChange={e => set("carousel_order", e.target.value)} placeholder="0 = first" className="input-field" />
           </div>
         </div>
       </div>
-
-      {/* Redemption rules */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
-        <div>
-          <FL>Min. order value (₹)</FL>
-          <div className="input-wrap">
-            <span style={{ color:"var(--t3)" }}>₹</span>
-            <input type="number" min="0" value={form.min_order_value}
-              onChange={e => set("min_order_value", e.target.value)}
-              placeholder="e.g. 199 (leave blank = any)" className="input-field"/>
+        <div onClick={() => set("is_active", !form.is_active)}
+          style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px var(--s4)", background:form.is_active?"var(--ok-t)":"var(--bg2)", border:`1px solid ${form.is_active?"rgba(29,158,117,.3)":"var(--bd)"}`, borderRadius:"var(--r3)", cursor:"pointer", transition:"all var(--d1) var(--ease)" }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:".875rem", color:form.is_active?"var(--ok)":"var(--t1)" }}>Active</div>
+            <div style={{ fontSize:".6875rem", color:"var(--t3)" }}>Visible to customers</div>
           </div>
-          <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Customer must spend at least this amount</p>
+          <button type="button" className={`toggle ${form.is_active?"on":"off"}`} style={{ flexShrink:0 }}><div className="toggle-knob"/></button>
         </div>
-        <div>
-          <FL>Max uses per customer</FL>
-          <div className="input-wrap">
-            <input type="number" min="0" value={form.max_redemptions_per_user}
-              onChange={e => set("max_redemptions_per_user", e.target.value)}
-              placeholder="0 = unlimited" className="input-field"/>
+        <div onClick={() => set("auto_broadcast", !form.auto_broadcast)}
+          style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px var(--s4)", background:form.auto_broadcast?"var(--brand-tint)":"var(--bg2)", border:`1px solid ${form.auto_broadcast?"var(--bdb)":"var(--bd)"}`, borderRadius:"var(--r3)", cursor:"pointer", transition:"all var(--d1) var(--ease)" }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:".875rem", color:form.auto_broadcast?"var(--brand)":"var(--t1)" }}>Auto-broadcast</div>
+            <div style={{ fontSize:".6875rem", color:"var(--t3)" }}>WhatsApp on activate</div>
           </div>
-          <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>0 means unlimited redemptions</p>
+          <button type="button" className={`toggle ${form.auto_broadcast?"on":"off"}`} style={{ flexShrink:0 }}><div className="toggle-knob"/></button>
         </div>
       </div>
 
-      {/* Category restriction */}
-      <FL>Restrict to category (optional)</FL>
-      <div className="input-wrap" style={{ marginBottom:"var(--s2)" }}>
-        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        <select value={form.category_id} onChange={e => set("category_id", e.target.value)}
-          style={{ flex:1, border:"none", background:"transparent", color:form.category_id?"var(--t1)":"var(--t4)", fontSize:".9375rem", outline:"none", padding:"0 var(--s2)", fontFamily:"var(--ff-b)", cursor:"pointer" }}>
-          <option value="">All categories (no restriction)</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </div>
-      <p style={{ fontSize:".6875rem", color:"var(--t4)", marginBottom:"var(--s4)" }}>
-        Only items from this category will get the discount. Leave blank to apply to the entire order.
-      </p>
-
-      {/* Coupon code (optional) */}
-      <FL>Coupon code (optional)</FL>
-      <div className="input-wrap" style={{ marginBottom:"var(--s2)" }}>
-        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>
-        <input value={form.coupon_code} onChange={e => set("coupon_code", e.target.value.toUpperCase())}
-          placeholder="e.g. KNFC20 (leave blank = offer only, no code)" maxLength={30}
-          style={{ flex:1, border:"none", background:"transparent", fontSize:".9375rem", outline:"none", fontFamily:"monospace", fontWeight:700, letterSpacing:".06em", color:"var(--t1)" }}
-          className="input-field"/>
-      </div>
-      <p style={{ fontSize:".6875rem", color:"var(--t4)", marginBottom:"var(--s4)" }}>
-        Customers can type this code in the cart to apply the offer directly.
-      </p>
-
-      {/* First order only toggle */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"var(--s3) var(--s4)", background:form.first_order_only?"linear-gradient(135deg,rgba(55,138,221,.08),rgba(55,138,221,.03))":"var(--bg2)", border:`1px solid ${form.first_order_only?"rgba(55,138,221,.3)":"var(--bd)"}`, borderRadius:"var(--r3)", marginBottom:"var(--s4)", cursor:"pointer", transition:"all var(--d1) var(--ease)" }}
-        onClick={() => set("first_order_only", !form.first_order_only)}>
-        <div>
-          <div style={{ fontWeight:700, fontSize:".9375rem", color:form.first_order_only?"var(--info)":"var(--t1)" }}>First order only</div>
-          <div style={{ fontSize:".8125rem", color:"var(--t3)", marginTop:"2px" }}>Only applies to a customer's very first order at this branch</div>
-        </div>
-        <button type="button" className={`toggle ${form.first_order_only?"on":"off"}`} style={{ flexShrink:0 }}>
-          <div className="toggle-knob"/>
-        </button>
-      </div>
-
-      {/* Image upload */}
-      <FL>Offer image</FL>
-      <div onClick={() => document.getElementById("offer-img-input").click()} style={{ border:`2px dashed ${image?"var(--brand)":"var(--bd)"}`, borderRadius:"var(--r3)", height:"100px", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", marginBottom:"var(--s5)", background:"var(--bg2)", overflow:"hidden", position:"relative" }}>
-        {image
-          ? <img src={URL.createObjectURL(image)} alt="preview" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-          : <div style={{ textAlign:"center", color:"var(--t3)", fontSize:".8125rem" }}>
-              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" style={{marginBottom:"4px"}}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              Click to upload offer image
+      {/* ══ RULES — min order + max uses (only for discount/combo types) ══ */}
+      {["percentage", "flat", "combo", "free_item", "bogo"].includes(form.offer_type) && (
+        <>
+          <SectionHead>Rules</SectionHead>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+            <div>
+              <FL>Min. order value (₹)</FL>
+              <div className="input-wrap">
+                <span style={{ color:"var(--t3)" }}>₹</span>
+                <input type="number" min="0" value={form.min_order_value}
+                  onChange={e => set("min_order_value", e.target.value)}
+                  placeholder="e.g. 199 (leave blank = any)" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>Customer must spend at least this amount</p>
             </div>
-        }
-      </div>
-      <input id="offer-img-input" type="file" accept="image/*" onChange={e => setImage(e.target.files[0])} style={{ display:"none" }} />
+            <div>
+              <FL>Max uses per customer</FL>
+              <div className="input-wrap">
+                <input type="number" min="0" value={form.max_redemptions_per_user}
+                  onChange={e => set("max_redemptions_per_user", e.target.value)}
+                  placeholder="0 = unlimited" className="input-field"/>
+              </div>
+              <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:"3px" }}>0 = unlimited</p>
+            </div>
+          </div>
+        </>
+      )}
 
-      <div style={{ display:"flex", gap:"var(--s2)" }}>
-        <button type="submit" disabled={saving} className="btn btn-p btn-lg" style={{ flex:1 }}>
-          {saving ? <><span className="spin">⟳</span> Saving…</> : initial ? "Save changes" : "Create offer"}
-        </button>
-        <button type="button" onClick={onClose} className="btn btn-s">Cancel</button>
+      {/* ══ CATEGORY + SPECIFIC ITEMS — only for percentage / flat ══ */}
+      {["percentage", "flat"].includes(form.offer_type) && (
+        <>
+          <SectionHead>Scope — Category &amp; Items</SectionHead>
+          <FL>Category restriction <span style={{ fontWeight:400, color:"var(--t4)" }}>(optional)</span></FL>
+          <div className="input-wrap" style={{ marginBottom:"var(--s2)" }}>
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <select value={form.category_id} onChange={e => set("category_id", e.target.value)}
+              style={{ flex:1, border:"none", background:"transparent", color:form.category_id?"var(--t1)":"var(--t4)", fontSize:".9375rem", outline:"none", padding:"0 var(--s2)", fontFamily:"var(--ff-b)", cursor:"pointer" }}>
+              <option value="">All categories (entire order)</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <p style={{ fontSize:".6875rem", color:"var(--t4)", marginBottom:"var(--s4)" }}>
+            Discount applies only to items in this category. Leave blank = entire order.
+          </p>
+
+          <FL>Specific items <span style={{ fontWeight:400, color:"var(--t4)" }}>(optional — narrows further than category)</span></FL>
+          <div className="input-wrap" style={{ marginBottom:"var(--s2)" }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input value={appliesToSearch} onChange={e => setAppliesToSearch(e.target.value)}
+              placeholder={form.branch_id ? "Search menu items to restrict to…" : "Select a branch first"}
+              disabled={!form.branch_id} className="input-field"/>
+          </div>
+          {appliesToSearch.length > 0 && (
+            <div style={{ background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r3)", marginBottom:"var(--s3)", maxHeight:"150px", overflowY:"auto", boxShadow:"var(--sh-md)" }}>
+              {menuItems.filter(m => m.name.toLowerCase().includes(appliesToSearch.toLowerCase()) && !appliesTo.find(a => a.id === m.id)).slice(0,8).map(m => (
+                <button key={m.id} type="button"
+                  onClick={() => { setAppliesTo(a => [...a, { id: m.id, name: m.name }]); setAppliesToSearch(""); }}
+                  style={{ width:"100%", textAlign:"left", padding:"var(--s2) var(--s3)", background:"none", border:"none", borderBottom:"1px solid var(--bd)", cursor:"pointer", fontSize:".875rem", display:"flex", alignItems:"center", gap:"var(--s2)" }}
+                  onMouseEnter={e=>e.currentTarget.style.background="var(--bg2)"}
+                  onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                  <span style={{ fontWeight:500 }}>{m.name}</span>
+                  <span style={{ marginLeft:"auto", color:"var(--t3)", fontSize:".8125rem" }}>₹{m.price}</span>
+                </button>
+              ))}
+              {menuItems.filter(m => m.name.toLowerCase().includes(appliesToSearch.toLowerCase()) && !appliesTo.find(a => a.id === m.id)).length === 0 && (
+                <div style={{ padding:"var(--s3)", color:"var(--t3)", fontSize:".875rem", textAlign:"center" }}>No items found</div>
+              )}
+            </div>
+          )}
+          {appliesTo.length > 0 ? (
+            <div style={{ display:"flex", flexWrap:"wrap", gap:"var(--s2)", marginBottom:"var(--s3)" }}>
+              {appliesTo.map(item => (
+                <span key={item.id} style={{ display:"flex", alignItems:"center", gap:"5px", padding:"4px 10px 4px 12px", background:"var(--brand-tint)", border:"1px solid rgba(232,82,26,.25)", borderRadius:"var(--rf)", fontSize:".8125rem", fontWeight:600, color:"var(--brand)" }}>
+                  {item.name}
+                  <button type="button" onClick={() => setAppliesTo(a => a.filter(x => x.id !== item.id))}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:"var(--brand)", fontSize:"15px", lineHeight:1, padding:0, opacity:.7 }}>×</button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize:".6875rem", color:"var(--t4)", marginBottom:"var(--s4)" }}>
+              Leave empty = applies to whole cart (or chosen category above).
+            </p>
+          )}
+        </>
+      )}
+
+      {/* ══ COUPON + FIRST ORDER ONLY — only for discount / combo types ══ */}
+      {["percentage", "flat", "combo", "free_item", "bogo"].includes(form.offer_type) && (
+        <>
+          <SectionHead>Coupon Code <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(optional)</span></SectionHead>
+          <div style={{ display:"flex", gap:"var(--s2)", marginBottom:"var(--s2)" }}>
+            <div className="input-wrap" style={{ flex:1, marginBottom:0 }}>
+              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>
+              <input value={form.coupon_code} onChange={e => set("coupon_code", e.target.value.toUpperCase())}
+                placeholder="e.g. KNFC20 (leave blank = auto-applied)" maxLength={30}
+                style={{ flex:1, border:"none", background:"transparent", fontSize:".9375rem", outline:"none", fontFamily:"monospace", fontWeight:700, letterSpacing:".06em", color:"var(--t1)" }}
+                className="input-field"/>
+            </div>
+            <button type="button" onClick={() => set("coupon_code", genCoupon())}
+              style={{ padding:"0 var(--s3)", borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", color:"var(--t2)", fontSize:".75rem", fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+              Generate
+            </button>
+          </div>
+          <p style={{ fontSize:".6875rem", color:"var(--t4)", marginBottom:"var(--s3)" }}>
+            Leave blank = offer applies automatically. With a code, customers enter it at cart. Hit <strong>Generate</strong> for a random unique code.
+          </p>
+          {form.coupon_code.trim().length > 0 && (
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"var(--s3) var(--s4)", background:form.require_coupon?"linear-gradient(135deg,rgba(232,82,26,.08),rgba(232,82,26,.03))":"var(--bg2)", border:`1px solid ${form.require_coupon?"rgba(232,82,26,.3)":"var(--bd)"}`, borderRadius:"var(--r3)", marginBottom:"var(--s4)", cursor:"pointer" }}
+              onClick={() => set("require_coupon", !form.require_coupon)}>
+              <div>
+                <div style={{ fontWeight:700, fontSize:".9375rem", color:form.require_coupon?"var(--brand)":"var(--t1)" }}>Require coupon to claim</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)", marginTop:"2px" }}>Offer is hidden — only visible when this exact code is entered</div>
+              </div>
+              <button type="button" className={`toggle ${form.require_coupon?"on":"off"}`} style={{ flexShrink:0 }}><div className="toggle-knob"/></button>
+            </div>
+          )}
+
+          {["percentage", "flat"].includes(form.offer_type) && (
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"var(--s3) var(--s4)", background:form.first_order_only?"linear-gradient(135deg,rgba(55,138,221,.08),rgba(55,138,221,.03))":"var(--bg2)", border:`1px solid ${form.first_order_only?"rgba(55,138,221,.3)":"var(--bd)"}`, borderRadius:"var(--r3)", marginBottom:"var(--s4)", cursor:"pointer" }}
+              onClick={() => set("first_order_only", !form.first_order_only)}>
+              <div>
+                <div style={{ fontWeight:700, fontSize:".9375rem", color:form.first_order_only?"var(--info)":"var(--t1)" }}>First order only</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)", marginTop:"2px" }}>Only applies to a customer's very first order at this branch</div>
+              </div>
+              <button type="button" className={`toggle ${form.first_order_only?"on":"off"}`} style={{ flexShrink:0 }}><div className="toggle-knob"/></button>
+            </div>
+          )}
+        </>
+      )}
+
+      <SectionHead>Image &amp; Video</SectionHead>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
+        {/* Image upload */}
+        <div>
+          <FL>Image <span style={{ fontWeight:400, color:"var(--t4)" }}>(JPG/PNG)</span></FL>
+          <div onClick={() => document.getElementById("offer-img-input").click()}
+            style={{ border:`2px dashed ${image?"var(--brand)":"var(--bd)"}`, borderRadius:"var(--r3)", height:"90px", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", background:"var(--bg2)", overflow:"hidden", position:"relative", transition:"border-color var(--d1) var(--ease)" }}>
+            {image
+              ? <img src={URL.createObjectURL(image)} alt="preview" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+              : <div style={{ textAlign:"center", color:"var(--t3)", fontSize:".75rem" }}>
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" style={{display:"block",margin:"0 auto 4px"}}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  Upload image
+                </div>
+            }
+            {image && (
+              <button type="button" onClick={e => { e.stopPropagation(); setImage(null); }}
+                style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:"50%", background:"rgba(0,0,0,.6)", border:"none", cursor:"pointer", color:"#fff", fontSize:"13px", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>×</button>
+            )}
+          </div>
+          <input id="offer-img-input" type="file" accept="image/*" onChange={e => setImage(e.target.files[0])} style={{ display:"none" }} />
+        </div>
+
+        {/* Video upload */}
+        <div>
+          <FL>Video <span style={{ fontWeight:400, color:"var(--t4)" }}>(MP4/WebM)</span></FL>
+          <div onClick={() => document.getElementById("offer-vid-input").click()}
+            style={{ border:`2px dashed ${video?"var(--brand)":"var(--bd)"}`, borderRadius:"var(--r3)", height:"90px", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", background:"var(--bg2)", overflow:"hidden", position:"relative", transition:"border-color var(--d1) var(--ease)" }}>
+            {video
+              ? <>
+                  <video src={URL.createObjectURL(video)} style={{ width:"100%", height:"100%", objectFit:"cover" }} muted />
+                  <button type="button" onClick={e => { e.stopPropagation(); setVideo(null); }}
+                    style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:"50%", background:"rgba(0,0,0,.6)", border:"none", cursor:"pointer", color:"#fff", fontSize:"13px", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>×</button>
+                </>
+              : <div style={{ textAlign:"center", color:"var(--t3)", fontSize:".75rem" }}>
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" style={{display:"block",margin:"0 auto 4px"}}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                  Upload video
+                </div>
+            }
+          </div>
+          <input id="offer-vid-input" type="file" accept="video/mp4,video/webm,video/*" onChange={e => setVideo(e.target.files[0])} style={{ display:"none" }} />
+          {video && <p style={{ fontSize:".6875rem", color:"var(--t4)", marginTop:3 }}>{(video.size/1024/1024).toFixed(1)} MB — {video.name}</p>}
+        </div>
       </div>
+
+      <div style={{ display:"flex", gap:"var(--s2)", paddingTop:"var(--s4)", borderTop:"1px solid var(--bd)", marginTop:"var(--s3)", position:"sticky", bottom:0, background:"var(--bgc)", paddingBottom:"var(--s2)" }}>
+        <button type="button" onClick={onClose} className="btn btn-s btn-lg">Cancel</button>
+        <button type="submit" disabled={saving} className="btn btn-p btn-lg" style={{ flex:1 }}>
+          {saving
+            ? <><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" style={{ animation:"spin 1s linear infinite" }}><path d="M21 12a9 9 0 11-3-6.7" strokeLinecap="round"/></svg> Saving…</>
+            : initial ? "Save changes" : "Create offer"
+          }
+        </button>
+      </div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </form>
   );
 }
@@ -810,6 +1243,8 @@ export default function AdminOffersPage() {
             </div>
           ) : (
             <div style={{ background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r5)", overflow:"hidden" }}>
+              <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+              <div style={{ minWidth:"560px" }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 140px 90px 80px 100px", gap:"var(--s3)", padding:"var(--s3) var(--s5)", background:"var(--bg2)", borderBottom:"1px solid var(--bd)" }}>
                 {["Customer","Offer","Token","Saved","Date"].map((h,i)=>(
                   <div key={h} style={{ fontSize:".5625rem", fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"var(--t4)", textAlign:i>0?"center":"left" }}>{h}</div>
@@ -826,6 +1261,8 @@ export default function AdminOffersPage() {
                   <div style={{ textAlign:"center", fontSize:".75rem", color:"var(--t3)" }}>{new Date(r.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</div>
                 </div>
               ))}
+              </div>
+              </div>
             </div>
           )}
         </div>
@@ -881,106 +1318,159 @@ export default function AdminOffersPage() {
       {pageTab === "howto" && (
         <div style={{ display:"flex", flexDirection:"column", gap:"var(--s4)", maxWidth:"780px" }}>
 
-          {/* Offers */}
+          {/* HOW COUPONS WORK */}
           <div style={{ background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden" }}>
             <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(232,82,26,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
               <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>
               <div>
-                <div style={{ fontWeight:800, fontSize:"1rem" }}>Regular Offers</div>
-                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Percentage or flat discounts shown on the Offers page</div>
+                <div style={{ fontWeight:800, fontSize:"1rem" }}>Coupon Codes — How They Work</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Who generates them, how they reach customers, when they apply</div>
               </div>
             </div>
             <div style={{ padding:"var(--s4) var(--s5)", fontSize:".9rem", lineHeight:1.7, color:"var(--t2)" }}>
-              <p><strong>How it works:</strong> Create an offer with a % or flat ₹ discount. Customers browse and tap to apply it in their cart. The offer reduces the order total before payment.</p>
-              <p style={{ marginTop:"var(--s3)" }}><strong>Controls you have:</strong></p>
+              <p><strong>Who generates the code?</strong> You (the admin) set the code when creating an offer — either type one (e.g. SUMMER20) or click the <strong>Generate</strong> button for a random unique code. The system does not auto-create codes by itself.</p>
+              <p style={{ marginTop:"var(--s3)" }}><strong>How does it reach the customer?</strong></p>
               <ul style={{ paddingLeft:"var(--s5)", marginTop:"var(--s2)", display:"flex", flexDirection:"column", gap:"var(--s1)" }}>
-                <li><strong>Category restriction</strong> — discount only applies to items in one category (e.g., only on Beverages). Leave blank for entire order.</li>
-                <li><strong>Min order value</strong> — customer must spend ₹X before the offer applies.</li>
-                <li><strong>First order only</strong> — offer applies only to a customer's very first order.</li>
-                <li><strong>Max uses per customer</strong> — limits repeated use (0 = unlimited).</li>
-                <li><strong>Coupon code</strong> — optional code customers type in cart to apply the offer.</li>
-                <li><strong>Lifetime vs End date</strong> — toggle ∞ for permanent offers or set an expiry.</li>
+                <li><strong>% / ₹ Discount offers:</strong> You broadcast the offer via WhatsApp — customers see the code in the message and enter it at cart checkout.</li>
+                <li><strong>Scratch Card:</strong> The code is hidden under the scratch surface — revealed only when the customer scratches it.</li>
+                <li><strong>Re-engagement:</strong> The code is embedded in the "We Miss You" WhatsApp message sent automatically to inactive customers.</li>
+                <li><strong>Referral reward:</strong> A unique code is generated per referrer when their friend qualifies — sent to the referrer via WhatsApp.</li>
               </ul>
+              <p style={{ marginTop:"var(--s3)" }}><strong>How does the customer use it?</strong> They go to cart → tap "Apply coupon" → type or paste the code → discount applies instantly if the conditions match (min order value, valid dates, not used up).</p>
+              <div style={{ marginTop:"var(--s3)", padding:"var(--s3)", background:"rgba(232,82,26,.05)", borderRadius:"var(--r2)", fontSize:".8125rem", color:"var(--brand)", border:"1px solid rgba(232,82,26,.15)" }}>
+                <strong>Require coupon ON:</strong> Offer is invisible in the offers list — only applied when the exact code is entered. Useful for secret/exclusive deals.
+                <br/><strong>Require coupon OFF:</strong> Offer is visible in the list and the code is optional — customers can apply it manually or it auto-applies.
+              </div>
             </div>
           </div>
 
-          {/* Scratch Card */}
+          {/* WELCOME BONUS */}
           <div style={{ background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden" }}>
-            <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(37,99,235,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
-              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/></svg>
+            <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(55,138,221,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               <div>
-                <div style={{ fontWeight:800, fontSize:"1rem" }}>Scratch Card Game</div>
-                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Customers scratch to reveal a discount coupon code</div>
+                <div style={{ fontWeight:800, fontSize:"1rem" }}>Welcome Bonus</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Auto-applied ₹ discount on a new customer's very first order</div>
               </div>
             </div>
             <div style={{ padding:"var(--s4) var(--s5)", fontSize:".9rem", lineHeight:1.7, color:"var(--t2)" }}>
-              <p><strong>How it works:</strong> A digital scratch card appears on the customer's Offers page. When they scratch (50%+ of the surface), a coupon code is revealed. They copy the code and apply it at cart checkout for a discount.</p>
-              <p style={{ marginTop:"var(--s3)" }}><strong>SuperAdmin controls (Settings tab):</strong></p>
-              <ul style={{ paddingLeft:"var(--s5)", marginTop:"var(--s2)", display:"flex", flexDirection:"column", gap:"var(--s1)" }}>
-                <li><strong>Enable / Disable</strong> — toggle the scratch card on or off for all customers.</li>
-                <li><strong>Discount %</strong> — what % discount is revealed (e.g. 15%).</li>
-                <li><strong>Coupon code</strong> — the actual code revealed (e.g. SCRATCH15). Must match an active offer that has this coupon code set.</li>
-                <li><strong>Max uses per customer per day</strong> — prevent abuse (default: 1).</li>
-              </ul>
-              <div style={{ marginTop:"var(--s3)", padding:"var(--s3)", background:"rgba(37,99,235,.05)", borderRadius:"var(--r2)", fontSize:".8125rem", color:"var(--info)", border:"1px solid rgba(37,99,235,.15)" }}>
-                <strong>Setup tip:</strong> Create an offer with coupon code "SCRATCH15" and 15% discount. Set the scratch card code to "SCRATCH15" in Settings. When the customer scratches and enters the code, the offer is applied.
+              <p><strong>How it works — step by step:</strong></p>
+              <ol style={{ paddingLeft:"var(--s5)", marginTop:"var(--s2)", display:"flex", flexDirection:"column", gap:"var(--s1)" }}>
+                <li>Customer signs up / logs in for the first time.</li>
+                <li>They browse, add items, and go to cart.</li>
+                <li>The system checks: is this their first-ever order at this branch? If yes → the bonus is auto-applied, reducing the total by the bonus amount (₹).</li>
+                <li>If you set a minimum order value, the cart must meet it first.</li>
+                <li>The customer cannot use this type more than once — it is permanently a first-order-only offer.</li>
+              </ol>
+              <p style={{ marginTop:"var(--s3)" }}><strong>No coupon needed</strong> — it appears automatically. You just create the offer, set the bonus amount and (optionally) min order value, and it works for every new signup.</p>
+              <div style={{ marginTop:"var(--s3)", padding:"var(--s3)", background:"rgba(55,138,221,.05)", borderRadius:"var(--r2)", fontSize:".8125rem", color:"var(--info)", border:"1px solid rgba(55,138,221,.15)" }}>
+                <strong>Example:</strong> Bonus ₹50 off, min order ₹199. New customer signs up, adds ₹250 worth of food → cart automatically shows ₹50 discount → they pay ₹200.
               </div>
             </div>
           </div>
 
-          {/* Spin Wheel */}
+          {/* RE-ENGAGEMENT */}
+          <div style={{ background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden" }}>
+            <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(239,159,39,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <div>
+                <div style={{ fontWeight:800, fontSize:"1rem" }}>Re-engagement ("We Miss You")</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>WhatsApp offer sent to inactive customers after X days</div>
+              </div>
+            </div>
+            <div style={{ padding:"var(--s4) var(--s5)", fontSize:".9rem", lineHeight:1.7, color:"var(--t2)" }}>
+              <p><strong>How timing works:</strong></p>
+              <ul style={{ paddingLeft:"var(--s5)", marginTop:"var(--s2)", display:"flex", flexDirection:"column", gap:"var(--s1)" }}>
+                <li>You set <strong>Inactive after X days</strong> (e.g. 7 days, 14 days, 30 days).</li>
+                <li>A background Celery task runs <strong>once daily at midnight</strong> and checks: which customers have not placed an order in the last X days?</li>
+                <li>Each matching customer (who hasn't already received this specific offer) gets a WhatsApp message with your coupon code.</li>
+                <li>Once sent, we log it — they will <strong>not be messaged again</strong> for the same offer, even if they stay inactive.</li>
+                <li>You can also <strong>trigger it manually</strong> from the Redemptions tab → Re-engagement Preview → Send Now.</li>
+              </ul>
+              <p style={{ marginTop:"var(--s3)" }}><strong>What the customer gets:</strong> A WhatsApp message like "We miss you [Name]! Come back and get 20% off with code COMEBACK20." They go to the site, add items, enter the code at cart → discount applies.</p>
+              <div style={{ marginTop:"var(--s3)", padding:"var(--s3)", background:"rgba(239,159,39,.05)", borderRadius:"var(--r2)", fontSize:".8125rem", color:"var(--warn)", border:"1px solid rgba(239,159,39,.15)" }}>
+                <strong>Recommended setup:</strong> inactive_days = 7, discount = 15–20%, coupon code = COMEBACK + random. This brings back ~15–30% of inactive users within 48 hours of the message.
+              </div>
+            </div>
+          </div>
+
+          {/* SCRATCH CARD */}
           <div style={{ background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden" }}>
             <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(124,58,237,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
-              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="16" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="16" r="1.2" fill="currentColor"/><circle cx="16" cy="16" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><path d="M8 14h.01M12 14h.01M16 14h.01" strokeLinecap="round" strokeWidth="2"/></svg>
               <div>
-                <div style={{ fontWeight:800, fontSize:"1rem" }}>Spin-the-Wheel Game</div>
-                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Lucky wheel with probability-weighted prizes</div>
+                <div style={{ fontWeight:800, fontSize:"1rem" }}>Scratch Card</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Customer scratches to reveal a hidden discount code</div>
               </div>
             </div>
             <div style={{ padding:"var(--s4) var(--s5)", fontSize:".9rem", lineHeight:1.7, color:"var(--t2)" }}>
-              <p><strong>How it works:</strong> A spinning wheel with coloured prize segments appears on the Offers page. The customer spins and lands on a random prize (discount, free item, or "Try Again"). The wheel uses probability weights so you control how often each prize is won.</p>
-              <p style={{ marginTop:"var(--s3)" }}><strong>SuperAdmin controls (Settings tab):</strong></p>
-              <ul style={{ paddingLeft:"var(--s5)", marginTop:"var(--s2)", display:"flex", flexDirection:"column", gap:"var(--s1)" }}>
-                <li><strong>Enable / Disable</strong> — toggle the spin wheel on or off.</li>
-                <li><strong>Max spins per day</strong> — how many spins a customer gets (default: 1).</li>
-                <li><strong>Prizes JSON</strong> — array of prize objects. Each has:
-                  <code style={{ display:"block", fontSize:".8125rem", background:"var(--bg3)", padding:"var(--s3)", borderRadius:"var(--r2)", marginTop:"var(--s2)", lineHeight:1.6 }}>
-                    {"[{\"label\":\"10% OFF\",\"color\":\"#E8521A\",\"prob\":0.25,\"discount_pct\":10},"}
-                    <br/>{"  {\"label\":\"Free Drink\",\"color\":\"#059669\",\"prob\":0.10},"}
-                    <br/>{"  {\"label\":\"Try Again\",\"color\":\"#6B7280\",\"prob\":0.40}]"}
-                  </code>
-                  <span style={{ fontSize:".8125rem", color:"var(--t3)", display:"block", marginTop:"4px" }}>prob values must sum to 1.0. Higher prob = more likely to land on this segment.</span>
-                </li>
-              </ul>
+              <p><strong>Two ways to use Scratch Cards:</strong></p>
+              <ol style={{ paddingLeft:"var(--s5)", marginTop:"var(--s2)", display:"flex", flexDirection:"column", gap:"var(--s1)" }}>
+                <li><strong>Global scratch card (Settings):</strong> Always-visible card on the Offers page for all customers. SuperAdmin enables it in Settings tab, sets the code + discount globally. All customers see the same card. Max 1 scratch per day per customer.</li>
+                <li><strong>Offer-type scratch card (this form):</strong> A time-limited scratch card attached to a specific offer. Appears on the Offers page only while the offer is active. You set the exact code and discount % for this specific card — different customers can't share it past the end date.</li>
+              </ol>
+              <p style={{ marginTop:"var(--s3)" }}><strong>How the reveal works:</strong> Customer finger-swipes / mouse-drags across the card surface. When 50%+ is scratched, the coupon code and discount are revealed with a celebration animation. They tap "Copy code" → paste it in cart.</p>
               <div style={{ marginTop:"var(--s3)", padding:"var(--s3)", background:"rgba(124,58,237,.05)", borderRadius:"var(--r2)", fontSize:".8125rem", color:"#7C3AED", border:"1px solid rgba(124,58,237,.15)" }}>
-                <strong>Tip:</strong> Keep "Try Again" probability at 0.40–0.60 and big prizes at 0.05–0.10 for balanced excitement without giving away too much.
+                <strong>Important:</strong> The scratch card offer type controls the <em>reveal</em>. You must also create a <em>% Discount</em> offer with the same coupon code so the discount actually applies at checkout. Example: Scratch Card offer with code SC9K3M at 15% off → also create a % Discount offer with code SC9K3M, 15% off.
               </div>
             </div>
           </div>
 
-          {/* Loyalty Points */}
+          {/* SHARE & EARN */}
           <div style={{ background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden" }}>
-            <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(217,119,6,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
-              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01" strokeLinecap="round"/></svg>
+            <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(29,158,117,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               <div>
-                <div style={{ fontWeight:800, fontSize:"1rem" }}>Loyalty Points Programme</div>
-                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Earn points on every order, redeem for discounts</div>
+                <div style={{ fontWeight:800, fontSize:"1rem" }}>Share &amp; Earn (Referral)</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Each customer gets a unique link — referrer earns when friend joins</div>
               </div>
             </div>
             <div style={{ padding:"var(--s4) var(--s5)", fontSize:".9rem", lineHeight:1.7, color:"var(--t2)" }}>
-              <p><strong>How it works:</strong> Every time a customer completes an order, they earn points based on how much they spent. Points accumulate in their account. At checkout they can choose to redeem points for a ₹ discount off their order.</p>
-              <p style={{ marginTop:"var(--s3)" }}><strong>SuperAdmin controls (Settings tab → Loyalty Programme):</strong></p>
-              <ul style={{ paddingLeft:"var(--s5)", marginTop:"var(--s2)", display:"flex", flexDirection:"column", gap:"var(--s1)" }}>
-                <li><strong>Enable / Disable</strong> — master switch. Off = no earning, no redemption.</li>
-                <li><strong>Earn rate</strong> — points earned per ₹1 spent (e.g. 1.0 = 1 pt per ₹1, 0.5 = 1 pt per ₹2).</li>
-                <li><strong>Redeem rate</strong> — ₹ value of 1 point (e.g. 0.10 = 100 pts = ₹10 off).</li>
-                <li><strong>Minimum to redeem</strong> — minimum points needed to redeem in one order (e.g. 100 pts).</li>
-                <li><strong>Redeem step</strong> — points must be in multiples of this (e.g. step=100 means 100/200/300 etc.).</li>
-                <li><strong>Max redeem %</strong> — caps how much of the order value can be paid with points (e.g. 50% = max half the bill).</li>
-              </ul>
+              <p><strong>Step by step:</strong></p>
+              <ol style={{ paddingLeft:"var(--s5)", marginTop:"var(--s2)", display:"flex", flexDirection:"column", gap:"var(--s1)" }}>
+                <li>Customer A goes to their Account page → Share &amp; Earn → copies their unique link (e.g. knfcs.com/refer/XK7P2Q).</li>
+                <li>Customer A shares it on WhatsApp, Instagram, etc.</li>
+                <li>Customer B opens the link → lands on KNFC with a "Your friend referred you" banner → signs up.</li>
+                <li>System records: Customer B was referred by Customer A via code XK7P2Q.</li>
+                <li>If <strong>Reward on signup</strong> is ON → Customer A immediately gets a WhatsApp message with their reward coupon.</li>
+                <li>If <strong>Reward on signup</strong> is OFF → Customer A gets the reward only after Customer B places a qualifying order (meeting the friend's min order value).</li>
+              </ol>
+              <p style={{ marginTop:"var(--s3)" }}><strong>Unique mechanism:</strong> Every single customer has a different link — so you can track exactly who brought whom, how many signups each referrer drove, and reward only verified referrals. No gaming possible.</p>
+            </div>
+          </div>
+
+          {/* SPIN WHEEL */}
+          <div style={{ background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden" }}>
+            <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(124,58,237,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 2v10M12 12l8.5 4.9"/></svg>
+              <div>
+                <div style={{ fontWeight:800, fontSize:"1rem" }}>Spin-the-Wheel</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Lucky wheel — probability-weighted prizes, once per day</div>
+              </div>
+            </div>
+            <div style={{ padding:"var(--s4) var(--s5)", fontSize:".9rem", lineHeight:1.7, color:"var(--t2)" }}>
+              <p><strong>How it works:</strong> A spinning wheel appears on the Offers page. Customer taps SPIN — the wheel rotates and lands on a random prize segment. Each segment has a probability weight you control (e.g. 40% "Try Again", 10% "Free Drink", 25% "10% OFF"). One spin per customer per day by default.</p>
+              <p style={{ marginTop:"var(--s3)" }}><strong>Configure in Settings tab:</strong> Enable/disable, max spins per day, and the prizes JSON with labels, colours, and probabilities.</p>
+              <div style={{ marginTop:"var(--s3)", padding:"var(--s3)", background:"rgba(124,58,237,.05)", borderRadius:"var(--r2)", fontSize:".8125rem", color:"#7C3AED", border:"1px solid rgba(124,58,237,.15)" }}>
+                <strong>Tip:</strong> Keep "Try Again" at 40–60% probability. Big prizes (free item, 30%+ off) at 5–10%. This feels exciting without giving away too much margin.
+              </div>
+            </div>
+          </div>
+
+          {/* LOYALTY POINTS */}
+          <div style={{ background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden" }}>
+            <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", background:"linear-gradient(135deg,rgba(217,119,6,.06),transparent)", display:"flex", alignItems:"center", gap:"var(--s3)" }}>
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <div>
+                <div style={{ fontWeight:800, fontSize:"1rem" }}>Loyalty Points</div>
+                <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Earn on every order, redeem for ₹ off future orders</div>
+              </div>
+            </div>
+            <div style={{ padding:"var(--s4) var(--s5)", fontSize:".9rem", lineHeight:1.7, color:"var(--t2)" }}>
+              <p><strong>How it works:</strong> Customer completes an order → earns points (e.g. 1 pt per ₹1 spent). Points accumulate. On a future order they can redeem points for ₹ off (e.g. 100 pts = ₹10 off).</p>
+              <p style={{ marginTop:"var(--s3)" }}><strong>Configure in Settings → Loyalty Programme:</strong> earn rate, redeem rate, minimum points to redeem, step size, max % of order payable with points.</p>
               <div style={{ marginTop:"var(--s3)", padding:"var(--s3)", background:"rgba(217,119,6,.05)", borderRadius:"var(--r2)", fontSize:".8125rem", color:"#b45309", border:"1px solid rgba(217,119,6,.15)" }}>
-                <strong>Example:</strong> Earn rate = 1.0, Redeem rate = 0.10, Min = 100 pts.
-                Customer spends ₹200 → earns 200 pts. Next order they redeem 100 pts → gets ₹10 off.
+                <strong>Example:</strong> Earn 1 pt/₹1, redeem 0.10 ₹/pt. Customer spends ₹500 → earns 500 pts. Next order: redeems 200 pts → gets ₹20 off.
               </div>
             </div>
           </div>

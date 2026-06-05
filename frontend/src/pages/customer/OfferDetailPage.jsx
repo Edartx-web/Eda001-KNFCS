@@ -11,13 +11,15 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useNavigate }     from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { gsap }                       from "gsap";
 import AppLayout                      from "../../components/layout/AppLayout";
 import KNCLoader, { usePageLoader }   from "../../components/common/KNCLoader";
 import useCartStore                   from "../../store/cartStore";
 import { getOfferDetail }             from "../../api/orders";
 import { formatPrice, formatCountdown } from "../../utils/format";
+import axiosClient                    from "../../api/axiosClient";
+import { useAuth }                    from "../../context/AuthContext";
 
 /* ── Icons ─────────────────────────────────────────────────────────── */
 const Ic = {
@@ -53,11 +55,16 @@ export default function OfferDetailPage() {
   const ctaRef    = useRef(null);
   const { loading: pageLoading } = usePageLoader(900);
 
-  const [offer,     setOffer]   = useState(null);
-  const [secs,      setSecs]    = useState(0);
-  const [added,     setAdded]   = useState(false);
-  const [loading,   setLoading] = useState(true);
-  const [shared,    setShared]  = useState(false);
+  const [offer,        setOffer]        = useState(null);
+  const [secs,         setSecs]         = useState(0);
+  const [added,        setAdded]        = useState(false);
+  const [loading,      setLoading]      = useState(true);
+  const [shared,       setShared]       = useState(false);
+  const [refLink,      setRefLink]      = useState(null);   // { code, share_url, whatsapp_share }
+  const [refStats,     setRefStats]     = useState(null);   // { visits, signups, rewards_earned }
+  const [refCopied,    setRefCopied]    = useState(false);
+  const [refLoading,   setRefLoading]   = useState(false);
+  const { user } = useAuth();
   const addItem = useCartStore(s => s.addItem);
   const setOffer_ = useCartStore(s => s.setOffer);
 
@@ -89,10 +96,39 @@ export default function OfferDetailPage() {
     if (ctaRef.current) gsap.from(ctaRef.current, { opacity:0, y:20, duration:.5, ease:"power2.out", delay:.35 });
   }, [loading]);
 
+  /* Fetch referral link + stats for referral-type offers (logged-in customers) */
+  useEffect(() => {
+    if (!offer || offer.offer_type !== "referral" || !user || user.role !== "customer") return;
+    setRefLoading(true);
+    Promise.all([
+      axiosClient.get(`/offers/referral/link/?offer_id=${offer.id}`).catch(() => null),
+      axiosClient.get("/offers/referral/stats/").catch(() => null),
+    ]).then(([linkRes, statsRes]) => {
+      if (linkRes?.data?.success) {
+        const code = linkRes.data.link?.code;
+        /* Always build share_url from the actual frontend origin so it works
+           regardless of what SITE_URL is configured on the backend */
+        const shareUrl = `${window.location.origin}/refer/${code}`;
+        const waText   = encodeURIComponent(
+          `🍗 Hey! I'm at KNFC Fried Chicken — best crispy chicken ever!\n\nSign up with my link and get a special reward on your first order.\n\n👉 ${shareUrl}`
+        );
+        setRefLink({
+          code,
+          share_url:      shareUrl,
+          whatsapp_share: `https://wa.me/?text=${waText}`,
+        });
+      }
+      if (statsRes?.data?.success) {
+        const myLink = statsRes.data.referrals?.find(r => r.offer_id === offer.id);
+        if (myLink) setRefStats(myLink);
+      }
+    }).finally(() => setRefLoading(false));
+  }, [offer?.id, offer?.offer_type, user?.id]);
+
   /* Video play/pause */
   useEffect(() => {
     if (videoRef.current) videoRef.current.play().catch(()=>{});
-  }, [offer?.has_video]);
+  }, [offer?.video_url]);
 
   const handleGrabDeal = () => {
     if (!offer) return;
@@ -152,6 +188,12 @@ export default function OfferDetailPage() {
   const expired     = !isLifetime && secs === 0;
 
   if (pageLoading || loading || !offer) return <KNCLoader visible label="Loading offer…" />;
+  // inject spin keyframe once
+  if (typeof document !== "undefined" && !document.getElementById("od-spin-css")) {
+    const s = document.createElement("style"); s.id = "od-spin-css";
+    s.textContent = "@keyframes spin{to{transform:rotate(360deg)}}";
+    document.head.appendChild(s);
+  }
 
   const discount = offer.discount_percentage
     ? `${Math.round(offer.discount_percentage)}% OFF`
@@ -170,10 +212,10 @@ export default function OfferDetailPage() {
 
         {/* Hero media */}
         <div ref={heroRef} style={{ borderRadius:"var(--r5)", overflow:"hidden", marginBottom:"var(--s5)", position:"relative", aspectRatio:"16/9", maxHeight:"380px", background:`linear-gradient(135deg,${offer.gradient_from||"#1A0500"},${offer.gradient_to||"#2D0A00"})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          {offer.has_video && offer.media_url ? (
-            <video ref={videoRef} src={offer.media_url} poster={offer.video_thumbnail} muted loop playsInline style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />
-          ) : offer.image ? (
-            <img loading="lazy" src={typeof offer.image==="string"?offer.image:""} alt={offer.name} style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />
+          {offer.video_url ? (
+            <video ref={videoRef} src={offer.video_url} poster={offer.thumbnail_url || offer.image_url || ""} muted loop playsInline style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />
+          ) : offer.image_url ? (
+            <img loading="lazy" src={offer.image_url} alt={offer.name} style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />
           ) : (
             <div style={{ textAlign:"center" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"center", marginBottom:"var(--s3)" }}><svg width="56" height="56" viewBox="0 0 24 24" fill="rgba(255,255,255,.6)"><path d="M12 2s-4 4-4 9a4 4 0 008 0c0-5-4-9-4-9z"/></svg></div>
@@ -292,41 +334,160 @@ export default function OfferDetailPage() {
           </ul>
         </div>
 
-        {/* CTA */}
-        <div ref={ctaRef}>
-          {!expired ? (
-            <button onClick={handleGrabDeal} className="btn btn-p btn-xl btn-full"
-              style={{ background: added ? "var(--ok)" : "linear-gradient(135deg,var(--gold),var(--gold-d))", borderColor:"transparent", color:added?"#fff":"#000", fontSize:"1.0625rem", fontWeight:800, transition:"background .35s ease" }}>
-              {added
-                ? <><Ic.Check /> Added to cart!</>
-                : <><Ic.Cart /> Grab this deal → {offer.offer_price ? formatPrice(offer.offer_price) : ""}</>
-              }
-            </button>
-          ) : (
-            <div style={{ textAlign:"center", padding:"var(--s5)", background:"var(--err-t)", border:"1px solid rgba(226,75,74,.25)", borderRadius:"var(--r4)" }}>
-              <p style={{ fontSize:".9375rem", fontWeight:700, color:"var(--err)", marginBottom:"var(--s3)" }}>
-                This offer has expired
-              </p>
-              <button onClick={() => navigate("/menu")} className="btn btn-p">Browse current offers →</button>
+        {/* ── REFERRAL OFFER — unique share link + stats ───────────── */}
+        {offer.offer_type === "referral" ? (
+          <div>
+            {/* Reward explanation */}
+            <div style={{ padding:"var(--s4) var(--s5)", background:"linear-gradient(135deg,rgba(232,82,26,.07),rgba(232,82,26,.03))", border:"1px solid rgba(232,82,26,.2)", borderRadius:"var(--r4)", marginBottom:"var(--s4)" }}>
+              <div style={{ fontWeight:800, fontSize:".9375rem", color:"var(--brand)", marginBottom:6, display:"flex", alignItems:"center", gap:6 }}>
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                How Share &amp; Earn works
+              </div>
+              <div style={{ fontSize:".875rem", color:"var(--t2)", lineHeight:1.65, display:"flex", flexDirection:"column", gap:6 }}>
+                <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="2" style={{flexShrink:0,marginTop:2}}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                  <span><strong>Share your unique link</strong> with friends via WhatsApp or any platform</span>
+                </div>
+                <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--ok)" strokeWidth="2.5" style={{flexShrink:0,marginTop:2}}><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg>
+                  <span>When a friend <strong>signs up</strong> using your link, you earn a reward</span>
+                </div>
+                <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--gold-d,#b45309)" strokeWidth="2" style={{flexShrink:0,marginTop:2}}><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
+                  <span>Your friend also <strong>gets a welcome discount</strong> automatically</span>
+                </div>
+                {offer.referral_reward_value && (
+                  <div style={{ marginTop:4, padding:"6px 12px", background:"var(--ok-t)", border:"1px solid rgba(29,158,117,.2)", borderRadius:"var(--r2)", color:"var(--ok)", fontWeight:700, fontSize:".875rem", display:"inline-block" }}>
+                    You earn ₹{Math.round(offer.referral_reward_value)} per successful referral
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Share row */}
-        <div style={{ display:"flex", gap:"var(--s2)", marginTop:"var(--s3)" }}>
-          <button onClick={handleShare}
-            style={{ flex:1, padding:"var(--s3)", background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r3)", color:shared?"var(--ok)":"var(--t2)", fontWeight:600, fontSize:".875rem", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)" }}>
-            {shared
-              ? <><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg> Copied!</>
-              : <><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share</>
-            }
-          </button>
-          <button onClick={handleWhatsAppShare}
-            style={{ flex:1, padding:"var(--s3)", background:"#25D366", border:"none", borderRadius:"var(--r3)", color:"#fff", fontWeight:700, fontSize:".875rem", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", fontFamily:"var(--ff-b)" }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-            WhatsApp
-          </button>
-        </div>
+            {/* Referral link widget */}
+            {!user || user.role !== "customer" ? (
+              <div style={{ padding:"var(--s5)", background:"var(--bg2)", border:"1.5px dashed var(--bd)", borderRadius:"var(--r4)", textAlign:"center", marginBottom:"var(--s4)" }}>
+                <div style={{ width:44, height:44, borderRadius:"50%", background:"var(--bg3)", border:"1px solid var(--bd)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="1.8"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4" strokeLinecap="round"/></svg>
+                </div>
+                <div style={{ fontWeight:700, fontSize:".9375rem", marginBottom:6 }}>Login to get your unique link</div>
+                <p style={{ fontSize:".875rem", color:"var(--t3)", marginBottom:16, lineHeight:1.5 }}>
+                  Sign in to receive a personal referral link that tracks your rewards.
+                </p>
+                <Link to="/login/customer" className="btn btn-p btn-lg" style={{ display:"inline-flex" }}>
+                  Login / Sign up →
+                </Link>
+              </div>
+            ) : refLoading ? (
+              <div style={{ padding:"var(--s5)", textAlign:"center", color:"var(--t3)", fontSize:".875rem" }}>
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{ animation:"spin 1s linear infinite", display:"inline-block" }}><path d="M21 12a9 9 0 11-3-6.7" strokeLinecap="round"/></svg>
+                {" "}Generating your link…
+              </div>
+            ) : refLink ? (
+              <>
+                {/* Link display */}
+                <div style={{ marginBottom:"var(--s4)" }}>
+                  <div style={{ fontSize:".75rem", fontWeight:700, color:"var(--t3)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>
+                    Your unique referral link
+                  </div>
+                  <div style={{ display:"flex", gap:"var(--s2)", alignItems:"center" }}>
+                    <div style={{ flex:1, padding:"11px 14px", background:"var(--bg2)", border:"1.5px solid var(--bd)", borderRadius:"var(--r3)", fontSize:".875rem", fontFamily:"monospace", fontWeight:600, color:"var(--t2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {refLink.share_url}
+                    </div>
+                    <button onClick={() => {
+                        navigator.clipboard?.writeText(refLink.share_url).then(() => {
+                          setRefCopied(true);
+                          setTimeout(() => setRefCopied(false), 2400);
+                        });
+                      }}
+                      style={{ flexShrink:0, padding:"11px 16px", borderRadius:"var(--r3)", border:"1.5px solid var(--bd)", background:refCopied?"var(--ok)":"var(--bg2)", color:refCopied?"#fff":"var(--t1)", fontWeight:700, fontSize:".8125rem", cursor:"pointer", fontFamily:"var(--ff-b)", transition:"all .22s", display:"flex", alignItems:"center", gap:5 }}>
+                      {refCopied
+                        ? <><Ic.Check /> Copied!</>
+                        : <><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</>
+                      }
+                    </button>
+                  </div>
+                </div>
+
+                {/* Share buttons */}
+                <div style={{ display:"flex", gap:"var(--s2)", marginBottom:"var(--s5)" }}>
+                  {/* WhatsApp */}
+                  <a href={refLink.whatsapp_share} target="_blank" rel="noopener noreferrer"
+                    style={{ flex:1, padding:"12px", borderRadius:"var(--r3)", background:"#25D366", border:"none", color:"#fff", fontWeight:800, fontSize:".9375rem", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, textDecoration:"none", boxShadow:"0 4px 14px rgba(37,211,102,.35)" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                    Share on WhatsApp
+                  </a>
+                  {/* Generic share / copy link */}
+                  <button onClick={handleShare}
+                    style={{ flex:"0 0 auto", padding:"12px 14px", borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", color:shared?"var(--ok)":"var(--t2)", fontWeight:600, fontSize:".875rem", cursor:"pointer", display:"flex", alignItems:"center", gap:6, fontFamily:"var(--ff-b)" }}>
+                    {shared
+                      ? <><Ic.Check /> Copied</>
+                      : <><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share</>
+                    }
+                  </button>
+                </div>
+
+                {/* Referral stats */}
+                {refStats && (
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"var(--s2)", marginBottom:"var(--s4)" }}>
+                    {[
+                      { label:"Link visits",    value: refStats.visits          ?? 0, color:"var(--info)"  },
+                      { label:"Friends joined", value: refStats.signups         ?? 0, color:"var(--ok)"    },
+                      { label:"Rewards earned", value: refStats.rewards_earned  ?? 0, color:"var(--brand)" },
+                    ].map(s => (
+                      <div key={s.label} style={{ padding:"var(--s3) var(--s2)", background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r3)", textAlign:"center" }}>
+                        <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.625rem", fontWeight:900, color:s.color, lineHeight:1 }}>{s.value}</div>
+                        <div style={{ fontSize:".6875rem", color:"var(--t3)", fontWeight:600, marginTop:3 }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ padding:"var(--s4)", background:"var(--err-t)", border:"1px solid rgba(226,75,74,.2)", borderRadius:"var(--r3)", fontSize:".875rem", color:"var(--err)", marginBottom:"var(--s4)" }}>
+                Could not load your referral link. Please refresh the page.
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ── NON-REFERRAL: standard CTA + share ─────────────────── */
+          <>
+            <div ref={ctaRef}>
+              {!expired ? (
+                <button onClick={handleGrabDeal} className="btn btn-p btn-xl btn-full"
+                  style={{ background: added ? "var(--ok)" : "linear-gradient(135deg,var(--gold),var(--gold-d))", borderColor:"transparent", color:added?"#fff":"#000", fontSize:"1.0625rem", fontWeight:800, transition:"background .35s ease" }}>
+                  {added
+                    ? <><Ic.Check /> Added to cart!</>
+                    : <><Ic.Cart /> Grab this deal → {offer.offer_price ? formatPrice(offer.offer_price) : ""}</>
+                  }
+                </button>
+              ) : (
+                <div style={{ textAlign:"center", padding:"var(--s5)", background:"var(--err-t)", border:"1px solid rgba(226,75,74,.25)", borderRadius:"var(--r4)" }}>
+                  <p style={{ fontSize:".9375rem", fontWeight:700, color:"var(--err)", marginBottom:"var(--s3)" }}>
+                    This offer has expired
+                  </p>
+                  <button onClick={() => navigate("/menu")} className="btn btn-p">Browse current offers →</button>
+                </div>
+              )}
+            </div>
+
+            {/* Share row */}
+            <div style={{ display:"flex", gap:"var(--s2)", marginTop:"var(--s3)" }}>
+              <button onClick={handleShare}
+                style={{ flex:1, padding:"var(--s3)", background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r3)", color:shared?"var(--ok)":"var(--t2)", fontWeight:600, fontSize:".875rem", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)" }}>
+                {shared
+                  ? <><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg> Copied!</>
+                  : <><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share</>
+                }
+              </button>
+              <button onClick={handleWhatsAppShare}
+                style={{ flex:1, padding:"var(--s3)", background:"#25D366", border:"none", borderRadius:"var(--r3)", color:"#fff", fontWeight:700, fontSize:".875rem", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", fontFamily:"var(--ff-b)" }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                WhatsApp
+              </button>
+            </div>
+          </>
+        )}
 
         {/* Branch + validity + conditions */}
         <div style={{ textAlign:"center", marginTop:"var(--s4)", fontSize:".8125rem", color:"var(--t2)" }}>

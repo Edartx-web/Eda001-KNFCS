@@ -55,8 +55,15 @@ class CustomerVerifyOTPSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=20)
     otp   = serializers.CharField(max_length=10)
 
-    def validate_phone(self, v): return v.strip().replace(" ", "")
-    def validate_otp(self, v):   return v.strip()
+    def validate_phone(self, v):
+        v = v.strip().replace(" ", "")
+        if v and not v.startswith("+"):
+            raise serializers.ValidationError(
+                "Phone must include country code, e.g. +919876543210"
+            )
+        return v
+
+    def validate_otp(self, v): return v.strip()
 
 
 class CustomerResendOTPSerializer(serializers.Serializer):

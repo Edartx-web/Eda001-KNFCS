@@ -10,7 +10,7 @@
  */
 
 import React, { useRef, useEffect } from "react";
-import { useLocation, Link }           from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import { gsap }                        from "gsap";
 import Header                          from "./Header";
 import { useAuth }                     from "../../context/AuthContext";
@@ -40,20 +40,12 @@ const SvgChart    = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="
 /* ── Admin sidebar link sets ─────────────────────────────────────────────── */
 const ADMIN_NAV = [
   { path:"/admin/dashboard",  label:"Dashboard", icon:"◈" },
-  { path:"/admin/menu",       label:"Menu",       icon:"⬡" },
   { path:"/admin/staff",      label:"Staff",      icon:<SvgStaff /> },
   { path:"/admin/stock",      label:"Stock",      icon:"◎" },
   { path:"/admin/offers",     label:"Offers",     icon:<SvgFlame /> },
-  { path:"/admin/analytics",  label:"Analytics",  icon:<SvgChart /> },
 ];
 const SUPER_NAV = [
-  { path:"/superadmin/dashboard",  label:"Dashboard", icon:"◈" },
-  { path:"/superadmin/branches",   label:"Branches",  icon:"⬡" },
-  { path:"/superadmin/menu",       label:"Menu",      icon:<SvgMenu /> },
-  { path:"/superadmin/stock",      label:"Stock",     icon:"◎" },
-  { path:"/superadmin/staff",      label:"Staff",     icon:<SvgStaff /> },
-  { path:"/superadmin/offers",     label:"Offers",    icon:<SvgFlame /> },
-  { path:"/superadmin/analytics",  label:"Analytics", icon:<SvgChart /> },
+  { path:"/superadmin/dashboard", label:"← Back to Dashboard", icon:"◈" },
 ];
 
 function AdminSidebar({ isSuperAdmin }) {
@@ -95,10 +87,12 @@ function AdminSidebar({ isSuperAdmin }) {
 export default function AppLayout({ children, adminSidebar = false }) {
   const mainRef  = useRef(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const prev     = useRef(location.pathname);
   const { user } = useAuth();
 
-  const isSuperAdmin = user?.role === "super_admin";
+  const isSuperAdmin  = user?.role === "super_admin";
+  const isBranchAdmin = user?.role === "branch_admin";
 
   /* Page transition */
   useEffect(() => {
@@ -116,6 +110,22 @@ export default function AppLayout({ children, adminSidebar = false }) {
     <div className="app-shell">
       <Header />
       <StaffPing role={user?.role} />
+
+      {/* SuperAdmin mobile sub-nav — sticky bar below header with back + key actions
+          Shown only on mobile (hidden at ≥1024px via CSS).
+          Gives super_admin navigation since they have no hamburger or mob-tabbar here. */}
+      {isSuperAdmin && (
+        <div className="sa-subnav">
+          <button onClick={() => navigate("/superadmin/dashboard")} className="sa-subnav-btn">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Dashboard
+          </button>
+          <Link to="/admin/menu"    className="sa-subnav-btn" style={{ textDecoration:"none" }}>Menu</Link>
+          <Link to="/admin/stock"   className="sa-subnav-btn" style={{ textDecoration:"none" }}>Stock</Link>
+          <Link to="/admin/offers"  className="sa-subnav-btn" style={{ textDecoration:"none" }}>Offers</Link>
+        </div>
+      )}
+
 
       {/* Main body — flex row if admin sidebar is needed */}
       <div className={`page-body${adminSidebar ? " admin-layout" : ""}`}>

@@ -18,6 +18,26 @@ import { getAnalytics } from "../../api/orders";
 import { formatPrice } from "../../utils/format";
 import axiosClient from "../../api/axiosClient";
 
+/* ── Inject layout CSS (not in global sheet) ───────────────────────────── */
+if (typeof document !== "undefined" && !document.getElementById("analytics-css")) {
+  const s = document.createElement("style");
+  s.id = "analytics-css";
+  s.textContent = `
+    /* Stat cards — 4-col desktop, 2-col mobile */
+    .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+    @media (max-width:700px) { .stats-grid { grid-template-columns:repeat(2,1fr); gap:10px; } }
+    @media (max-width:380px) { .stats-grid { grid-template-columns:1fr; } }
+
+    /* Revenue + Top-items — side-by-side on desktop */
+    .an-two-col { display:grid; grid-template-columns:1fr 1fr; gap:var(--s5); }
+    @media (max-width:760px) { .an-two-col { grid-template-columns:1fr; } }
+
+    .an-card { background:var(--bgc); border:1px solid var(--bd); border-radius:var(--r5); }
+    .card { background:var(--bgc); border:1px solid var(--bd); border-radius:var(--r5); }
+  `;
+  document.head.appendChild(s);
+}
+
 /* ─── Stat card ──────────────────────────────────────────────────────── */
 function StatCard({ label, value, sub, color, icon }) {
   return (
@@ -35,7 +55,7 @@ function StatCard({ label, value, sub, color, icon }) {
 
 /* ─── Revenue bar chart ──────────────────────────────────────────────── */
 function RevenueChart({ data }) {
-  const max = Math.max(...data.map(d => d.revenue), 1);
+  const max = Math.max(...data.map(d => Number(d.revenue) || 0), 1);
   const barRef = useRef(null);
 
   useEffect(() => {
@@ -391,7 +411,7 @@ export default function AnalyticsDashboard() {
             </section>
 
             {/* ── Revenue chart ─────────────────────────────────────── */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:"var(--s5)", marginBottom:"var(--s5)" }} className="an-two-col">
+            <div style={{ marginBottom:"var(--s5)" }} className="an-two-col">
               <section className="an-card card" style={{ padding:"var(--s5)" }}>
                 <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:800, marginBottom:"var(--s5)", letterSpacing:"-.015em" }}>
                   Revenue — last 7 days
@@ -407,7 +427,7 @@ export default function AnalyticsDashboard() {
                   <div>
                     <div style={{ fontSize:".625rem", fontWeight:800, letterSpacing:".08em", textTransform:"uppercase", color:"var(--t4)", marginBottom:"3px" }}>7-day orders</div>
                     <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.375rem", fontWeight:900, color:"var(--info)" }}>
-                      {data.revenue_by_day.reduce((s,d) => s+d.order_count, 0)}
+                      {data.revenue_by_day.reduce((s,d) => s + (Number(d.order_count) || 0), 0)}
                     </div>
                   </div>
                 </div>
@@ -424,10 +444,10 @@ export default function AnalyticsDashboard() {
                   <HBar
                     key={item.name}
                     label={`${i+1}. ${item.name}`}
-                    value={item.quantity_sold}
-                    max={data.top_items[0].quantity_sold}
+                    value={Number(item.quantity_sold) || 0}
+                    max={Math.max(Number(data.top_items[0]?.quantity_sold) || 0, 1)}
                     color="var(--brand)"
-                    sub={`sold · ${formatPrice(item.revenue)}`}
+                    sub={`sold · ${formatPrice(item.revenue || 0)}`}
                   />
                 ))}
               </section>
@@ -455,7 +475,7 @@ export default function AnalyticsDashboard() {
               </div>
               {/* Find peak */}
               {(() => {
-                const peak = data.peak_hours.reduce((a,b) => b.orders > a.orders ? b : a, data.peak_hours[0]);
+                const peak = data.peak_hours.reduce((a,b) => (Number(b.orders)||0) > (Number(a.orders)||0) ? b : a, data.peak_hours[0] || { hour:0, orders:0 });
                 const HOURS = ["12am","1am","2am","3am","4am","5am","6am","7am","8am","9am","10am","11am","12pm","1pm","2pm","3pm","4pm","5pm","6pm","7pm","8pm","9pm","10pm","11pm"];
                 return peak.orders > 0 ? (
                   <div style={{ marginTop:"var(--s4)", padding:"var(--s3) var(--s4)", background:"var(--brand-tint)", border:"1px solid var(--bdb)", borderRadius:"var(--r3)", fontSize:".875rem" }}>
@@ -472,8 +492,8 @@ export default function AnalyticsDashboard() {
                   Order type — today
                 </div>
                 <SplitBar
-                  dineIn={data.order_type_split.dine_in}
-                  pickup={data.order_type_split.pickup}
+                  dineIn={Number(data.order_type_split?.dine_in) || 0}
+                  pickup={Number(data.order_type_split?.pickup)  || 0}
                 />
               </section>
 

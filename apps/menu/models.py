@@ -184,6 +184,8 @@ class MenuItem(models.Model):
     is_chicken    = models.BooleanField(default=False, help_text="Appears in Chicken Items section on home page")
     is_snacks     = models.BooleanField(default=False, help_text="Appears in Snacks & Munchies section on home page")
     is_cold_drinks= models.BooleanField(default=False, help_text="Appears in Cold Drinks section on home page")
+    is_buckets    = models.BooleanField(default=False, help_text="Appears in Buckets section on home page")
+    is_combo      = models.BooleanField(default=False, help_text="Appears in Combos section on home page")
 
     # Rating cache — updated by signals when reviews are added
     avg_rating      = models.DecimalField(

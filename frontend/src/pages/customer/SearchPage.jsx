@@ -90,7 +90,7 @@ function SearchCard({ item, navigate, highlight }) {
             <Ic.Fire/> Best
           </div>
         )}
-        {isOOS && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,.5)", display:"flex", alignItems:"center", justifyContent:"center" }}><span style={{ fontSize:".5625rem", fontWeight:800, color:"rgba(255,255,255,.8)", letterSpacing:".08em" }}>SOLD OUT</span></div>}
+        {isOOS && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,.5)", display:"flex", alignItems:"center", justifyContent:"center" }}><span style={{ fontSize:".5625rem", fontWeight:800, color:"rgba(255,255,255,.8)", letterSpacing:".08em" }}>OUT OF STOCK</span></div>}
       </div>
 
       {/* Body */}

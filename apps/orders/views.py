@@ -17,7 +17,7 @@ Admin:
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.utils import timezone
 
 from apps.orders.models import Order, OrderStatus
@@ -37,6 +37,60 @@ def ok(data, code=status.HTTP_200_OK):
 
 def err(msg, code=status.HTTP_400_BAD_REQUEST):
     return Response({"success": False, "error": msg}, status=code)
+
+
+def _send_whatsapp_invoice(order):
+    """
+    Send a WhatsApp invoice message to the customer via the broadcast session
+    immediately after an order is marked COMPLETED.
+    Fires-and-forgets — any exception is silenced by the caller.
+    """
+    import requests as _req
+    from django.conf import settings
+
+    phone = order.customer.phone if order.customer_id else None
+    if not phone:
+        return
+
+    wa_url = getattr(settings, "WHATSAPP_SERVICE_URL", "http://127.0.0.1:3001")
+    wa_key = getattr(settings, "WHATSAPP_INTERNAL_KEY", "")
+
+    # Build item lines (no emoji)
+    lines = []
+    for item in order.items.all():
+        c_note = ""
+        if item.customisations:
+            names = [c.get("name","") for c in item.customisations if c.get("name")]
+            if names:
+                c_note = f" ({', '.join(names)})"
+        lines.append(f"  - {item.name_snapshot}{c_note} x{item.quantity}  Rs.{float(item.line_total):.2f}")
+
+    pay_method  = {"cash": "Cash", "upi": "UPI", "card": "Card"}.get(order.payment_method, "Cash")
+    order_type  = "Dine-in" if order.order_type == "dine_in" else "Pickup"
+    items_block = "\n".join(lines)
+    invoice_url = f"https://knfcs.com/order/invoice/{order.id}"
+
+    discount_line = f"\nDiscount: -Rs.{float(order.discount):.2f}" if float(order.discount or 0) > 0 else ""
+    serial_line   = f"\nPay Ref: {order.payment_serial}"           if order.payment_serial else ""
+
+    text = (
+        f"*KNFC Fried Chicken - Order Ready*\n"
+        f"Token: *{order.token_number}* | {order_type}\n"
+        f"Customer: {order.customer.name}\n\n"
+        f"*Items:*\n{items_block}\n\n"
+        f"Total: *Rs.{float(order.total):.2f}* ({pay_method})"
+        f"{discount_line}"
+        f"{serial_line}\n\n"
+        f"View Invoice: {invoice_url}\n\n"
+        f"Thank you for choosing KNFC Fried Chicken!"
+    )
+
+    _req.post(
+        f"{wa_url}/send-message",
+        json={"phone": phone, "text": text},
+        headers={"Content-Type": "application/json", "X-Internal-Key": wa_key},
+        timeout=6,
+    )
 
 
 class PlaceOrderView(APIView):
@@ -73,11 +127,27 @@ class PlaceOrderView(APIView):
             return err("Branch not found.")
 
         # Enforce branch order mode restrictions
-        order_type = serializer.validated_data.get("order_type")
+        order_type   = serializer.validated_data.get("order_type")
+        table_number = serializer.validated_data.get("table_number")
         if order_type == "pickup" and not branch.enable_pickup:
             return err("This branch does not accept pickup orders.")
         if order_type == "dine_in" and not branch.enable_dine_in:
             return err("This branch does not accept dine-in orders.")
+
+        # Table availability — reject if another active order occupies this table today
+        if order_type == "dine_in" and table_number:
+            occupied = Order.objects.filter(
+                branch=branch,
+                order_type="dine_in",
+                table_number=table_number,
+                status__in=["placed", "confirmed", "preparing", "ready"],
+                created_at__date=timezone.localdate(),
+            ).exists()
+            if occupied:
+                return err(
+                    f"Table {table_number} is currently occupied by another order. "
+                    "Please choose a different table."
+                )
 
         # Block customer orders when shop is closed — staff/admin bypass this
         if user.role == "customer":
@@ -224,10 +294,15 @@ class UpdateOrderStatusView(APIView):
         new_status = serializer.validated_data["status"]
         order.update_status(new_status)
 
-        # Record who completed the order
+        # Record who completed the order; auto-mark cash orders as paid
         if new_status == OrderStatus.COMPLETED:
+            save_fields = ["completed_by"]
             order.completed_by = request.user
-            order.save(update_fields=["completed_by"])
+            if order.payment_method == "cash" and order.payment_status == "pending":
+                order.payment_status    = "paid"
+                order.payment_marked_by = request.user
+                save_fields += ["payment_status", "payment_marked_by"]
+            order.save(update_fields=save_fields)
 
         # Award loyalty points when order is COMPLETED — rate from SiteConfig
         if new_status == OrderStatus.COMPLETED and order.customer_id:
@@ -243,8 +318,13 @@ class UpdateOrderStatusView(APIView):
                     )
             except Exception:
                 pass  # Points failure must never block status update
+
+        # Send WhatsApp invoice to customer when order is COMPLETED
+        if new_status == OrderStatus.COMPLETED and order.customer_id and order.customer.phone:
+            try:
+                _send_whatsapp_invoice(order)
             except Exception:
-                pass  # Points failure must not block status update
+                pass  # WhatsApp failure never blocks status update
 
         # Push real-time update to connected staff via WebSocket
         try:
@@ -342,6 +422,10 @@ class AdminOrderListView(APIView):
         from apps.accounts.models import Role
         if request.user.role == Role.SUPER_ADMIN:
             qs = Order.objects.all()
+            # SuperAdmin branch filter
+            branch_id_param = request.query_params.get("branch_id")
+            if branch_id_param:
+                qs = qs.filter(branch_id=branch_id_param)
         else:
             qs = Order.objects.filter(branch_id=request.user.branch_id)
 
@@ -583,11 +667,33 @@ class MarkPaymentView(APIView):
             return err("payment_status must be 'paid' or 'waived'.")
 
         update_fields = ["payment_status", "payment_marked_by"]
-        order.payment_status     = status_val
-        order.payment_marked_by  = request.user
-        if request.data.get("payment_serial"):
-            order.payment_serial = str(request.data["payment_serial"])[:20].upper()
+        order.payment_status    = status_val
+        order.payment_marked_by = request.user
+
+        # Auto-generate payment serial server-side (read-only, non-editable)
+        if not order.payment_serial:
+            today = timezone.localdate()
+            last_serial = (
+                Order.objects.filter(
+                    branch=order.branch,
+                    created_at__date=today,
+                    payment_serial__startswith="PAY",
+                )
+                .exclude(payment_serial="")
+                .order_by("-payment_serial")
+                .values_list("payment_serial", flat=True)
+                .first()
+            )
+            if last_serial:
+                try:
+                    n = int(last_serial.replace("PAY", "")) + 1
+                except (ValueError, AttributeError):
+                    n = 1
+            else:
+                n = 1
+            order.payment_serial = f"PAY{n:03d}"
             update_fields.append("payment_serial")
+
         if request.data.get("upi_ref"):
             order.upi_ref = str(request.data["upi_ref"])[:50]
             update_fields.append("upi_ref")
@@ -613,8 +719,10 @@ class PaymentLogsView(APIView):
 
     def get(self, request):
         from apps.accounts.permissions import get_request_branch_id
+        from django.db.models import Q
         qs = Order.objects.filter(
-            payment_status__in=["paid", "waived"]
+            Q(payment_status__in=["paid", "waived"]) |
+            Q(payment_method="cash", status="completed")
         ).select_related("branch", "payment_marked_by", "customer").order_by("-created_at")
 
         # Super admin can filter by branch; branch admin sees only their branch
@@ -631,6 +739,10 @@ class PaymentLogsView(APIView):
                 qs = qs.filter(created_at__date=d)
             except ValueError:
                 pass
+
+        method_param = request.query_params.get("method")
+        if method_param and method_param in ("upi", "cash", "card"):
+            qs = qs.filter(payment_method=method_param)
 
         logs = []
         for o in qs[:500]:
@@ -882,3 +994,74 @@ class ExportCustomersCSVView(APIView):
         response = HttpResponse(buf.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="customers.csv"'
         return response
+
+
+class PublicInvoiceView(APIView):
+    """
+    GET /api/v1/orders/<order_id>/invoice/
+    Public � no auth required. Returns invoice data for the order.
+    The UUID order ID is unguessable, which provides sufficient access control.
+    Used by the WhatsApp invoice link and the printable invoice page.
+    """
+    permission_classes     = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, order_id):
+        try:
+            order = Order.objects.select_related(
+                "branch", "customer", "offer",
+                "completed_by", "placed_by_staff", "payment_marked_by",
+            ).prefetch_related("items").get(id=order_id)
+        except Order.DoesNotExist:
+            return Response({"success": False, "error": "Invoice not found."}, status=404)
+
+        items = []
+        for item in order.items.all():
+            c_names = [c.get("name", "") for c in (item.customisations or []) if c.get("name")]
+            items.append({
+                "name":           item.name_snapshot,
+                "price":          str(item.price_snapshot),
+                "quantity":       item.quantity,
+                "line_total":     str(item.line_total),
+                "customisations": ", ".join(c_names),
+                "note":           item.special_instructions,
+            })
+
+        pay_labels = {"cash": "Cash", "upi": "UPI", "card": "Card"}
+
+        # Staff who handled the order
+        served_by = (
+            getattr(order.completed_by,  "name", None)
+            or getattr(order.placed_by_staff, "name", None)
+            or getattr(order.payment_marked_by, "name", None)
+            or ""
+        )
+
+        data = {
+            "id":               str(order.id),
+            "token_number":     order.token_number,
+            "branch_name":      order.branch.name    if order.branch else "",
+            "branch_address":   order.branch.address if order.branch else "",
+            "branch_phone":     order.branch.phone   if order.branch else "",
+            "branch_email":     order.branch.email   if order.branch else "",
+            "order_type":       order.order_type,
+            "table_number":     order.table_number,
+            "customer_name":    order.customer.name  if order.customer_id else (order.walkin_name  or "Walk-in"),
+            "customer_phone":   order.customer.phone if order.customer_id else (order.walkin_phone or ""),
+            "served_by":        served_by,
+            "status":           order.status,
+            "items":            items,
+            "subtotal":         str(order.subtotal),
+            "discount":         str(order.discount or 0),
+            "total":            str(order.total),
+            "payment_method":   pay_labels.get(order.payment_method, order.payment_method),
+            "payment_status":   order.payment_status,
+            "payment_serial":   order.payment_serial or "",
+            "upi_ref":          order.upi_ref        or "",
+            "points_earned":    order.points_earned,
+            "special_instructions": order.special_instructions or "",
+            "created_at":       order.created_at.isoformat(),
+            "confirmed_at":     order.confirmed_at.isoformat() if order.confirmed_at else None,
+            "completed_at":     order.completed_at.isoformat() if order.completed_at else None,
+        }
+        return Response({"success": True, "invoice": data})

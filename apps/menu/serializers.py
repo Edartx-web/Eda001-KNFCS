@@ -75,7 +75,8 @@ class MenuItemListSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url)
         # Fallback: prepend API base from settings
         from django.conf import settings
-        return f"{settings.MEDIA_URL.rstrip('/')}{obj.image.url}" if not obj.image.url.startswith("http") else obj.image.url
+        base = getattr(settings, "BACKEND_URL", "http://localhost:1000").rstrip("/")
+        return f"{base}{obj.image.url}" if not obj.image.url.startswith("http") else obj.image.url
     offer_label      = serializers.SerializerMethodField()
     stock_status     = serializers.SerializerMethodField()
     stock_remaining  = serializers.SerializerMethodField()
@@ -93,6 +94,7 @@ class MenuItemListSerializer(serializers.ModelSerializer):
             "prep_time_display",
             "is_available", "is_featured", "is_new", "is_bestseller",
             "is_hotdeals", "is_chicken", "is_snacks", "is_cold_drinks",
+            "is_buckets", "is_combo",
             "discount", "measurement_unit", "unit_quantity",
             "is_on_offer", "offer_price", "offer_label",
             "stock_status", "stock_remaining",
@@ -154,7 +156,9 @@ class MenuItemDetailSerializer(MenuItemListSerializer):
         images = []
         for img in obj.gallery_images.all():
             if img.image:
-                url = request.build_absolute_uri(img.image.url) if request else img.image.url
+                from django.conf import settings as _s
+                _base = getattr(_s, "BACKEND_URL", "http://localhost:1000").rstrip("/")
+                url = request.build_absolute_uri(img.image.url) if request else f"{_base}{img.image.url}"
                 images.append({"id": str(img.id), "url": url})
         return images
 
@@ -201,7 +205,8 @@ class MenuCategoryListSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.image.url)
         from django.conf import settings
-        return f"{settings.MEDIA_URL.rstrip('/')}{obj.image.url}" if not obj.image.url.startswith("http") else obj.image.url
+        base = getattr(settings, "BACKEND_URL", "http://localhost:1000").rstrip("/")
+        return f"{base}{obj.image.url}" if not obj.image.url.startswith("http") else obj.image.url
 
     def get_item_count(self, obj):
         return obj.items.count()

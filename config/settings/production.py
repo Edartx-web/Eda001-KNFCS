@@ -8,12 +8,14 @@ Deploy with:
 
 Required environment variables (.env):
   SECRET_KEY          — long random string
-  ALLOWED_HOSTS       — comma-separated domains e.g. knfc.example.com
+  ALLOWED_HOSTS       — comma-separated domains e.g. knfcs.com,api.knfcs.com
   DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
-  REDIS_URL           — redis://redis:6379/0
+  REDIS_URL           — redis://127.0.0.1:6379/0
   EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL
   WHATSAPP_SERVICE_URL  — URL of Baileys Node service e.g. http://127.0.0.1:3001
   WHATSAPP_INTERNAL_KEY — shared secret between Django and Baileys service
+  CORS_ALLOWED_ORIGINS  — comma-separated allowed origins
+  DB_SSL_REQUIRE        — set to True only if your PostgreSQL server has SSL (default: False)
   SENTRY_DSN            — optional, for error monitoring
 """
 from .base import *
@@ -29,7 +31,24 @@ except ImportError:
 # ── Security ──────────────────────────────────────────────────────────────────
 DEBUG = False
 
-SECURE_SSL_REDIRECT            = True
+_allowed_extra = config(
+    "ALLOWED_HOSTS", default="",
+    cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
+)
+ALLOWED_HOSTS = list({
+    "knfcs.com", "www.knfcs.com", "api.knfcs.com", "wa.knfcs.com",
+    "localhost", "127.0.0.1",
+    *_allowed_extra,
+})
+
+# Trust proxy SSL termination (Nginx / Cloudflare / any reverse proxy)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST    = True
+USE_X_FORWARDED_PORT    = True
+
+# SSL redirect is handled by Nginx/Cloudflare in front of daphne.
+# Daphne itself serves plain HTTP internally — let the proxy redirect HTTP→HTTPS.
+SECURE_SSL_REDIRECT            = False
 SECURE_HSTS_SECONDS            = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD            = True
@@ -40,26 +59,60 @@ CSRF_COOKIE_SECURE             = True
 X_FRAME_OPTIONS                = "DENY"
 
 # ── Database ──────────────────────────────────────────────────────────────────
+# DB_SSL_REQUIRE=True only if your PostgreSQL is configured with SSL certificates.
+# Leave as False (default) for a local PostgreSQL with no SSL.
+_db_ssl = config("DB_SSL_REQUIRE", default=False, cast=bool)
+
 DATABASES = {
     "default": {
-        "ENGINE":   "django.db.backends.postgresql",
-        "NAME":     config("DB_NAME"),
-        "USER":     config("DB_USER"),
-        "PASSWORD": config("DB_PASSWORD"),
-        "HOST":     config("DB_HOST"),
-        "PORT":     config("DB_PORT", default="5432"),
+        "ENGINE":      "django.db.backends.postgresql",
+        "NAME":        config("DB_NAME"),
+        "USER":        config("DB_USER"),
+        "PASSWORD":    config("DB_PASSWORD"),
+        "HOST":        config("DB_HOST"),
+        "PORT":        config("DB_PORT", default="5432"),
         "CONN_MAX_AGE": 60,
-        "OPTIONS":  {"sslmode": "require"},
+        **({"OPTIONS": {"sslmode": "require"}} if _db_ssl else {}),
     }
 }
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = config(
-    "CORS_ALLOWED_ORIGINS",
-    default="",
+# Production URLs:
+#   Frontend  → https://knfcs.com       (Cloudflare Tunnel → localhost:3000)
+#   Backend   → https://api.knfcs.com   (Cloudflare Tunnel → localhost:1000)
+#   WhatsApp  → https://wa.knfcs.com    (Cloudflare Tunnel → localhost:1000)
+_cors_extra = config(
+    "CORS_ALLOWED_ORIGINS", default="",
     cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
+CORS_ALLOWED_ORIGINS = list({
+    "https://knfcs.com",
+    "https://www.knfcs.com",
+    "https://api.knfcs.com",
+    "https://wa.knfcs.com",
+    *_cors_extra,
+})
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-language",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+CORS_ALLOW_METHODS = ["DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT"]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://knfcs.com",
+    "https://www.knfcs.com",
+    "https://api.knfcs.com",
+    "https://wa.knfcs.com",
+]
 
 # ── Static files (Whitenoise) ─────────────────────────────────────────────────
 MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
@@ -68,9 +121,8 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # ── Email ─────────────────────────────────────────────────────────────────────
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
-# ── OTP — real SMS in production ──────────────────────────────────────────────
-OTP_BYPASS      = False
-OTP_BYPASS_CODE = ""
+# ── OTP — real WhatsApp OTP in production ─────────────────────────────────────
+OTP_BYPASS = False
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOGGING = {
@@ -94,13 +146,18 @@ LOGGING = {
     },
     "loggers": {
         "django": {
-            "handlers": ["console"],
-            "level":    "ERROR",
+            "handlers":  ["console"],
+            "level":     "ERROR",
+            "propagate": False,
+        },
+        "daphne": {
+            "handlers":  ["console"],
+            "level":     "INFO",
             "propagate": False,
         },
         "apps": {
-            "handlers": ["console"],
-            "level":    "INFO",
+            "handlers":  ["console"],
+            "level":     "INFO",
             "propagate": False,
         },
     },
@@ -115,5 +172,6 @@ if _sentry_dsn and _SENTRY_AVAILABLE:
         traces_sample_rate=0.1,
         send_default_pii=False,
     )
-TIME_ZONE = 'Asia/Kolkata'
-USE_TZ = True
+
+TIME_ZONE = "Asia/Kolkata"
+USE_TZ     = True

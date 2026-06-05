@@ -16,14 +16,18 @@
   "devDependencies": {
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
+    "serve": "^14.2.6",
     "tailwindcss": "^3.4.1"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "serve": "node node_modules/serve/build/main.js build -l 3000 --single",
+    "tunnel": "npm run build && node node_modules/serve/build/main.js build -l 3000 --single",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "proxy": "http://localhost:1000",
   "browserslist": {
     "production": [
       ">0.2%",

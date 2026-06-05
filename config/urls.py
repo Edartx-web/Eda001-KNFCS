@@ -2,8 +2,10 @@
 config/urls.py — Root URL configuration
 All API routes versioned under /api/v1/
 """
+import re
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.static import serve
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -21,8 +23,12 @@ urlpatterns = [
     path("api/v1/stock/",        include("apps.stock.urls")),
     path("api/v1/notifications/", include("apps.notifications.urls")),
     path("api/v1/favourites/",    include("apps.favourites.urls")),
+    path("api/v1/support/",       include("apps.support.urls")),
+
+    # Media files — served directly via Django's static serve view.
+    # Works regardless of DEBUG. In production, add Nginx location /media/ for better performance.
+    re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
 ]
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL,  document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

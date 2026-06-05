@@ -116,6 +116,41 @@ def midnight_carryover():
                     f"{count} orders carried over to {tomorrow}"
                 )
 
+    # ── Save end-of-day snapshots as system StockDailyLocks ──────────────
+    # Captures pending stock for each branch before the rollover —
+    # visible to SuperAdmin as historical daily summaries.
+    from apps.stock.models import StockDailyLock, StockLog, ChangeType
+    for branch in branches:
+        # Skip if already manually locked by admin
+        if StockDailyLock.objects.filter(branch=branch, date=today).exists():
+            continue
+
+        today_records = StockRecord.objects.filter(branch=branch, date=today)
+        if not today_records.exists():
+            continue
+
+        rollback_count = StockLog.objects.filter(
+            branch=branch,
+            timestamp__date=today,
+            change_type__in=[ChangeType.MANUAL_CORRECTION, ChangeType.ROLLBACK],
+        ).count()
+
+        StockDailyLock.objects.create(
+            branch=branch,
+            date=today,
+            locked_by=None,
+            is_system=True,
+            note="Auto-snapshot at midnight before nightly rollover.",
+            total_added=sum(r.new_stock_added  for r in today_records),
+            total_used=sum(r.used_stock         for r in today_records),
+            total_remaining=sum(r.remaining_stock for r in today_records),
+            rollback_count=rollback_count,
+            items_count=today_records.count(),
+        )
+        logger.info(
+            f"[midnight_carryover] Snapshot saved for branch '{branch.name}' — {today}"
+        )
+
     logger.info(
         f"[midnight_carryover] Done. "
         f"Stock records rolled: {total_stock_rolled}. "

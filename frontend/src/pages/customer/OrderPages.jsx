@@ -6,7 +6,7 @@
  * - Track: animated progress bar, celebration on READY, live pulse dot
  */
 import React, { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Navigate, Link } from "react-router-dom";
 import { gsap } from "gsap";
 import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
 import AppLayout from "../../components/layout/AppLayout";
@@ -16,6 +16,7 @@ import { formatPrice, formatTime } from "../../utils/format";
 import { STATUS_META } from "../../utils/constants";
 import { notify } from "../../components/common/NotificationSystem";
 import GoogleReviewBanner from "../../components/common/GoogleReviewBanner";
+import { useAuth } from "../../context/AuthContext";
 
 const MICROCOPY = [
   "Your chicken is getting its spa treatment. Won't be long!",
@@ -46,10 +47,6 @@ const STATUS_MSG = {
 /* ══════════════════════════════════════════════════════════════════════
    ORDER CONFIRM PAGE
 ══════════════════════════════════════════════════════════════════════ */
-// UPI VPA — set to the shop's registered UPI ID
-const UPI_VPA  = import.meta.env?.VITE_UPI_VPA  || "knfc@upi";
-const UPI_NAME = import.meta.env?.VITE_UPI_NAME || "KNFC Fried Chicken";
-
 const RECEIPT_LOGO = import.meta.env?.VITE_RECEIPT_LOGO || "";
 
 /* ─── Bill print helper ─────────────────────────────────────────────── */
@@ -144,71 +141,113 @@ function printBill(order) {
   w.onload = () => { w.print(); w.onafterprint = () => w.close(); };
 }
 
-/* ─── UPI Payment Panel ─────────────────────────────────────────────── */
+/* ─── UPI Payment Panel — dynamic, branch-specific ──────────────────── */
 function UPIPaymentPanel({ order }) {
-  const amount   = Number(order.total).toFixed(2);
-  const note     = encodeURIComponent(`Order ${order.token_number}`);
-  const vpa      = encodeURIComponent(UPI_VPA);
-  const name     = encodeURIComponent(UPI_NAME);
+  const [payInfo, setPayInfo] = useState(null);
+  const [copied,  setCopied]  = useState("");
 
-  // upi:// deep link opens any UPI app directly
-  const upiLink  = `upi://pay?pa=${vpa}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
+  useEffect(() => {
+    if (!order?.branch_id) return;
+    import("../../api/axiosClient").then(({ default: ax }) => {
+      ax.get(`/branches/${order.branch_id}/payment-info/`)
+        .then(r => setPayInfo(r.data))
+        .catch(() => {});
+    });
+  }, [order?.branch_id]);
 
-  // Fallback individual app links
-  const gpay    = `tez://upi/pay?pa=${vpa}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
-  const phonepe = `phonepe://pay?pa=${vpa}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
-  const paytm   = `paytmmp://pay?pa=${vpa}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
+  const amount  = Number(order.total).toFixed(2);
+  const note    = encodeURIComponent(`Order ${order.token_number}`);
+  const branchName = encodeURIComponent(payInfo?.branch_name || "KNFC Fried Chicken");
+
+  const mainUpi      = payInfo?.upi_id      || UPI_VPA;
+  const gpayUpi      = payInfo?.gpay_upi_id      || mainUpi;
+  const phonepeUpi   = payInfo?.phonepe_upi_id    || mainUpi;
+  const supermoneyUpi= payInfo?.supermoney_upi_id || "";
+
+  const buildLink = (vpa, scheme = "upi") =>
+    `${scheme}://pay?pa=${encodeURIComponent(vpa)}&pn=${branchName}&am=${amount}&cu=INR&tn=${note}`;
+
+  const upiLink      = buildLink(mainUpi);
+  const gpayLink     = `tez://upi/pay?pa=${encodeURIComponent(gpayUpi)}&pn=${branchName}&am=${amount}&cu=INR&tn=${note}`;
+  const phonepeLink  = `phonepe://pay?pa=${encodeURIComponent(phonepeUpi)}&pn=${branchName}&am=${amount}&cu=INR&tn=${note}`;
+
+  const copyUpi = (upi, label) => {
+    navigator.clipboard?.writeText(upi).catch(() => {});
+    setCopied(label);
+    setTimeout(() => setCopied(""), 2000);
+  };
+
+  const appButtons = [
+    { href: gpayLink,    label: "GPay",       color: "#1a73e8", bg: "rgba(26,115,232,.1)",  upi: gpayUpi },
+    { href: phonepeLink, label: "PhonePe",    color: "#5f259f", bg: "rgba(95,37,159,.1)",   upi: phonepeUpi },
+  ];
+  if (supermoneyUpi) {
+    appButtons.push({ href: buildLink(supermoneyUpi), label: "SuperMoney", color: "#e8521a", bg: "rgba(232,82,26,.1)", upi: supermoneyUpi });
+  }
 
   return (
     <div style={{ background:"linear-gradient(135deg,rgba(55,138,221,.08),rgba(55,138,221,.03))", border:"1px solid rgba(55,138,221,.3)", borderRadius:"var(--r4)", padding:"var(--s5)", marginBottom:"var(--s4)" }}>
       <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", marginBottom:"var(--s4)" }}>
-        <div style={{ width:"40px", height:"40px", borderRadius:"var(--r3)", background:"var(--info)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="#fff" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg></div>
+        <div style={{ width:"40px", height:"40px", borderRadius:"var(--r3)", background:"var(--info)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+          <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="#fff" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg>
+        </div>
         <div>
-          <div style={{ fontFamily:"var(--ff-d)", fontWeight:800, fontSize:"1rem" }}>Pay via UPI</div>
-          <div style={{ fontSize:".8125rem", color:"var(--t2)" }}>Tap to open your UPI app · ₹{amount}</div>
+          <div style={{ fontFamily:"var(--ff-d)", fontWeight:800, fontSize:"1rem" }}>Pay ₹{amount} via UPI</div>
+          <div style={{ fontSize:".8125rem", color:"var(--t2)" }}>Scan QR or tap to open your UPI app</div>
         </div>
       </div>
 
-      {/* Primary deep link button */}
+      {/* QR code from backend */}
+      {payInfo?.payment_qr_url && (
+        <div style={{ textAlign:"center", marginBottom:"var(--s4)" }}>
+          <img
+            src={`${payInfo.payment_qr_url}?am=${amount}&tn=${encodeURIComponent(`Order ${order.token_number}`)}`}
+            alt="Payment QR Code"
+            style={{ width:180, height:180, borderRadius:"var(--r3)", border:"1px solid var(--bd)", objectFit:"contain", background:"#fff", padding:8 }}
+          />
+          <p style={{ fontSize:".75rem", color:"var(--t4)", marginTop:"var(--s2)" }}>Scan with GPay · PhonePe · Any UPI app</p>
+        </div>
+      )}
+
+      {/* Primary deep link */}
       <a href={upiLink}
-        style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"var(--s2)", width:"100%", padding:"13px", borderRadius:"var(--r4)", background:"var(--info)", color:"#fff", fontFamily:"var(--ff-b)", fontWeight:800, fontSize:"1rem", textDecoration:"none", marginBottom:"var(--s3)", boxShadow:"0 4px 16px rgba(55,138,221,.4)", transition:"all var(--d1) var(--ease)" }}
-        onMouseEnter={e=>e.currentTarget.style.opacity=".9"}
-        onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+        style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"var(--s2)", width:"100%", padding:"13px", borderRadius:"var(--r4)", background:"var(--info)", color:"#fff", fontFamily:"var(--ff-b)", fontWeight:800, fontSize:"1rem", textDecoration:"none", marginBottom:"var(--s3)", boxShadow:"0 4px 16px rgba(55,138,221,.4)" }}>
         Pay ₹{amount} · Open UPI app →
       </a>
 
-      {/* App-specific quick buttons */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"var(--s2)", marginBottom:"var(--s4)" }}>
-        {[
-          { href:gpay,    label:"GPay",    color:"#1a73e8", bg:"rgba(26,115,232,.1)"  },
-          { href:phonepe, label:"PhonePe", color:"#5f259f", bg:"rgba(95,37,159,.1)"  },
-          { href:paytm,   label:"Paytm",   color:"#00b9f1", bg:"rgba(0,185,241,.1)"  },
-        ].map(a => (
+      {/* App buttons */}
+      <div style={{ display:"grid", gridTemplateColumns:`repeat(${appButtons.length},1fr)`, gap:"var(--s2)", marginBottom:"var(--s4)" }}>
+        {appButtons.map(a => (
           <a key={a.label} href={a.href}
-            style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:"9px", borderRadius:"var(--r3)", border:`1px solid ${a.color}33`, background:a.bg, color:a.color, fontFamily:"var(--ff-b)", fontWeight:700, fontSize:".8125rem", textDecoration:"none", transition:"all var(--d1) var(--ease)" }}
-            onMouseEnter={e=>e.currentTarget.style.opacity=".8"}
-            onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+            style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:"9px", borderRadius:"var(--r3)", border:`1px solid ${a.color}33`, background:a.bg, color:a.color, fontFamily:"var(--ff-b)", fontWeight:700, fontSize:".8125rem", textDecoration:"none" }}>
             {a.label}
           </a>
         ))}
       </div>
 
-      {/* UPI ID to copy */}
-      <div style={{ background:"var(--bg2)", borderRadius:"var(--r3)", padding:"var(--s3) var(--s4)", display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:".875rem" }}>
-        <div>
-          <div style={{ fontSize:".6875rem", color:"var(--t4)", fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:"2px" }}>UPI ID</div>
-          <div style={{ fontWeight:700, fontFamily:"var(--ff-d)", letterSpacing:".02em" }}>{UPI_VPA}</div>
-        </div>
-        <button onClick={() => navigator.clipboard?.writeText(UPI_VPA)}
-          style={{ padding:"6px 12px", borderRadius:"var(--r2)", border:"1px solid var(--bd)", background:"var(--bgc)", cursor:"pointer", fontSize:".75rem", fontWeight:700, fontFamily:"var(--ff-b)", color:"var(--t2)", transition:"all var(--d1) var(--ease)" }}
-          onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--info)";e.currentTarget.style.color="var(--info)";}}
-          onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--bd)";e.currentTarget.style.color="var(--t2)";}}>
-          Copy
-        </button>
+      {/* UPI IDs list */}
+      <div style={{ display:"flex", flexDirection:"column", gap:"var(--s2)", marginBottom:"var(--s3)" }}>
+        {[
+          { label: "GPay UPI",        upi: gpayUpi,       show: !!gpayUpi },
+          { label: "PhonePe UPI",     upi: phonepeUpi,    show: !!phonepeUpi },
+          { label: "SuperMoney UPI",  upi: supermoneyUpi, show: !!supermoneyUpi },
+          { label: "General UPI",     upi: mainUpi,       show: !!mainUpi },
+        ].filter(u => u.show && u.upi !== gpayUpi || u.label === "GPay UPI" || u.label === "General UPI").filter((u, i, arr) => arr.findIndex(x => x.upi === u.upi) === i).map(u => (
+          <div key={u.label} style={{ background:"var(--bg2)", borderRadius:"var(--r3)", padding:"var(--s3) var(--s4)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:".625rem", fontWeight:800, letterSpacing:".08em", textTransform:"uppercase", color:"var(--t4)", marginBottom:2 }}>{u.label}</div>
+              <div style={{ fontWeight:700, fontFamily:"var(--ff-d)", fontSize:".9375rem" }}>{u.upi}</div>
+            </div>
+            <button onClick={() => copyUpi(u.upi, u.label)}
+              style={{ padding:"6px 12px", borderRadius:"var(--r2)", border:"1px solid var(--bd)", background:copied===u.label?"var(--ok)":"var(--bgc)", cursor:"pointer", fontSize:".75rem", fontWeight:700, color:copied===u.label?"#fff":"var(--t2)", fontFamily:"var(--ff-b)", transition:"all .2s" }}>
+              {copied === u.label ? "Copied!" : "Copy"}
+            </button>
+          </div>
+        ))}
       </div>
 
-      <p style={{ fontSize:".75rem", color:"var(--t4)", marginTop:"var(--s3)", textAlign:"center", lineHeight:1.5 }}>
-        After payment, show staff your UPI transaction ID. Staff will mark your order as paid.
+      <p style={{ fontSize:".75rem", color:"var(--t4)", textAlign:"center", lineHeight:1.5 }}>
+        After payment, show your UPI screenshot to staff. Staff will confirm your order.
       </p>
     </div>
   );
@@ -290,14 +329,14 @@ function UpiPaymentWaiting({ order, onPaid }) {
             <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="var(--info)" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg>
           </div>
           <h1 style={{ fontFamily:"var(--ff-d)", fontSize:"1.75rem", fontWeight:900, letterSpacing:"-.025em", marginBottom:"var(--s2)" }}>
-            Complete Payment
+            Order Confirmation
           </h1>
           <p style={{ fontSize:".9375rem", color:"var(--t2)", marginBottom:"var(--s3)" }}>
-            Pay below and show your screenshot to staff
+            Complete payment below, then wait for staff to confirm your order
           </p>
           <div style={{ display:"inline-flex", alignItems:"center", gap:"8px", padding:"6px 14px", borderRadius:"var(--rf)", background:"rgba(55,138,221,.1)", border:"1px solid rgba(55,138,221,.2)" }}>
             <div style={{ width:"8px", height:"8px", borderRadius:"50%", background:"var(--info)", animation:"pulse 1.5s infinite" }}/>
-            <span style={{ fontSize:".8125rem", fontWeight:700, color:"var(--info)" }}>Waiting for staff confirmation{dots}</span>
+            <span style={{ fontSize:".8125rem", fontWeight:700, color:"var(--info)" }}>Waiting for Staff Confirmation{dots}</span>
           </div>
         </div>
 
@@ -350,6 +389,7 @@ export function OrderConfirmPage() {
   const tokenRef   = useRef(null);
   const cardsRef   = useRef(null);
   const { loading: pageLoading } = usePageLoader(900);
+  const { user }   = useAuth();
   const [order,      setOrder]      = useState(null);
   const [loaded,     setLoaded]     = useState(false);
   const [siteConfig, setSiteConfig] = useState(null);
@@ -368,10 +408,10 @@ export function OrderConfirmPage() {
         const res = await getOrderDetail(id);
         const o = res.data.order;
         setOrder(o);
-        localStorage.setItem("active_order", JSON.stringify(o));
+        localStorage.setItem("active_order", JSON.stringify({ ...o, _uid: user?.id }));
       } catch {
         const stored = localStorage.getItem("active_order");
-        if (stored) { try { setOrder(JSON.parse(stored)); } catch {} }
+        if (stored) { try { const p=JSON.parse(stored); if(!p._uid||p._uid===user?.id) setOrder(p); } catch {} }
       } finally { setLoaded(true); }
     };
     load();
@@ -389,17 +429,29 @@ export function OrderConfirmPage() {
 
   // When staff marks payment — navigate to track page
   const handlePaid = (updatedOrder) => {
-    localStorage.setItem("active_order", JSON.stringify(updatedOrder));
+    localStorage.setItem("active_order", JSON.stringify({ ...updatedOrder, _uid: user?.id }));
     notify("Payment confirmed by staff!", "success");
     navigate(`/order/track/${id}`, { replace: true });
   };
 
-  if (pageLoading || !order) return <KNCLoader visible label="Confirming order…"/>;
+  // Auto-redirect to track page once staff confirms (status moves off 'placed')
+  useEffect(() => {
+    if (!order || order.status !== "placed") return;
+    const t = setInterval(async () => {
+      try {
+        const res = await getOrderDetail(id);
+        const updated = res.data.order;
+        if (updated.status !== "placed") {
+          clearInterval(t);
+          localStorage.setItem("active_order", JSON.stringify({ ...updated, _uid: user?.id }));
+          navigate(`/order/track/${id}`, { replace: true });
+        }
+      } catch {}
+    }, 5000); // poll every 5 s
+    return () => clearInterval(t);
+  }, [order?.status, id]);
 
-  // UPI + pending → show ONLY the payment waiting page
-  if (order.payment_method === "upi" && order.payment_status === "pending") {
-    return <UpiPaymentWaiting order={order} onPaid={handlePaid}/>;
-  }
+  if (pageLoading || !order) return <KNCLoader visible label="Confirming order…"/>;
 
   const pointsEarned = Math.round(parseFloat(order.total || 0) * 0.1);
 
@@ -483,8 +535,14 @@ export function OrderConfirmPage() {
               </div>
             )}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", paddingTop:"var(--s3)", borderTop:"1px solid var(--bd)", marginTop:"var(--s2)" }}>
-              <span style={{ fontSize:".9375rem", fontWeight:700 }}>Total paid</span>
+              <span style={{ fontSize:".9375rem", fontWeight:700 }}>Total</span>
               <span className="price" style={{ fontSize:"1.5rem" }}>{formatPrice(order.total)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", paddingTop:"var(--s2)", fontSize:".8125rem" }}>
+              <span style={{ color:"var(--t3)" }}>Payment</span>
+              <span style={{ fontWeight:600, color:"var(--t2)", textTransform:"capitalize" }}>
+                {order.payment_method === "upi" ? "Scan QR at counter" : "Cash at counter"}
+              </span>
             </div>
           </div>
 
@@ -508,6 +566,7 @@ export function OrderTrackPage() {
   const { id }     = useParams();
   const navigate   = useNavigate();
   const { loading: pageLoading } = usePageLoader(700);
+  const { user }   = useAuth();
   const msgRef     = useRef(null);
   const stepRef    = useRef(null);
   const prevStatus = useRef(null);
@@ -548,10 +607,10 @@ export function OrderTrackPage() {
       prevStatus.current = o.status;
       setOrder(o);
       if (["completed","cancelled"].includes(o.status)) localStorage.removeItem("active_order");
-      else localStorage.setItem("active_order", JSON.stringify(o));
+      else localStorage.setItem("active_order", JSON.stringify({ ...o, _uid: user?.id }));
     } catch {
       const stored = localStorage.getItem("active_order");
-      if (stored) { try { setOrder(JSON.parse(stored)); } catch {} }
+      if (stored) { try { const p=JSON.parse(stored); if(!p._uid||p._uid===user?.id) setOrder(p); } catch {} }
     } finally { setLoaded(true); }
   };
 
@@ -560,7 +619,7 @@ export function OrderTrackPage() {
     if (stored) {
       try {
         const o = JSON.parse(stored);
-        if (o.id === id) { setOrder(o); setLoaded(true); prevStatus.current = o.status; }
+        if (o.id === id && (!o._uid || o._uid === user?.id)) { setOrder(o); setLoaded(true); prevStatus.current = o.status; }
       } catch {}
     }
     fetchOrder();
@@ -585,7 +644,10 @@ export function OrderTrackPage() {
     } finally { setSubmittingRating(false); }
   };
 
-  if (pageLoading || !order) return <KNCLoader visible label="Loading order status…"/>;
+  if (pageLoading) return <KNCLoader visible label="Loading order status…"/>;
+  // Loaded but no order found (invalid/expired ID) → send to menu instead of blank screen
+  if (loaded && !order) return <Navigate to="/menu" replace />;
+  if (!order) return <KNCLoader visible label="Loading order status…"/>;
 
   const stepIdx  = STEPS.findIndex(s => s.key === order.status);
   const msg      = STATUS_MSG[order.status] || STATUS_MSG.placed;
@@ -722,12 +784,17 @@ export function OrderTrackPage() {
           </div>
         )}
 
+        {/* Payment status info — no action needed, staff handles at counter */}
         {order.payment_method === "upi" && order.payment_status === "pending" && !isDone && (
-          <UPIPaymentPanel order={order}/>
+          <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", padding:"var(--s3) var(--s4)", background:"rgba(124,58,237,.07)", border:"1px solid rgba(124,58,237,.2)", borderRadius:"var(--r4)", marginBottom:"var(--s4)", fontSize:".875rem", fontWeight:600, color:"#7c3aed" }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg>
+            UPI payment — show QR to staff at the counter
+          </div>
         )}
         {order.payment_method === "upi" && order.payment_status === "paid" && (
           <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", padding:"var(--s3) var(--s4)", background:"var(--ok-t)", border:"1px solid rgba(29,158,117,.25)", borderRadius:"var(--r4)", marginBottom:"var(--s4)", fontSize:".875rem", fontWeight:700, color:"var(--ok)" }}>
-            UPI payment received — you're all set!
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg>
+            UPI payment confirmed
           </div>
         )}
 
@@ -801,7 +868,7 @@ export function OrderTrackPage() {
                         {[1,2,3,4,5].map(n => (
                           <button key={n} type="button"
                             onClick={() => setRatings(r => ({...r, [item.menu_item]: n}))}
-                            style={{ background:"none", border:"none", cursor:"pointer", padding:"2px", fontSize:"1.375rem", lineHeight:1, transition:"transform var(--d1) var(--ease)", transform:n <= (ratings[item.menu_item]||0) ? "scale(1.15)" : "scale(1)", color:n <= (ratings[item.menu_item]||0) ? "var(--gold)" : "var(--bg3)" }}>
+                            style={{ background:"none", border:"none", cursor:"pointer", padding:"2px", fontSize:"1.375rem", lineHeight:1, transition:"transform var(--d1) var(--ease)", transform:n <= (ratings[item.menu_item]||0) ? "scale(1.15)" : "scale(1)", color:n <= (ratings[item.menu_item]||0) ? "var(--gold)" : "var(--t4)" }}>
                             ★
                           </button>
                         ))}

@@ -17,6 +17,7 @@ import useCartStore                    from "../../store/cartStore";
 import { getOffers }                   from "../../api/orders";
 import { getCategories, getFeatured, getFavourites, getItems } from "../../api/menu";
 import GoogleReviewBanner from "../../components/common/GoogleReviewBanner";
+import BranchSelector     from "../../components/common/BranchSelector";
 import { formatPrice, formatUnit }     from "../../utils/format";
 import { DIETARY_DOT }                 from "../../utils/constants";
 
@@ -54,6 +55,8 @@ function formatNextOpen(isoStr) {
 
 const THEMED_SECTIONS = [
   { flag:"is_hotdeals",    label:"Hot Deals",     accent:"var(--brand)", filterParam:"is_hotdeals"    },
+  { flag:"is_buckets",     label:"Buckets",       accent:"#d97706",      filterParam:"is_buckets"     },
+  { flag:"is_combo",       label:"Combos",        accent:"var(--ok)",    filterParam:"is_combo"       },
   { flag:"is_chicken",     label:"Chicken Items", accent:"var(--brand)", filterParam:"is_chicken"     },
   { flag:"is_snacks",      label:"Snacks",        accent:"var(--warn)",  filterParam:"is_snacks"      },
   { flag:"is_cold_drinks", label:"Cold Drinks",   accent:"var(--info)",  filterParam:"is_cold_drinks" },
@@ -81,8 +84,22 @@ function HeroCarousel({ offers }) {
     return () => clearInterval(t);
   }, [cur, paused, total, goTo]);
 
+  const curOffer   = offers[cur] || offers[0];
+  const curHasMedia = !!(curOffer?.video_url || curOffer?.video || curOffer?.image_url || curOffer?.image);
+
   return (
-    <div style={{ position:"relative", width:"100%", height:"100%", overflow:"hidden" }}
+    /* isolation:isolate creates a self-contained stacking context so all
+       z-indices inside are relative to this container only.
+       background is set directly on this element (no child div needed)
+       so it is always painted, regardless of willChange:transform on children. */
+    <div style={{
+      position:"relative", width:"100%", height:"100%", overflow:"hidden",
+      isolation:"isolate",
+      background: curHasMedia
+        ? `linear-gradient(135deg,${curOffer?.gradient_from||"#1A0500"},${curOffer?.gradient_to||"#3D1200"})`
+        : "linear-gradient(145deg,#5A0E00 0%,#A02000 40%,#D64010 70%,#E8521A 100%)",
+      transition:"background .45s ease",
+    }}
       onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
       onTouchEnd={e => {
         if (touchX.current === null) return;
@@ -90,50 +107,92 @@ function HeroCarousel({ offers }) {
         if (Math.abs(d) > 45) goTo(d > 0 ? (cur+1)%total : (cur-1+total)%total);
         touchX.current = null;
       }}>
+
+      {/* No-media vivid glow — behind the track */}
+      {!curHasMedia && <>
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none",
+          background:"radial-gradient(ellipse 85% 80% at 72% 40%, rgba(255,115,30,.95) 0%, rgba(232,82,26,.55) 42%, transparent 68%)" }}/>
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none",
+          background:"radial-gradient(ellipse 60% 70% at 18% 62%, rgba(245,166,35,.6) 0%, transparent 70%)" }}/>
+      </>}
+
+      {/* Animated slide track */}
       <div ref={trackRef} style={{ display:"flex", height:"100%", width:`${total*100}%`, willChange:"transform" }}>
-        {offers.map((o, i) => <HeroSlide key={o.id} offer={o} active={i===cur} paused={paused} onPause={()=>setPaused(v=>!v)} width={`${100/total}%`}/>)}
+        {offers.map((o, i) => (
+          <HeroSlide key={o.id} offer={o} active={i===cur} paused={paused}
+            onPause={()=>setPaused(v=>!v)} width={`${100/total}%`}/>
+        ))}
       </div>
-      <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.45) 45%,rgba(0,0,0,.12) 100%)", pointerEvents:"none" }}/>
+
+      {/* Text-readability overlay */}
+      <div style={{ position:"absolute", inset:0, pointerEvents:"none",
+        background:"linear-gradient(to top,rgba(0,0,0,.86) 0%,rgba(0,0,0,.35) 44%,rgba(0,0,0,.06) 100%)" }}/>
+
       <HeroOverlay offer={offers[cur]}/>
-      <div style={{ position:"absolute", bottom:"var(--s5)", right:"var(--s5)", display:"flex", alignItems:"center", gap:"var(--s2)", zIndex:4 }}>
-        <button onClick={()=>setPaused(v=>!v)} style={{ width:"28px",height:"28px",borderRadius:"50%",background:"rgba(0,0,0,.5)",border:"1px solid rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,.8)",cursor:"pointer",backdropFilter:"blur(8px)" }}>
+
+      <div style={{ position:"absolute", bottom:"var(--s5)", right:"var(--s5)", display:"flex", alignItems:"center", gap:"var(--s2)", zIndex:3 }}>
+        <button onClick={()=>setPaused(v=>!v)}
+          style={{ width:"28px",height:"28px",borderRadius:"50%",background:"rgba(0,0,0,.5)",border:"1px solid rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,.8)",cursor:"pointer",backdropFilter:"blur(8px)" }}>
           {paused ? <Ic.Play/> : <Ic.Pause/>}
         </button>
         {offers.map((_,i) => (
-          <button key={i} onClick={()=>goTo(i)} style={{ border:"none",cursor:"pointer",padding:0,width:i===cur?"22px":"6px",height:"6px",borderRadius:"3px",background:i===cur?"var(--brand)":"rgba(255,255,255,.35)",transition:"all .3s var(--ease)" }}/>
+          <button key={i} onClick={()=>goTo(i)}
+            style={{ border:"none",cursor:"pointer",padding:0,width:i===cur?"22px":"6px",height:"6px",borderRadius:"3px",background:i===cur?"var(--brand)":"rgba(255,255,255,.35)",transition:"all .3s var(--ease)" }}/>
         ))}
       </div>
     </div>
   );
 }
 
+/* ── Resolve a relative media path to an absolute URL ─────────────────── */
+function _mediaAbs(path) {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const h = typeof window !== "undefined" ? window.location.hostname : "localhost";
+  const base = h.endsWith("knfcs.com")
+    ? "https://api.knfcs.com"
+    : h !== "localhost" && h !== "127.0.0.1"
+    ? `http://${h}:1000`
+    : "http://localhost:1000";
+  return `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
 function HeroSlide({ offer, active, paused, onPause, width }) {
-  const canvasRef = useRef(null);
-  const videoRef  = useRef(null);
+  const videoRef   = useRef(null);
+  const [imgError, setImgError] = useState(false);
+
+  const videoSrc  = offer.video_url  || _mediaAbs(offer.video);
+  const posterSrc = offer.thumbnail_url || _mediaAbs(offer.video_thumbnail) || "";
+  const hasVideo  = !!videoSrc;
+  const rawImg    = offer.image_url || _mediaAbs(offer.image);
+  const imageUrl  = (!imgError && rawImg) ? rawImg : "";
+
   useEffect(() => {
-    if (videoRef.current) {
-      if (active && !paused) videoRef.current.play().catch(()=>{});
-      else videoRef.current.pause();
-    }
+    if (!videoRef.current) return;
+    if (active && !paused) videoRef.current.play().catch(()=>{});
+    else videoRef.current.pause();
   }, [active, paused]);
-  useEffect(() => {
-    const c = canvasRef.current;
-    if (!c || offer.image) return;
-    const w = c.offsetWidth||800, h = c.offsetHeight||500;
-    c.width=w; c.height=h;
-    const ctx=c.getContext("2d"), g=ctx.createLinearGradient(0,0,w,h);
-    g.addColorStop(0,offer.gradient_from||"#0D0300"); g.addColorStop(.5,"#1A0800"); g.addColorStop(1,offer.gradient_to||"#2D1200");
-    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
-    for(let i=0;i<120;i++){const x=Math.random()*w,y=Math.random()*h,r=.3+Math.random()*3;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=`rgba(245,166,35,${Math.random()*.22})`;ctx.fill();}
-    const rg=ctx.createRadialGradient(w*.72,h*.45,30,w*.72,h*.45,w*.4);
-    rg.addColorStop(0,"rgba(232,82,26,.22)"); rg.addColorStop(.5,"rgba(232,82,26,.06)"); rg.addColorStop(1,"transparent");
-    ctx.fillStyle=rg; ctx.fillRect(0,0,w,h);
-  }, [offer]);
+
+  /* The HeroSlide is intentionally transparent — the HeroCarousel container
+     provides the per-offer background behind the animated track, which fixes
+     the willChange:transform compositing layer stale-paint problem. */
   return (
-    <div style={{ width,flexShrink:0,position:"relative",cursor:offer.has_video?"pointer":"default" }} onClick={offer.has_video?onPause:undefined}>
-      {offer.has_video ? <video ref={videoRef} src={offer.media_url} poster={offer.video_thumbnail} muted loop playsInline style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
-        : offer.image ? <img loading="eager" src={offer.image} alt={offer.name} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
-        : <canvas ref={canvasRef} style={{ width:"100%",height:"100%",display:"block" }}/>}
+    <div style={{ width, flexShrink:0, height:"100%", position:"relative", cursor: hasVideo ? "pointer" : "default" }}
+      onClick={hasVideo ? onPause : undefined}>
+
+      {/* Video — highest priority */}
+      {hasVideo && (
+        <video ref={videoRef} src={videoSrc} poster={posterSrc}
+          muted loop playsInline
+          style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}/>
+      )}
+
+      {/* Image — only when no video */}
+      {!hasVideo && imageUrl && (
+        <img loading="eager" src={imageUrl} alt={offer.name}
+          onError={() => setImgError(true)}
+          style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}/>
+      )}
     </div>
   );
 }
@@ -201,6 +260,78 @@ function FallbackHero({ branchName }) {
 /* ══════════════════════════════════════════════════════════════════════
    OFFER STRIP — horizontal scroll cards
 ══════════════════════════════════════════════════════════════════════ */
+
+/* Single offer strip card — supports image_url AND video_url with error fallback */
+function OfferStripCard({ offer: o }) {
+  const navigate   = useNavigate();
+  const videoRef   = useRef(null);
+  const [imgError, setImgError] = useState(false);
+  const videoSrc   = o.video_url || _mediaAbs(o.video);
+  const hasVideo   = !!videoSrc;
+  const rawImg     = o.image_url || _mediaAbs(o.image);
+  const imageUrl   = (!imgError && rawImg) ? rawImg : "";
+  const disc = o.discount_percentage
+    ? `${Math.round(o.discount_percentage)}% OFF`
+    : o.discount_flat ? `₹${Math.round(o.discount_flat)} OFF` : "DEAL";
+
+  /* Play video on mount (muted autoplay in strip) */
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.play().catch(() => {});
+  }, [hasVideo]);
+
+  return (
+    <div onClick={() => navigate(`/offer/${o.id}`)}
+      style={{ flexShrink:0, cursor:"pointer", borderRadius:"var(--r4)", overflow:"hidden",
+        position:"relative", width:"clamp(200px,50vw,280px)", aspectRatio:"3/4",
+        background:`linear-gradient(135deg,${o.gradient_from||"#1A0500"},${o.gradient_to||"#2D0A00"})`,
+        border:"1px solid rgba(255,255,255,.06)",
+        transition:"border-color var(--d2) var(--ease),box-shadow var(--d2) var(--ease)" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor="rgba(232,82,26,.55)"; e.currentTarget.style.boxShadow="0 0 0 1px rgba(232,82,26,.25),0 8px 28px rgba(232,82,26,.2)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor="rgba(255,255,255,.06)"; e.currentTarget.style.boxShadow="none"; }}>
+
+      {/* Media layer — video > image > gradient background */}
+      {hasVideo ? (
+        <video ref={videoRef} src={videoSrc} poster={o.thumbnail_url || _mediaAbs(o.video_thumbnail) || imageUrl || ""}
+          muted loop playsInline
+          style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", opacity:.75 }}/>
+      ) : imageUrl ? (
+        <img loading="eager" src={imageUrl} alt={o.name}
+          onError={() => setImgError(true)}
+          style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", opacity:.55 }}/>
+      ) : null /* gradient background from parent div is the fallback */}
+
+      {/* Gradient overlay */}
+      <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.18) 60%,transparent 100%)" }}/>
+
+      {/* Video badge */}
+      {hasVideo && (
+        <div style={{ position:"absolute", top:"var(--s3)", right:"var(--s3)", display:"flex", alignItems:"center", gap:4, padding:"3px 8px", background:"rgba(0,0,0,.6)", backdropFilter:"blur(6px)", borderRadius:"var(--rf)", border:"1px solid rgba(255,255,255,.15)" }}>
+          <Ic.Play/>
+          <span style={{ fontSize:".6rem", fontWeight:800, color:"#fff", letterSpacing:".06em", textTransform:"uppercase" }}>Video</span>
+        </div>
+      )}
+
+      {/* Content */}
+      <div style={{ position:"relative", padding:"var(--s4)", height:"100%", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
+        <div style={{ width:"34px", height:"34px", borderRadius:"var(--r2)", background:"rgba(232,82,26,.18)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--brand)" }}>
+          <Ic.Fire/>
+        </div>
+        <div>
+          <span style={{ fontSize:".625rem", fontWeight:800, background:"var(--gold)", color:"#000", padding:"2px 8px", borderRadius:"var(--rf)", letterSpacing:".06em" }}>{disc}</span>
+          <div style={{ fontFamily:"var(--ff-d)", fontSize:"1rem", fontWeight:800, color:"#fff", marginTop:"var(--s2)", lineHeight:1.2 }}>{o.name}</div>
+          {o.tagline && <div style={{ fontSize:".75rem", color:"rgba(255,255,255,.55)", marginTop:2, lineHeight:1.35, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{o.tagline}</div>}
+          {o.offer_price && (
+            <div style={{ display:"flex", alignItems:"baseline", gap:"var(--s1)", marginTop:6 }}>
+              <span style={{ fontFamily:"var(--ff-d)", fontSize:"1.25rem", fontWeight:900, color:"var(--gold)" }}>{formatPrice(o.offer_price)}</span>
+              {o.original_price && <span style={{ fontSize:".875rem", color:"rgba(255,255,255,.35)", textDecoration:"line-through" }}>{formatPrice(o.original_price)}</span>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OfferStrip({ offers }) {
   const navigate = useNavigate();
   if (!offers.length) return null;
@@ -213,31 +344,7 @@ function OfferStrip({ offers }) {
         <Link to="/offers" style={{ fontSize:".875rem",fontWeight:700,color:"var(--brand)",display:"flex",alignItems:"center",gap:"4px" }}>All <Ic.Arrow/></Link>
       </div>
       <div style={{ display:"flex",gap:"var(--s3)",overflowX:"auto",scrollbarWidth:"none",paddingBottom:"var(--s1)",WebkitOverflowScrolling:"touch" }} className="scroll-x">
-        {offers.map(o => {
-          const disc = o.discount_percentage ? `${Math.round(o.discount_percentage)}% OFF` : o.discount_flat ? `₹${Math.round(o.discount_flat)} OFF` : "DEAL";
-          return (
-            <div key={o.id} onClick={()=>navigate(`/offer/${o.id}`)}
-              style={{ flexShrink:0,cursor:"pointer",borderRadius:"var(--r4)",overflow:"hidden",position:"relative",width:"clamp(200px,50vw,280px)",background:`linear-gradient(135deg,${o.gradient_from||"#1A0500"},${o.gradient_to||"#2D0A00"})`,border:"1px solid rgba(255,255,255,.06)",transition:"border-color var(--d2) var(--ease),box-shadow var(--d2) var(--ease)" }}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(232,82,26,.55)";e.currentTarget.style.boxShadow="0 0 0 1px rgba(232,82,26,.25),0 8px 28px rgba(232,82,26,.2)";}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,.06)";e.currentTarget.style.boxShadow="none";}}>
-              {o.image && <img loading="eager" src={o.image} alt={o.name} style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:.35 }}/>}
-              <div style={{ position:"absolute",inset:0,background:"linear-gradient(to top,rgba(0,0,0,.85),rgba(0,0,0,.1))" }}/>
-              <div style={{ position:"relative",padding:"var(--s4)" }}>
-                <div style={{ width:"34px",height:"34px",borderRadius:"var(--r2)",background:"rgba(232,82,26,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--brand)" }}><Ic.Fire/></div>
-                <div style={{ marginTop:"var(--s8)" }}>
-                  <span style={{ fontSize:".625rem",fontWeight:800,background:"var(--gold)",color:"#000",padding:"2px 8px",borderRadius:"var(--rf)",letterSpacing:".06em" }}>{disc}</span>
-                  <div style={{ fontFamily:"var(--ff-d)",fontSize:"1rem",fontWeight:800,color:"#fff",marginTop:"var(--s2)",lineHeight:1.2 }}>{o.name}</div>
-                  {o.offer_price && (
-                    <div style={{ display:"flex",alignItems:"baseline",gap:"var(--s1)",marginTop:"4px" }}>
-                      <span style={{ fontFamily:"var(--ff-d)",fontSize:"1.25rem",fontWeight:900,color:"var(--gold)" }}>{formatPrice(o.offer_price)}</span>
-                      {o.original_price && <span style={{ fontSize:".875rem",color:"rgba(255,255,255,.35)",textDecoration:"line-through" }}>{formatPrice(o.original_price)}</span>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {offers.map(o => <OfferStripCard key={o.id} offer={o} />)}
       </div>
     </section>
   );
@@ -247,29 +354,57 @@ function OfferStrip({ offers }) {
    ADS PANEL — simple promotional strip between sections
 ══════════════════════════════════════════════════════════════════════ */
 function AdsPanel({ siteConfig }) {
-  const navigate = useNavigate();
-  const adImage = siteConfig?.config?.ad_banner_url;
-  const adLink  = siteConfig?.config?.ad_banner_link || "/menu/all";
+  const navigate  = useNavigate();
+  const [cur, setCur] = useState(0);
 
-  if (adImage) {
+  // home_ads is an array of {id, title, image_url, link, active}
+  const allAds = (siteConfig?.config?.home_ads || []).filter(a => a.active && a.image_url);
+
+  // auto-cycle through multiple ads every 5 seconds
+  useEffect(() => {
+    if (allAds.length < 2) return;
+    const t = setInterval(() => setCur(c => (c + 1) % allAds.length), 5000);
+    return () => clearInterval(t);
+  }, [allAds.length]);
+
+  if (allAds.length > 0) {
+    const ad = allAds[cur];
     return (
       <section className="hp-section" style={{ marginBottom:"var(--s6)" }}>
-        <div onClick={()=>navigate(adLink)} style={{ borderRadius:"var(--r4)",overflow:"hidden",cursor:"pointer",position:"relative",aspectRatio:"16/5",background:"var(--bg2)",border:"1px solid var(--bd)" }}>
-          <img src={adImage} alt="Promotion" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }}/>
+        <div onClick={()=>navigate(ad.link||"/menu/all")}
+          style={{ borderRadius:"var(--r4)", overflow:"hidden", cursor:"pointer", position:"relative", aspectRatio:"16/5", background:"var(--bg2)", border:"1px solid var(--bd)" }}>
+          <img src={ad.image_url} alt={ad.title||"Promotion"}
+            style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"opacity .4s ease" }}
+            onError={e => e.target.style.display="none"}/>
+          {ad.title && (
+            <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(to top,rgba(0,0,0,.65),transparent)", padding:"var(--s3) var(--s4)" }}>
+              <div style={{ fontFamily:"var(--ff-d)", fontWeight:800, fontSize:"1rem", color:"#fff" }}>{ad.title}</div>
+            </div>
+          )}
+          {/* Dot indicators for multiple ads */}
+          {allAds.length > 1 && (
+            <div style={{ position:"absolute", bottom:8, right:10, display:"flex", gap:4 }}>
+              {allAds.map((_, i) => (
+                <div key={i} onClick={e => { e.stopPropagation(); setCur(i); }}
+                  style={{ width: i===cur ? 18 : 6, height:6, borderRadius:3, background: i===cur ? "#fff" : "rgba(255,255,255,.45)", transition:"all .3s ease", cursor:"pointer" }}/>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     );
   }
 
+  // fallback — decorative strip when no ads configured
   return (
     <section className="hp-section" style={{ marginBottom:"var(--s6)" }}>
-      <div onClick={()=>navigate("/menu/all")} style={{ borderRadius:"var(--r4)",overflow:"hidden",cursor:"pointer",background:"linear-gradient(135deg,#1A0500 0%,#3D0F00 50%,#1A0500 100%)",border:"1px solid rgba(232,82,26,.25)",padding:"var(--s5) var(--s6)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"var(--s4)" }}>
+      <div onClick={()=>navigate("/menu/all")} style={{ borderRadius:"var(--r4)", overflow:"hidden", cursor:"pointer", background:"linear-gradient(135deg,#1A0500 0%,#3D0F00 50%,#1A0500 100%)", border:"1px solid rgba(232,82,26,.25)", padding:"var(--s5) var(--s6)", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"var(--s4)" }}>
         <div>
-          <div style={{ fontSize:".625rem",fontWeight:800,letterSpacing:".16em",textTransform:"uppercase",color:"var(--brand)",marginBottom:"4px" }}>Limited time</div>
-          <div style={{ fontFamily:"var(--ff-d)",fontSize:"clamp(1.1rem,4vw,1.5rem)",fontWeight:900,color:"#fff",lineHeight:1.1 }}>Fresh & Crispy<br/><span style={{ color:"var(--brand)" }}>Every Day</span></div>
-          <div style={{ fontSize:".8125rem",color:"rgba(255,255,255,.55)",marginTop:"6px" }}>Explore today's full menu →</div>
+          <div style={{ fontSize:".625rem", fontWeight:800, letterSpacing:".16em", textTransform:"uppercase", color:"var(--brand)", marginBottom:"4px" }}>Today's menu</div>
+          <div style={{ fontFamily:"var(--ff-d)", fontSize:"clamp(1.1rem,4vw,1.5rem)", fontWeight:900, color:"#fff", lineHeight:1.1 }}>Fresh &amp; Crispy<br/><span style={{ color:"var(--brand)" }}>Every Day</span></div>
+          <div style={{ fontSize:".8125rem", color:"rgba(255,255,255,.55)", marginTop:"6px" }}>Explore today's full menu →</div>
         </div>
-        <div style={{ color:"var(--brand)",flexShrink:0 }}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="17" r="4"/><line x1="11.5" y1="13.5" x2="19" y2="6"/><circle cx="20" cy="5" r="1.5"/></svg></div>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="17" r="4"/><line x1="11.5" y1="13.5" x2="19" y2="6"/><circle cx="20" cy="5" r="1.5"/></svg>
       </div>
     </section>
   );
@@ -281,6 +416,8 @@ function AdsPanel({ siteConfig }) {
 function CategoryGrid({ categories }) {
   const navigate = useNavigate();
   if (!categories.length) return null;
+
+  // Always show all categories in a 4-column grid so rows are always even (4+4 = 8)
   return (
     <section style={{ marginBottom:"var(--s8)" }}>
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"var(--s4)" }}>
@@ -291,24 +428,21 @@ function CategoryGrid({ categories }) {
       <div className="cat-scroll-row">
         {categories.map(cat => (
           <div key={cat.id} className="cat-chip" onClick={()=>navigate(`/menu/category/${cat.slug}`)}>
-            {/* Square image area — gradient or photo fills entire square */}
             <div className="cat-chip-img"
               style={{ background:`linear-gradient(145deg,${cat.gradient_from||"#1A0800"},${cat.gradient_to||"#2D1200"})` }}>
               {cat.image
                 ? <img loading="lazy" src={cat.image} alt={cat.name}
-                    style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover" }}/>
-                : <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2.5rem" }}>
-                    {cat.emoji || <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="17" r="4"/><line x1="11.5" y1="13.5" x2="19" y2="6"/><circle cx="20" cy="5" r="1.5"/></svg>}
+                    style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center" }}/>
+                : <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="17" r="4"/><line x1="11.5" y1="13.5" x2="19" y2="6"/><circle cx="20" cy="5" r="1.5"/></svg>
                   </div>
               }
-              {/* Item count badge */}
               {(cat.available_count||cat.item_count||0) > 0 && (
                 <div style={{ position:"absolute",top:"6px",left:"6px",background:"rgba(0,0,0,.55)",backdropFilter:"blur(6px)",borderRadius:"var(--rf)",padding:"2px 6px",fontSize:".5625rem",fontWeight:700,color:"rgba(255,255,255,.9)",lineHeight:1.4 }}>
                   {cat.available_count||cat.item_count}
                 </div>
               )}
             </div>
-            {/* Name overlaid at bottom via CSS */}
             <div className="cat-chip-name">{cat.name}</div>
           </div>
         ))}
@@ -361,8 +495,7 @@ const ProductCard = memo(function ProductCard({ item, rank }) {
           {item.is_new && <div style={{ background:"linear-gradient(135deg,#378ADD,#2563EB)",color:"#fff",fontSize:".5625rem",fontWeight:800,padding:"3px 8px",borderRadius:"var(--rf)",letterSpacing:".06em" }}>NEW</div>}
         </div>
         {hasDisc&&item.discount && <div style={{ position:"absolute",bottom:"7px",left:"7px",background:"var(--ok)",color:"#fff",fontSize:".5625rem",fontWeight:800,padding:"2px 7px",borderRadius:"var(--rf)",letterSpacing:".04em" }}>{item.discount}% OFF</div>}
-        {item.stock_status==="low"&&!isOOS && <div style={{ position:"absolute",bottom:"7px",right:"7px",background:"rgba(0,0,0,.6)",backdropFilter:"blur(8px)",color:"var(--warn)",fontSize:".5625rem",fontWeight:800,padding:"2px 8px",borderRadius:"var(--rf)",border:"1px solid rgba(239,159,39,.3)",letterSpacing:".04em" }}>{item.stock_remaining>0?`Only ${item.stock_remaining} left`:"Few left"}</div>}
-        {isOOS && <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.5)",backdropFilter:"blur(3px)" }}><span style={{ fontSize:".75rem",fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.8)" }}>Sold out</span></div>}
+        {isOOS && <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.5)",backdropFilter:"blur(3px)" }}><span style={{ fontSize:".75rem",fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.8)" }}>Out of Stock</span></div>}
       </div>
       {/* Body */}
       <div style={{ padding:"var(--s3)",flex:1,display:"flex",flexDirection:"column" }}>
@@ -502,10 +635,11 @@ function HomeSkeleton() {
 ══════════════════════════════════════════════════════════════════════ */
 export default function HomePage() {
   const { user }       = useAuth();
-  const { branchName, branchId } = useBranch();
+  const { branchName, branchId, authLoading, selectBranch } = useBranch();
   const cartCount      = useCartStore(s => s.items.reduce((a,i)=>a+i.quantity,0));
   const cartTotal      = useCartStore(s => s.items.reduce((a,i)=>a+i.lineTotal,0));
   const pageRef        = useRef(null);
+  const [showBranchPicker, setShowBranchPicker] = useState(false);
 
   const [loading,      setLoading]      = useState(true);
   const [offers,       setOffers]       = useState([]);
@@ -537,8 +671,8 @@ export default function HomePage() {
           const fav = await getFavourites().catch(()=>({data:{favourites:[]}}));
           setFavourites(fav.data.favourites||[]);
         }
-        try { const s=localStorage.getItem("active_order"); if(s) setActiveOrder(JSON.parse(s)); } catch {}
-        const flags = ["is_hotdeals","is_chicken","is_snacks","is_cold_drinks"];
+        try { const s=localStorage.getItem("active_order"); if(s){const parsed=JSON.parse(s); if(!parsed._uid||parsed._uid===user?.id) setActiveOrder(parsed);} } catch {}
+        const flags = ["is_hotdeals","is_buckets","is_combo","is_chicken","is_snacks","is_cold_drinks"];
         const sec = {};
         await Promise.all(flags.map(async f => {
           try { const r=await getItems({[f]:"true",page_size:10}); if((r.data.items||[]).length>0) sec[f]=r.data.items; } catch {}
@@ -565,6 +699,32 @@ export default function HomePage() {
     gsap.fromTo(els,{y:22,opacity:0},{y:0,opacity:1,stagger:.08,duration:.5,ease:"power2.out",delay:.05});
   }, [loading]);
 
+  // ── Branch detection states ──────────────────────────────────────────
+  // authLoading=true  → AuthContext is still calling the branches API (show tiny loader)
+  // authLoading=false, !branchId → API failed AND no cache → show branch picker
+  // authLoading=false, branchId  → branch is known, proceed normally
+
+  if (authLoading) return <HomeSkeleton />;
+
+  if (!branchId) return (
+    <AppLayout>
+      <div style={{ textAlign:"center", padding:"var(--s16) var(--s4)", maxWidth:400, margin:"0 auto" }}>
+        <div style={{ width:64, height:64, borderRadius:"50%", background:"var(--brand-tint)", border:"2px solid rgba(232,82,26,.25)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto var(--s5)" }}>
+          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="1.8">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+        </div>
+        <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1.5rem", fontWeight:900, marginBottom:"var(--s3)" }}>
+          Select your branch
+        </h2>
+        <p style={{ fontSize:".9375rem", color:"var(--t2)", marginBottom:"var(--s6)", lineHeight:1.6 }}>
+          Choose your nearest KNFC branch to see the menu, offers and place orders.
+        </p>
+        <BranchSelector onSelected={b => selectBranch(b)} allowDismiss={false}/>
+      </div>
+    </AppLayout>
+  );
+
   if (loading) return <HomeSkeleton/>;
 
   const userPoints = user?.loyalty_points||0;
@@ -579,7 +739,9 @@ export default function HomePage() {
           <div style={{ position:"relative",height:"clamp(300px,55vw,520px)",overflow:"hidden" }} className="hp-hero">
             {offers.length>0 ? <HeroCarousel offers={offers}/> : <FallbackHero branchName={branchName}/>}
             {branchName && (
-              <div style={{ position:"absolute",top:"var(--s4)",left:"var(--s4)",zIndex:5,display:"flex",alignItems:"center",gap:"6px",background:"rgba(0,0,0,.55)",backdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,.12)",borderRadius:"var(--rf)",padding:"5px 12px" }}>
+              <button onClick={() => setShowBranchPicker(true)} style={{ position:"absolute",top:"var(--s4)",left:"var(--s4)",zIndex:5,display:"flex",alignItems:"center",gap:"6px",background:"rgba(0,0,0,.55)",backdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,.12)",borderRadius:"var(--rf)",padding:"5px 12px",cursor:"pointer",transition:"background .18s" }}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(0,0,0,.72)"}
+                onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,.55)"}>
                 <Ic.Loc/>
                 <span style={{ fontSize:".8125rem",fontWeight:700,color:"rgba(255,255,255,.9)" }}>{branchName}</span>
                 {shopOpen!==null && (
@@ -588,7 +750,8 @@ export default function HomePage() {
                     {shopOpen?"Open":"Closed"}
                   </span>
                 )}
-              </div>
+                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,.7)" strokeWidth="2.5" style={{ marginLeft:2 }}><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
             )}
           </div>
         </section>
@@ -650,7 +813,11 @@ export default function HomePage() {
               <Link to="/menu/all" style={{ fontSize:".875rem",fontWeight:700,color:"var(--brand)",display:"flex",alignItems:"center",gap:"4px" }}>All <Ic.Arrow/></Link>
             </div>
             <div className="home-section-row">
-              {featured.slice(0,10).map((item,i)=><ProductCard key={item.id} item={item} rank={i+1}/>)}
+              {(() => {
+                const n = Math.min(featured.length, 8);
+                const show = Math.floor(n / 4) * 4 || Math.min(n, 4);
+                return featured.slice(0, show).map((item,i) => <ProductCard key={item.id} item={item} rank={i+1}/>);
+              })()}
             </div>
           </section>
         )}
@@ -679,22 +846,56 @@ export default function HomePage() {
         {THEMED_SECTIONS.map(({flag,label,accent,filterParam}) => {
           const items = sectionItems[flag];
           if (!items?.length) return null;
+          const secImg = siteConfig?.config?.home_section_images?.[flag] || {};
+          // auto-fallback: use first item with an image as the section banner
+          const autoImg = !secImg.image_url ? (items.find(i => i.image_url)?.image_url || null) : null;
+          const bannerImg = secImg.image_url || autoImg;
           return (
             <section key={flag} className="hp-section" style={{ marginBottom:"var(--s8)" }}>
-              <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"var(--s4)" }}>
-                <h2 style={{ fontFamily:"var(--ff-d)",fontSize:"1.125rem",fontWeight:800,letterSpacing:"-.02em",display:"flex",alignItems:"center",gap:"var(--s2)",color:"var(--t1)" }}>
-                  <span style={{ color:accent,display:"flex",alignItems:"center" }}>
-                    {flag==="is_hotdeals"    && <Ic.Fire/>}
-                    {flag==="is_chicken"    && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" strokeLinejoin="round"/></svg>}
-                    {flag==="is_snacks"     && <Ic.Star/>}
-                    {flag==="is_cold_drinks"&& <Ic.Cup/>}
-                  </span>
-                  {label}
-                </h2>
-                <Link to={`/menu/all?filter=${filterParam}`} style={{ fontSize:".875rem",fontWeight:700,color:accent,display:"flex",alignItems:"center",gap:"4px" }}>All <Ic.Arrow/></Link>
-              </div>
-              <div className="home-section-row">
-                {items.slice(0,10).map((item,i)=><ProductCard key={item.id} item={item} rank={i+1}/>)}
+              {/* Section banner — admin image or auto-fallback from first item's image */}
+              {bannerImg && (
+                <div style={{ position:"relative", borderRadius:"var(--r4)", overflow:"hidden", marginBottom:"var(--s4)", height:"clamp(90px,20vw,160px)" }}>
+                  <img src={bannerImg} alt={label}
+                    style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}
+                    onError={e => { e.target.parentElement.style.display="none"; }}/>
+                  <div style={{ position:"absolute", inset:0, background:"linear-gradient(90deg,rgba(0,0,0,.65) 0%,rgba(0,0,0,.2) 60%,transparent 100%)" }}/>
+                  <div style={{ position:"absolute", bottom:"var(--s4)", left:"var(--s4)", right:"var(--s4)", display:"flex", alignItems:"flex-end", justifyContent:"space-between" }}>
+                    <div>
+                      <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"clamp(1rem,3vw,1.375rem)", fontWeight:900, color:"#fff", letterSpacing:"-.025em", lineHeight:1.1, marginBottom:secImg.tagline?"4px":0 }}>
+                        {label}
+                      </h2>
+                      {secImg.tagline && (
+                        <p style={{ fontSize:".8125rem", color:"rgba(255,255,255,.8)", margin:0 }}>{secImg.tagline}</p>
+                      )}
+                    </div>
+                    <Link to={`/menu/all?filter=${filterParam}`}
+                      style={{ fontSize:".75rem", fontWeight:700, color:"#fff", background:"rgba(255,255,255,.18)", backdropFilter:"blur(6px)", border:"1px solid rgba(255,255,255,.25)", borderRadius:"var(--rf)", padding:"5px 12px", textDecoration:"none", display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
+                      See all <Ic.Arrow/>
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Header row (shown only when no banner) */}
+              {!bannerImg && (
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"var(--s4)" }}>
+                  <h2 style={{ fontFamily:"var(--ff-d)",fontSize:"1.125rem",fontWeight:800,letterSpacing:"-.02em",display:"flex",alignItems:"center",gap:"var(--s2)",color:"var(--t1)" }}>
+                    <span style={{ color:accent,display:"flex",alignItems:"center" }}>
+                      {flag==="is_hotdeals"    && <Ic.Fire/>}
+                      {flag==="is_buckets"    && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10l-1.5 9H8.5L7 7z"/><path d="M5 7h14"/><circle cx="10" cy="4" r="1"/><circle cx="14" cy="4" r="1"/></svg>}
+                      {flag==="is_combo"      && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>}
+                      {flag==="is_chicken"    && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" strokeLinejoin="round"/></svg>}
+                      {flag==="is_snacks"     && <Ic.Star/>}
+                      {flag==="is_cold_drinks"&& <Ic.Cup/>}
+                    </span>
+                    {label}
+                  </h2>
+                  <Link to={`/menu/all?filter=${filterParam}`} style={{ fontSize:".875rem",fontWeight:700,color:accent,display:"flex",alignItems:"center",gap:"4px" }}>All <Ic.Arrow/></Link>
+                </div>
+              )}
+
+              <div className="mob-hscroll-row">
+                {items.slice(0, 8).map((item,i) => <ProductCard key={item.id} item={item} rank={i+1}/>)}
               </div>
             </section>
           );
@@ -726,6 +927,19 @@ export default function HomePage() {
         .hp-hero-section{margin-top:calc(-1 * var(--s4))}
         @media(min-width:1024px){.hp-hero-section{margin-top:calc(-1 * var(--s8))}}
       `}</style>
+
+      {/* Branch switch picker */}
+      {showBranchPicker && (
+        <BranchSelector
+          allowDismiss
+          onDismiss={() => setShowBranchPicker(false)}
+          onSelected={b => {
+            useCartStore.getState().clearCart();
+            selectBranch(b);
+            setShowBranchPicker(false);
+          }}
+        />
+      )}
     </AppLayout>
   );
 }

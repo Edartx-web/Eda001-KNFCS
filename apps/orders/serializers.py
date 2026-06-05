@@ -41,28 +41,60 @@ class PlaceOrderSerializer(serializers.Serializer):
     payment_method       = serializers.ChoiceField(choices=["cash","upi","card"], default="cash")
     # Walk-in fields (staff placing order)
     walkin_name          = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    walkin_phone         = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    walkin_phone         = serializers.CharField(max_length=15, required=False, allow_blank=True)
+
+    def validate_walkin_phone(self, value):
+        if not value:
+            return value
+        digits = "".join(c for c in value if c.isdigit())
+        if len(digits) != 10 or digits[0] not in "6789":
+            raise serializers.ValidationError(
+                "Enter a valid 10-digit Indian mobile number (starting with 6, 7, 8, or 9)."
+            )
+        return digits
 
     def validate(self, data):
         if data["order_type"] == "dine_in" and not data.get("table_number"):
             raise serializers.ValidationError({"table_number": "Table number required for dine-in."})
         return data
 
+    def _check_table_availability(self, branch, table_number):
+        """Return True if the table is free (no active dine-in order on it today)."""
+        if not table_number:
+            return True
+        occupied = Order.objects.filter(
+            branch=branch,
+            order_type="dine_in",
+            table_number=table_number,
+            status__in=["placed", "confirmed", "preparing", "ready"],
+            created_at__date=timezone.localdate(),
+        ).exists()
+        return not occupied
+
     @transaction.atomic
     def create_order(self, user, branch, placed_by="customer", staff_user=None):
         """Create order, deduct stock, log everything."""
         data = self.validated_data
 
-        # Resolve offer
+        # Resolve offer — match branch-specific OR all_branches global offers
         offer = None
         if data.get("offer_id"):
             from apps.offers.models import DailyOffer, OfferRedemption as _OR
-            try:
-                offer = DailyOffer.objects.get(id=data["offer_id"], branch=branch, is_active=True)
-                if not offer.is_valid_now:
-                    raise serializers.ValidationError("This offer has expired.")
-            except DailyOffer.DoesNotExist:
-                pass
+            from django.db.models import Q as _Q
+            offer = DailyOffer.objects.filter(
+                _Q(id=data["offer_id"], is_active=True) &
+                (_Q(branch=branch) | _Q(all_branches=True))
+            ).first()
+            if offer and not offer.is_valid_now:
+                offer = None  # silently drop expired offer
+
+            # Pre-flight: WELCOME bonus strictly once per customer (fail fast, before order creation)
+            if offer and user and user.pk and placed_by == "customer":
+                if offer.offer_type == "welcome":
+                    if _OR.objects.filter(offer=offer, customer=user).exists():
+                        raise serializers.ValidationError(
+                            "Welcome bonus can only be used once per account."
+                        )
 
         # Create order header
         order = Order(
@@ -104,23 +136,58 @@ class PlaceOrderSerializer(serializers.Serializer):
                         "Only " + str(stock.remaining_stock) + " portion(s) of " + menu_item.name + " left."
                     )
             except StockRecord.DoesNotExist:
-                # No stock record for today - stock must be updated before orders are accepted
-                raise serializers.ValidationError(
-                    "Stock not updated for " + menu_item.name + " today. "
-                    "Please ask staff to top up stock before ordering."
-                )
+                # Fallback: the customer may have ordered an all_branches=True item
+                # while this branch stocks a branch-specific item with the same name.
+                # Try to find the branch-specific item and its stock record.
+                if menu_item.all_branches:
+                    alt = MenuItem.objects.filter(
+                        name=menu_item.name,
+                        branch_id=branch.id,
+                        all_branches=False,
+                    ).first()
+                    if alt:
+                        try:
+                            stock = StockRecord.objects.select_for_update().get(
+                                branch=branch,
+                                menu_item=alt,
+                                date=timezone.localdate(),
+                            )
+                            menu_item = alt  # swap to branch-specific item for the order
+                        except StockRecord.DoesNotExist:
+                            raise serializers.ValidationError(
+                                menu_item.name + " is currently unavailable. Please try another item."
+                            )
+                    else:
+                        raise serializers.ValidationError(
+                            menu_item.name + " is currently unavailable. Please try another item."
+                        )
+                else:
+                    raise serializers.ValidationError(
+                        menu_item.name + " is currently unavailable. Please try another item."
+                    )
+                if stock.remaining_stock <= 0:
+                    raise serializers.ValidationError(
+                        menu_item.name + " is out of stock. Please choose another item."
+                    )
+                if not stock.deduct(qty):
+                    raise serializers.ValidationError(
+                        "Only " + str(stock.remaining_stock) + " portion(s) of " + menu_item.name + " left."
+                    )
             # Calculate customisation extras
             extra = sum(
                 float(c.get("extra_price", 0))
                 for c in item_data.get("customisations", [])
             )
-            line_total = (float(menu_item.price) + extra) * qty
+            # Use discounted price if a discount is set — never charge MRP when an
+            # item has a discount % configured.
+            selling_price = float(menu_item.get_discounted_price())
+            line_total    = (selling_price + extra) * qty
 
             OrderItem.objects.create(
                 order=order,
                 menu_item=menu_item,
                 name_snapshot=menu_item.name,
-                price_snapshot=menu_item.price,
+                price_snapshot=selling_price,   # price customer actually pays
                 quantity=qty,
                 line_total=line_total,
                 customisations=item_data.get("customisations", []),
@@ -150,15 +217,39 @@ class PlaceOrderSerializer(serializers.Serializer):
                 offer = None
             else:
                 discount = float(offer.discount_flat)
+        elif offer and offer.welcome_bonus_amount:
+            # WELCOME type — flat bonus amount (uses its own dedicated field)
+            if offer.min_order_value and subtotal < float(offer.min_order_value):
+                offer = None
+            else:
+                discount = float(offer.welcome_bonus_amount)
 
-        # Max redemptions per user check
-        if offer and offer.max_redemptions_per_user > 0 and user and user.pk:
+        # Offer eligibility checks (customer only — staff walk-in orders skip per-user limits)
+        if offer and user and user.pk and placed_by == "customer":
             from apps.offers.models import OfferRedemption as _OR2
-            already = _OR2.objects.filter(offer=offer, customer=user).count()
-            if already >= offer.max_redemptions_per_user:
-                raise serializers.ValidationError(
-                    "This offer has already been used. Each customer can only redeem it once."
-                )
+            # WELCOME bonus: strictly once per customer, lifetime
+            if offer.offer_type == "welcome":
+                already = _OR2.objects.filter(offer=offer, customer=user).count()
+                if already >= 1:
+                    offer = None  # drop silently — don't penalise customer
+                    discount = 0
+
+            elif offer.max_redemptions_per_user > 0:
+                already = _OR2.objects.filter(offer=offer, customer=user).count()
+                if already >= offer.max_redemptions_per_user:
+                    raise serializers.ValidationError(
+                        "You've already used this offer the maximum number of times."
+                    )
+
+            # first_order_only: apply only if customer has no previous completed orders
+            if offer and offer.first_order_only:
+                prev_orders = Order.objects.filter(
+                    customer=user,
+                    status="completed",
+                ).exclude(pk=order.pk).exists()
+                if prev_orders:
+                    offer = None
+                    discount = 0
 
         order.subtotal = subtotal
         order.discount = discount
@@ -218,6 +309,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             "special_instructions",
             "carried_over",
             "completed_by_name",
+            "cancel_reason", "cancel_note",
             "created_at", "confirmed_at", "ready_at", "completed_at",
         ]
 

@@ -14,6 +14,7 @@ const useCartStore = create(
       offerId:         null,
       branchId:        null,
       spinDiscountPct: 0,   // % discount won from spin wheel (0 = none)
+      paymentMethod:   "cash", // persisted so UPI selection survives page reloads
 
       addItem: (item, quantity = 1, customisations = [], specialInstructions = "") => {
         set(state => {
@@ -52,14 +53,15 @@ const useCartStore = create(
           ? { ...i, quantity, lineTotal: quantity * i.price } : i) }));
       },
 
-      clearCart:        () => set({ items: [], offerId: null, spinDiscountPct: 0 }),
-      setOrderType:     t   => set({ orderType: t }),
-      setTableNumber:   n   => set({ tableNumber: n }),
-      setOffer:         id  => set({ offerId: id }),
-      setBranch:        id  => set({ branchId: id }),
-      setSpinDiscount:  pct => set({ spinDiscountPct: pct }),
+      clearCart:          () => set({ items: [], offerId: null, spinDiscountPct: 0 }),
+      setOrderType:       t   => set({ orderType: t }),
+      setTableNumber:     n   => set({ tableNumber: n }),
+      setOffer:           id  => set({ offerId: id }),
+      setBranch:          id  => set({ branchId: id }),
+      setSpinDiscount:    pct => set({ spinDiscountPct: pct }),
+      setPaymentMethod:   m   => set({ paymentMethod: m }),    // persisted
 
-      buildOrderPayload: (loyaltyPtsUsed = 0, paymentMethod = "cash") => {
+      buildOrderPayload: (loyaltyPtsUsed = 0) => {
         const s = get();
         const branchId = s.branchId || localStorage.getItem("branch_id") || undefined;
         return {
@@ -68,7 +70,7 @@ const useCartStore = create(
           offer_id:          s.offerId || undefined,
           branch_id:         branchId,
           loyalty_pts_used:  loyaltyPtsUsed > 0 ? loyaltyPtsUsed : undefined,
-          payment_method:    paymentMethod,
+          payment_method:    s.paymentMethod,     // from persisted store
           items: s.items.map(i => ({
             menu_item_id:         i.id,
             quantity:             i.quantity,
@@ -78,7 +80,7 @@ const useCartStore = create(
         };
       },
     }),
-    { name: "knfc-cart-v2", version: 1 }
+    { name: "knfc-cart-v2", version: 2 }   // bumped: added paymentMethod persistence
   )
 );
 

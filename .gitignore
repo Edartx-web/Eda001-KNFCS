@@ -1,71 +1,148 @@
-# Environment — never commit secrets
+# ══════════════════════════════════════════════════════════════════
+#  KNFC — .gitignore
+#  Covers: Django, React (CRA), Node, Python, OS, IDE, deployment
+# ══════════════════════════════════════════════════════════════════
+
+# ── Secrets / environment ─────────────────────────────────────────
 .env
 .env.*
 !.env.example
-!frontend/.env.production
 
-# Python
+# ── Python ────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.pyw
+*.pyz
 .Python
 *.egg-info/
+*.egg
 dist/
 build/
-*.egg
+.eggs/
+pip-wheel-metadata/
+MANIFEST
 
-# Django
+# ── Django runtime ────────────────────────────────────────────────
 *.log
+*.log.*
+logs/
+!logs/.gitkeep
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
 staticfiles/
 media/
+!staticfiles/.gitkeep
+!media/.gitkeep
 
-# Virtual environments
+# ── Virtual environments ──────────────────────────────────────────
 venv/
 env/
 .venv/
+ENV/
+env.bak/
+venv.bak/
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Node (frontend)
-node_modules/
-frontend/build/
-frontend/dist/
-frontend/.env
-frontend/.env.local
-
-# WhatsApp session credentials — never commit
-whatsapp-service/sessions/
-whatsapp-service/node_modules/
-
-# Celery beat schedule (auto-generated runtime file)
+# ── Celery ────────────────────────────────────────────────────────
 celerybeat-schedule
 celerybeat-schedule.*
 celerybeat.pid
 
-# Local scratch / working files — not for version control
-notes.txt
-Prompt.txt
-issues_list.txt
-KNFC_PROJECT_MANUAL.txt
+# ── Node / React ──────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Claude Code session data
-.claude/
+# ── WhatsApp service ──────────────────────────────────────────────
+whatsapp-service/node_modules/
+whatsapp-service/sessions/
+whatsapp-service/auth_info_*/
+whatsapp-service/*.log
 
-# Security-related local files
-security/
-
-# Large binary assets — store outside git or use Git LFS
+# ── Large binary assets (use external storage / Git LFS) ──────────
 frontend/src/components/videoclips/*.mp4
 frontend/src/components/videoclips/*.webm
+frontend/public/assets/video/
+
+# ── Source / working data files (already imported into DB) ────────
+MenuImage/
+KNFCMENU*.xlsx
+KNFCMENULIST.xlsx
+MENULIST.txt
+
+# ── IDE / Editor ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+*.orig
+*.sublime-project
+*.sublime-workspace
+
+# ── Operating system ──────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Testing / Coverage ────────────────────────────────────────────
+.coverage
+coverage.xml
+.pytest_cache/
+htmlcov/
+.tox/
+nosetests.xml
+
+# ── Type checking ─────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+
+# ── Working / scratch files ───────────────────────────────────────
+Prompt.txt
+notes.txt
+issues_list.txt
+TODO.txt
+KNFC_PROJECT_MANUAL.txt
+scratch/
+tmp/
+
+# ── Claude Code / AI tooling ──────────────────────────────────────
+.claude/
+
+# ── Deployment artefacts ──────────────────────────────────────────
+*.pid
+*.seed
+*.pid.lock
+
+# ── Server logs ───────────────────────────────────────────────────
+daphne_startup.log
+gunicorn.log
+gunicorn.pid
+access.log
+error.log
+
+# ── WhatsApp service secrets ──────────────────────────────────────
+whatsapp-service/.env
+whatsapp-service/.env.local
+
+# ── Temp extraction dirs ──────────────────────────────────────────
+favicon_io_extracted/
+*_extracted/
+DEPLOYMENT.md

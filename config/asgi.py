@@ -5,12 +5,16 @@ HTTP  → Django views (unchanged)
 WS    → ws/queue/<branch_id>/ → OrderQueueConsumer
 """
 import os
+from decouple import config
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from django.urls import re_path
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
+os.environ.setdefault(
+    "DJANGO_SETTINGS_MODULE",
+    config("DJANGO_SETTINGS_MODULE", default="config.settings.production"),
+)
 
 django_asgi_app = get_asgi_application()
 

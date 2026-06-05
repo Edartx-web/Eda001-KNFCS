@@ -1,0 +1,19 @@
+{% extends "emails/_base.html" %}
+{% block body %}
+<h1>Your verification code</h1>
+<p>Hi {{ name|default:"there" }},</p>
+<p>Use the code below to verify your KNFC account. It expires in <strong>{{ expiry|default:"5 minutes" }}</strong>.</p>
+
+<div style="text-align:center;margin:28px 0">
+  <div style="display:inline-block;background:linear-gradient(135deg,#E8521A,#C43F0A);color:#fff;font-size:36px;font-weight:900;letter-spacing:.2em;padding:18px 40px;border-radius:14px;font-family:'Courier New',monospace;box-shadow:0 8px 28px rgba(232,82,26,.35)">
+    {{ otp }}
+  </div>
+</div>
+
+<div class="info-box warning">
+  <strong style="color:#92400E">Never share this code.</strong>
+  <p style="margin-top:4px;font-size:14px;color:#92400E">KNFC staff will never ask for your OTP. If you didn't request this, ignore this email.</p>
+</div>
+
+<p class="small" style="margin-top:20px">This code is valid for <strong>{{ expiry|default:"5 minutes" }}</strong> from the time this email was sent.</p>
+{% endblock %}

@@ -37,28 +37,18 @@ const NAV = {
   staff:        [{ label:"Queue",     path:"/staff/queue"     },
                  { label:"Stock",     path:"/staff/stock"     },
                  { label:"New Order", path:"/staff/new-order" }],
-  branch_admin: [{ label:"Dashboard",  path:"/admin/dashboard"  },
-                 { label:"Menu",       path:"/admin/menu"       },
-                 { label:"Staff",      path:"/admin/staff"      },
-                 { label:"Stock",      path:"/admin/stock"      },
-                 { label:"Analytics",  path:"/admin/analytics"  },
-                 { label:"Broadcast",  path:"/admin/broadcast"  }],
-  super_admin:  [{ label:"Dashboard",  path:"/superadmin/dashboard" },
-                 { label:"Branches",   path:"/superadmin/branches"  },
-                 { label:"Menu",       path:"/superadmin/menu"      },
-                 { label:"Staff",      path:"/superadmin/staff"     },
-                 { label:"Offers",     path:"/superadmin/offers"    },
-                 { label:"Analytics",  path:"/superadmin/analytics" },
-                 { label:"WhatsApp",   path:"/superadmin/whatsapp"  },
-                 { label:"Broadcast",  path:"/superadmin/broadcast" }],
+  branch_admin: [{ label:"Dashboard", path:"/admin/dashboard" },
+                 { label:"Staff",     path:"/admin/staff"     },
+                 { label:"Stock",     path:"/admin/stock"     },
+                 { label:"Offers",    path:"/admin/offers"    }],
+  super_admin:  [], // SuperAdmin uses sidebar navigation inside SuperAdminDashboard
 };
 
 /* ── Icons ──────────────────────────────────────────────────────────────── */
 const LogoIcon = () => <img src="/KNFC-logo.svg" alt="KNFC" width="30" height="30" style={{ objectFit:"contain", borderRadius:"6px" }} />;
 const SearchIcon= () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" strokeLinecap="round"/></svg>;
 const CartIcon  = () => <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" strokeLinejoin="round"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>;
-const MoonIcon  = () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-const SunIcon   = () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" strokeLinecap="round"/></svg>;
+/* Dark/Light mode — pill toggle, no SVG ─── */
 const XIcon     = () => <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/></svg>;
 
 export default function Header() {
@@ -69,8 +59,10 @@ export default function Header() {
 
   const { branchName, hasBranch, selectBranch } = useBranch();
   const [showBranchPicker, setShowBranchPicker] = useState(false);
-  const isCustomer  = user?.role === "customer";
-  const userRole    = user?.role || "customer";
+  const isCustomer    = user?.role === "customer";
+  const userRole      = user?.role || "customer";
+  const isAdminRole   = userRole === "branch_admin" || userRole === "super_admin";
+  const isBranchAdmin = userRole === "branch_admin";
   const historyKey  = userRole === "staff"
     ? "knfc_staff_search_history"
     : (userRole === "branch_admin" || userRole === "super_admin")
@@ -125,6 +117,11 @@ export default function Header() {
 
   /* close drawer on nav */
   useEffect(() => setDrawer(false), [location.pathname]);
+  useEffect(() => {
+    if (isAdminRole && !isBranchAdmin) return;
+    document.body.classList.toggle("nav-open", drawer);
+    return () => document.body.classList.remove("nav-open");
+  }, [drawer, isAdminRole, isBranchAdmin]);
 
   /* fetch branch open/closed status + next open time */
   useEffect(() => {
@@ -156,7 +153,7 @@ export default function Header() {
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  const role   = user?.role || "customer";
+  const role   = userRole;
   const links  = NAV[role] || NAV.customer;
   const active = p => {
     if (p === "/menu") return location.pathname === "/menu" || location.pathname.startsWith("/menu/");
@@ -337,10 +334,10 @@ export default function Header() {
                       { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8" strokeLinecap="round"/></svg>,                                label:"New Order",   path:"/staff/new-order" },
                       { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>, label:"Stock Update", path:"/staff/stock" },
                     ] : (userRole === "branch_admin" || userRole === "super_admin") ? [
-                      { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>, label:"Dashboard",   path:"/admin/dashboard" },
-                      { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" strokeLinejoin="round"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>, label:"Manage Menu", path:"/admin/menu" },
-                      { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>, label:"Offers",       path:"/admin/offers" },
-                      { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, label:"Analytics",   path:"/admin/analytics" },
+                      { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>, label:"Dashboard",  path:"/admin/dashboard" },
+                      { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" strokeLinejoin="round"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>, label:"Menu",       path:"/admin/menu" },
+                      { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>,  label:"Stock",      path:"/admin/stock" },
+                      { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>, label:"Offers",     path:"/admin/offers" },
                     ] : [
                       { icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2s-4 4-4 9a4 4 0 008 0c0-5-4-9-4-9z"/></svg>, label:"Offers & Deals", path:"/offers" },
                       { icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label:"My Account",    path:"/account" },
@@ -385,6 +382,19 @@ export default function Header() {
               </span>
             </div>
 
+            {/* Branch switch icon — customers only, mobile only */}
+            {isCustomer && (
+              <button
+                onClick={() => setShowBranchPicker(true)}
+                className="hdr-branch-mob"
+                title={hasBranch ? `Branch: ${branchName}` : "Select branch"}
+                style={{ width:"36px", height:"36px", borderRadius:"var(--r2)", background:"var(--bg2)", border:"1px solid var(--bd)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--t2)", cursor:"pointer", flexShrink:0, transition:"all var(--d1) var(--ease)" }}
+                onMouseEnter={e=>{ e.currentTarget.style.color="var(--brand)"; e.currentTarget.style.borderColor="var(--bdb)"; }}
+                onMouseLeave={e=>{ e.currentTarget.style.color="var(--t2)"; e.currentTarget.style.borderColor="var(--bd)"; }}>
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              </button>
+            )}
+
             {/* Branch chip — customers only, desktop */}
             {isCustomer && (
               <button
@@ -410,21 +420,32 @@ export default function Header() {
               </button>
             )}
 
-            {/* Theme toggle */}
+            {/* Theme toggle — sun/moon icon button */}
             <button
               onClick={toggle}
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
               style={{
-                width:"38px", height:"38px", borderRadius:"var(--r2)",
-                background:"var(--bg2)", border:"1px solid var(--bd)",
-                display:"flex", alignItems:"center", justifyContent:"center",
-                color: isDark ? "var(--gold)" : "var(--t2)",
-                transition:"all var(--d1) var(--ease)", flexShrink:0,
+                width:"36px", height:"36px", borderRadius:"var(--r2)", padding:0,
+                background: isDark ? "rgba(232,82,26,.12)" : "var(--bg2)",
+                border:`1.5px solid ${isDark ? "rgba(232,82,26,.3)" : "var(--bd)"}`,
+                cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+                color: isDark ? "var(--brand)" : "var(--t2)",
+                transition:"all .2s ease",
               }}
-              onMouseEnter={e => e.currentTarget.style.background="var(--bg3)"}
-              onMouseLeave={e => e.currentTarget.style.background="var(--bg2)"}
-              title={isDark ? "Switch to light" : "Switch to dark"}
-            >
-              {isDark ? <SunIcon /> : <MoonIcon />}
+              onMouseEnter={e => { e.currentTarget.style.borderColor="var(--brand)"; e.currentTarget.style.color="var(--brand)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor= isDark ? "rgba(232,82,26,.3)" : "var(--bd)"; e.currentTarget.style.color= isDark ? "var(--brand)" : "var(--t2)"; }}>
+              {isDark ? (
+                /* Sun — switch to light */
+                <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="5"/>
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
+              ) : (
+                /* Moon — switch to dark */
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              )}
             </button>
 
             {/* Cart */}
@@ -462,9 +483,33 @@ export default function Header() {
               </button>
             )}
 
-            {/* Hamburger ── mobile only, hidden at desktop via CSS */}
-            <button
-              className="hdr-hamburger"
+            {/* Admin mobile sign-out — compact button, hidden at desktop (they use sidebar logout) */}
+            {isAdminRole && user && (
+              <button
+                className="hdr-admin-logout"
+                onClick={async () => { await logout(); navigate("/"); }}
+                title="Sign out"
+                style={{
+                  width:"36px", height:"36px", borderRadius:"var(--r2)",
+                  background:"transparent", border:"1px solid var(--err-t)",
+                  color:"var(--err)", display:"flex", alignItems:"center",
+                  justifyContent:"center", cursor:"pointer", flexShrink:0,
+                  transition:"all var(--d1) var(--ease)",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background="var(--err-t)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background="transparent"; }}
+              >
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" strokeLinecap="round"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+              </button>
+            )}
+
+            {/* Hamburger ── mobile only, hidden at desktop via CSS. */}
+            {(!isAdminRole || isBranchAdmin) && <button
+              className={isBranchAdmin ? "hdr-ba-hamburger hdr-hamburger" : "hdr-hamburger"}
               onClick={() => setDrawer(v => !v)}
               style={{
                 width:"38px", height:"38px", borderRadius:"var(--r2)",
@@ -487,13 +532,13 @@ export default function Header() {
                     : i===1 ? "scaleX(.72)" : "none",
                 }} />
               ))}
-            </button>
+            </button>}
           </div>
         </div>
       </header>
 
-      {/* ── Mobile drawer backdrop ─────────────────────────────────────── */}
-      {drawer && (
+      {/* ── Mobile drawer backdrop + slide drawer (customer / staff / branch_admin) ─── */}
+      {(!isAdminRole || isBranchAdmin) && drawer && (
         <div
           onClick={() => setDrawer(false)}
           style={{
@@ -504,8 +549,7 @@ export default function Header() {
         />
       )}
 
-      {/* ── Mobile slide drawer ────────────────────────────────────────── */}
-      <aside style={{
+      {(!isAdminRole || isBranchAdmin) && <aside style={{
         position:"fixed", top:0, right:0, bottom:0, zIndex:195,
         width:"min(300px,84vw)", background:"var(--bgc)",
         borderLeft:"1px solid var(--bd)", boxShadow:"var(--sh-xl)",
@@ -595,7 +639,7 @@ export default function Header() {
             </button>
           )}
         </div>
-      </aside>
+      </aside>}
 
       <style>{`
         /* cart badge hidden on desktop */
@@ -606,6 +650,15 @@ export default function Header() {
         @media(min-width:1280px){ .header-inner-row{padding: 0 var(--s10)} }
         .hdr-branch-chip{display:none !important}
         @media(min-width:1024px){ .hdr-branch-chip{display:flex !important} }
+        /* Mobile branch icon: show on mobile, hide on desktop (branch chip takes over) */
+        .hdr-branch-mob{display:flex !important}
+        @media(min-width:1024px){ .hdr-branch-mob{display:none !important} }
+        /* Admin logout button: mobile only */
+        .hdr-admin-logout{display:flex}
+        @media(min-width:1024px){ .hdr-admin-logout{display:none !important} }
+        /* BranchAdmin hamburger: mobile only */
+        .hdr-ba-hamburger{display:flex}
+        @media(min-width:1024px){ .hdr-ba-hamburger{display:none !important} }
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
       `}</style>

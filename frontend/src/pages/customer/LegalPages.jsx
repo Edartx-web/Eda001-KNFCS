@@ -1,10 +1,24 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { reopenCookieBanner } from "../../components/common/CookieBanner";
 import AppLayout from "../../components/layout/AppLayout";
 import axiosClient from "../../api/axiosClient";
+import { useAuth } from "../../context/AuthContext";
 
-const CONTACT_EMAIL = "knfchead01@gmail.com";
+const CONTACT_EMAIL_DEFAULT = "CustomerSupportKNFC@gmail.com";
+
+/* ── Fetch site config once (cached in module) ───────────────────────── */
+let _cfgCache = null;
+function useSiteConfig() {
+  const [cfg, setCfg] = useState(_cfgCache);
+  useEffect(() => {
+    if (_cfgCache) return;
+    axiosClient.get("/branches/config/")
+      .then(r => { _cfgCache = r.data.config; setCfg(r.data.config); })
+      .catch(() => {});
+  }, []);
+  return cfg || {};
+}
 
 /* ── Shared shell ────────────────────────────────────────────────────── */
 function LegalShell({ title, subtitle, children }) {
@@ -247,10 +261,17 @@ function AboutReviewCard({ review }) {
 ══════════════════════════════════════════════════════════════════════ */
 export function AboutPage() {
   const navigate = useNavigate();
+  const cfg      = useSiteConfig();
   const [marqHover,  setMarqHover]  = useState(false);
   const [marqPaused, setMarqPaused] = useState(false);
   const isPaused = marqHover || marqPaused;
   const doubled  = [...ABOUT_REVIEWS, ...ABOUT_REVIEWS];
+  const headline = cfg.about_headline || "About KNFC Fried Chicken";
+  const tagline  = cfg.about_tagline  || "Fried Chicken Done Right";
+  const bodyText = cfg.about_content  || "";
+  const stats    = (Array.isArray(cfg.about_stats) && cfg.about_stats.length > 0)
+    ? cfg.about_stats
+    : [{ value:"3+", label:"Branches" }, { value:"10K+", label:"Happy Customers" }, { value:"50K+", label:"Orders Served" }, { value:"5+", label:"Years Running" }];
 
   return (
     <AppLayout>
@@ -296,7 +317,7 @@ export function AboutPage() {
             KNFC
           </h1>
           <p style={{ fontSize:"clamp(1rem,3vw,1.25rem)", color:"rgba(255,255,255,.85)", fontWeight:600, marginBottom:"var(--s8)", letterSpacing:".02em" }}>
-            Fried Chicken Done Right
+            {tagline}
           </p>
 
           <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(255,255,255,.14)", borderRadius:999, padding:"9px 22px", fontSize:".8125rem", color:"rgba(255,255,255,.9)", fontWeight:700, backdropFilter:"blur(8px)", border:"1px solid rgba(255,255,255,.22)" }}>
@@ -311,14 +332,8 @@ export function AboutPage() {
       {/* ── Stats strip ──────────────────────────────────────────────── */}
       <div style={{ background:"var(--bgc)", borderBottom:"1px solid var(--bd2)" }}>
         <div className="about-stats" style={{ maxWidth:"1100px", margin:"0 auto" }}>
-          {[
-            { value:"3+",   label:"Branches",        icon:<svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg> },
-            { value:"10K+", label:"Happy Customers",  icon:<svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> },
-            { value:"50K+", label:"Orders Served",    icon:<svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> },
-            { value:"5+",   label:"Years Running",    icon:<svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> },
-          ].map((s, idx) => (
-            <div key={s.label} style={{ padding:"var(--s6) var(--s4)", textAlign:"center", borderRight: idx < 3 ? "1px solid var(--bd)" : "none" }}>
-              <div style={{ display:"flex", justifyContent:"center", marginBottom:"var(--s2)" }}>{s.icon}</div>
+          {stats.map((s, idx) => (
+            <div key={s.label || idx} style={{ padding:"var(--s6) var(--s4)", textAlign:"center", borderRight: idx < stats.length - 1 ? "1px solid var(--bd)" : "none" }}>
               <div style={{ fontFamily:"var(--ff-d)", fontSize:"clamp(1.5rem,4vw,2.25rem)", fontWeight:900, color:"var(--brand)", lineHeight:1 }}>{s.value}</div>
               <div style={{ fontSize:".8125rem", color:"var(--t2)", marginTop:4, fontWeight:600 }}>{s.label}</div>
             </div>
@@ -541,16 +556,22 @@ export function AboutPage() {
    CAREERS PAGE
 ══════════════════════════════════════════════════════════════════════ */
 export function CareersPage() {
-  const openings = [
-    { role:"Shift Manager",      location:"All Branches",    type:"Full-time", desc:"Lead daily operations, manage staff schedules, and ensure customer satisfaction." },
-    { role:"Kitchen Staff",      location:"All Branches",    type:"Full-time", desc:"Prepare KNFC signature fried chicken and sides to our quality standards." },
-    { role:"Cashier / Counter",  location:"All Branches",    type:"Part-time", desc:"Serve customers, handle orders on the POS system, keep the counter welcoming." },
-    { role:"Delivery Partner",   location:"All Branches",    type:"Freelance", desc:"Deliver hot meals on time using your own vehicle. Flexible per-delivery pay." },
-    { role:"Brand Ambassador",   location:"Remote / Events", type:"Contract",  desc:"Represent KNFC at events and on social media. Passion for food and people." },
-    { role:"Digital Marketing",  location:"Head Office",     type:"Full-time", desc:"Run social media campaigns, manage ads, and grow our online presence." },
+  const cfg = useSiteConfig();
+  const staticOpenings = [
+    { role:"Shift Manager",     location:"All Branches",    type:"Full-time", desc:"Lead daily operations, manage staff schedules, and ensure customer satisfaction.", apply_email:"careers@knfc.in" },
+    { role:"Kitchen Staff",     location:"All Branches",    type:"Full-time", desc:"Prepare KNFC signature fried chicken and sides to our quality standards.", apply_email:"careers@knfc.in" },
+    { role:"Cashier / Counter", location:"All Branches",    type:"Part-time", desc:"Serve customers, handle orders on the POS system, keep the counter welcoming.", apply_email:"careers@knfc.in" },
+    { role:"Delivery Partner",  location:"All Branches",    type:"Freelance", desc:"Deliver hot meals on time using your own vehicle. Flexible per-delivery pay.", apply_email:"careers@knfc.in" },
+    { role:"Brand Ambassador",  location:"Remote / Events", type:"Contract",  desc:"Represent KNFC at events and on social media. Passion for food and people.", apply_email:"careers@knfc.in" },
+    { role:"Digital Marketing", location:"Head Office",     type:"Full-time", desc:"Run social media campaigns, manage ads, and grow our online presence.", apply_email:"careers@knfc.in" },
   ];
+  const openings = (Array.isArray(cfg.careers_openings) && cfg.careers_openings.length > 0)
+    ? cfg.careers_openings : staticOpenings;
+  const intro = cfg.careers_intro || "";
+
   return (
     <LegalShell title="Careers at KNFC" subtitle="Join our flock — be part of the KNFC family">
+      {intro && <p style={{ fontSize:".9375rem", color:"var(--t2)", lineHeight:1.8, marginBottom:"var(--s6)" }}>{intro}</p>}
       <Section title="Why Work With Us?">
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:"var(--s4)", marginBottom:"var(--s5)" }}>
           {[
@@ -582,7 +603,7 @@ export function CareersPage() {
                 </div>
                 <div style={{ fontSize:".875rem", color:"var(--t2)", lineHeight:1.6 }}>{o.desc}</div>
               </div>
-              <a href={`mailto:careers@knfc.in?subject=Application: ${encodeURIComponent(o.role)}`}
+              <a href={`mailto:${o.apply_email || "careers@knfc.in"}?subject=Application: ${encodeURIComponent(o.role || o.title)}`}
                 style={{ padding:"9px 20px", borderRadius:"var(--rf)", background:"var(--brand)", color:"#fff", fontWeight:700, fontSize:".875rem", textDecoration:"none", flexShrink:0, whiteSpace:"nowrap", alignSelf:"flex-start" }}>
                 Apply now →
               </a>
@@ -603,34 +624,36 @@ export function CareersPage() {
    BLOG PAGE
 ══════════════════════════════════════════════════════════════════════ */
 export function BlogPage() {
-  const posts = [
+  const cfg = useSiteConfig();
+  const cfgPosts = Array.isArray(cfg.blog_posts) && cfg.blog_posts.length > 0 ? cfg.blog_posts : null;
+  const staticPosts = [
     { date:"April 2025", tag:"Recipe", icon:<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="17" r="4"/><line x1="11.5" y1="13.5" x2="19" y2="6"/><circle cx="20" cy="5" r="1.5"/></svg>, title:"The Secret Behind Our Crispy Fried Chicken", summary:"Double-dredging, a 12-hour brine, and a high smoke-point oil blend — we reveal the technique that makes every bite crunch perfectly." },
     { date:"March 2025", tag:"News",   icon:<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>, title:"KNFC Hits 10,000 Orders — Thank You!", summary:"From a single branch to thousands of happy customers, we share our journey and what is coming next for the KNFC family." },
     { date:"Feb 2025",   tag:"Health", icon:<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>, title:"Eating Fried Chicken the Healthier Way", summary:"Portion tips, side swaps, and why our air-chilled chicken cuts fat without cutting flavour." },
     { date:"Jan 2025",   tag:"Culture",icon:<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22a7 7 0 007-7c0-5-4-7-5-11-1.5 2-2 4-2 5.5-1-1-1.5-2.5-1-4-2 2.5-2 5-2 6a5 5 0 005 5z"/></svg>, title:"Spice Levels Explained — Mild to Fire", summary:"A deep dive into our spice blends and how to choose the heat level that is right for your palate." },
   ];
+  const posts = cfgPosts || staticPosts;
   return (
     <LegalShell title="KNFC Blog" subtitle="Stories, recipes, and news from the KNFC kitchen">
       <div style={{ display:"flex", flexDirection:"column", gap:"var(--s5)" }}>
         {posts.map((p, i) => (
           <div key={i} style={{ padding:"var(--s5)", background:"var(--bg2)", borderRadius:"var(--r4)", border:"1px solid var(--bd)", display:"flex", gap:"var(--s4)", flexWrap:"wrap" }}>
-            <div style={{ width:72, height:72, borderRadius:"var(--r3)", background:"linear-gradient(135deg,var(--brand),#c94010)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{p.icon}</div>
+            {p.image_url
+              ? <img src={p.image_url} alt="" style={{ width:72, height:72, borderRadius:"var(--r3)", objectFit:"cover", flexShrink:0 }}/>
+              : <div style={{ width:72, height:72, borderRadius:"var(--r3)", background:"linear-gradient(135deg,var(--brand),#c94010)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{p.icon || <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>}</div>
+            }
             <div style={{ flex:1, minWidth:200 }}>
               <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", marginBottom:"var(--s2)", flexWrap:"wrap" }}>
-                <span style={{ fontSize:".6875rem", fontWeight:700, padding:"2px 8px", borderRadius:"var(--rf)", background:"var(--brand-tint)", color:"var(--brand)", border:"1px solid rgba(232,82,26,.2)" }}>{p.tag}</span>
+                {p.tag && <span style={{ fontSize:".6875rem", fontWeight:700, padding:"2px 8px", borderRadius:"var(--rf)", background:"var(--brand-tint)", color:"var(--brand)", border:"1px solid rgba(232,82,26,.2)" }}>{p.tag}</span>}
                 <span style={{ fontSize:".75rem", color:"var(--t3)" }}>{p.date}</span>
               </div>
               <div style={{ fontFamily:"var(--ff-d)", fontWeight:800, fontSize:"1.0625rem", marginBottom:"var(--s2)", lineHeight:1.25 }}>{p.title}</div>
-              <div style={{ fontSize:".875rem", color:"var(--t2)", lineHeight:1.65 }}>{p.summary}</div>
+              <div style={{ fontSize:".875rem", color:"var(--t2)", lineHeight:1.65 }}>{p.summary || p.excerpt}</div>
             </div>
           </div>
         ))}
       </div>
-      <div style={{ textAlign:"center", marginTop:"var(--s8)", padding:"var(--s6)", background:"var(--bg2)", borderRadius:"var(--r4)", border:"1px dashed var(--bd)" }}>
-        <div style={{ fontSize:"1.5rem", marginBottom:"var(--s2)" }}>📬</div>
-        <div style={{ fontWeight:800, fontSize:"1rem", marginBottom:"var(--s2)" }}>Stay updated</div>
-        <div style={{ fontSize:".875rem", color:"var(--t2)" }}>Follow KNFC on social media for the latest updates, offers, and behind-the-scenes recipes.</div>
-      </div>
+      {/* Removed: "Stay updated / Follow us" section */}
     </LegalShell>
   );
 }
@@ -780,28 +803,43 @@ export function FAQPage() {
    CONTACT PAGE
 ══════════════════════════════════════════════════════════════════════ */
 export function ContactPage() {
-  const [name,    setName]    = useState("");
-  const [email,   setEmail]   = useState("");
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [status,  setStatus]  = useState(null); // null | "ok" | "err"
-  const [errMsg,  setErrMsg]  = useState("");
+  const { user }             = useAuth();
+  const cfg                  = useSiteConfig();
+  const contactEmail         = cfg.contact_email  || CONTACT_EMAIL_DEFAULT;
+  const contactPhone         = cfg.contact_phone  || "+91 98765 43210";
+  const contactWA            = cfg.contact_wa_number || "919876543210";
+  const contactAddress       = cfg.contact_address || "Visit your nearest KNFC branch";
+
+  const [name,    setName]   = useState(user?.name    || "");
+  const [email,   setEmail]  = useState(user?.email   || "");
+  const [phone,   setPhone]  = useState(user?.phone   || "");
+  const [subject, setSubject]= useState("");
+  const [message, setMessage]= useState("");
+  const [photo,   setPhoto]  = useState(null);
+  const [loading, setLoading]= useState(false);
+  const [status,  setStatus] = useState(null);
+  const [errMsg,  setErrMsg] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setStatus(null);
+    setLoading(true); setStatus(null);
     try {
-      await axiosClient.post("/auth/contact/", { name, email, subject, message });
+      const fd = new FormData();
+      fd.append("name",    name);
+      fd.append("email",   email);
+      fd.append("phone",   phone);
+      fd.append("subject", subject);
+      fd.append("message", message);
+      const bid = localStorage.getItem("branch_id");
+      if (bid) fd.append("branch_id", bid);
+      if (photo) fd.append("photo", photo);
+      await axiosClient.post("/support/submit/", fd, { headers:{ "Content-Type":"multipart/form-data" } });
       setStatus("ok");
-      setName(""); setEmail(""); setSubject(""); setMessage("");
+      setSubject(""); setMessage(""); setPhoto(null);
     } catch (ex) {
       setErrMsg(ex.response?.data?.error || "Failed to send. Please try again.");
       setStatus("err");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const inputStyle = {
@@ -815,7 +853,7 @@ export function ContactPage() {
   return (
     <LegalShell title="Contact Us" subtitle="We'd love to hear from you — reach out any way you prefer">
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "var(--s8)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "var(--s8)", maxWidth:"100%" }}>
 
         {/* ── Contact channels ─────────────────────────────── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "var(--s4)" }}>
@@ -823,22 +861,22 @@ export function ContactPage() {
             {
               icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.01 1.2 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>,
               label: "Call us",
-              value: "+91 98765 43210",
+              value: contactPhone,
               sub: "Mon – Sat, 10 AM – 8 PM IST",
-              href: "tel:+919876543210",
+              href: `tel:${contactPhone.replace(/\s/g,"")}`,
             },
             {
               icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
               label: "Email us",
-              value: CONTACT_EMAIL,
+              value: contactEmail,
               sub: "We reply within 1 business day",
-              href: `mailto:${CONTACT_EMAIL}`,
+              href: `mailto:${contactEmail}`,
             },
             {
               icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
               label: "Visit us",
-              value: "Multiple branches",
-              sub: "Find your nearest KNFC",
+              value: contactAddress.length > 40 ? contactAddress.slice(0,40)+"…" : contactAddress,
+              sub: "Find your nearest KNFC branch",
               href: "/menu",
             },
             {
@@ -846,7 +884,7 @@ export function ContactPage() {
               label: "WhatsApp",
               value: "Chat with us",
               sub: "Quick responses during hours",
-              href: "https://wa.me/919876543210",
+              href: `https://wa.me/${contactWA}`,
             },
           ].map(ch => (
             <a key={ch.label} href={ch.href} target={ch.href.startsWith("http") ? "_blank" : undefined}
@@ -857,7 +895,7 @@ export function ContactPage() {
             >
               <div style={{ width: 44, height: 44, borderRadius: "var(--r3)", background: "rgba(232,82,26,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>{ch.icon}</div>
               <div style={{ fontWeight: 800, fontSize: ".9rem", color: "var(--t1)", fontFamily: "var(--ff-b)" }}>{ch.label}</div>
-              <div style={{ fontWeight: 700, fontSize: ".9375rem", color: "var(--brand)" }}>{ch.value}</div>
+              <div style={{ fontWeight: 700, fontSize: ".9375rem", color: "var(--brand)", wordBreak:"break-all", overflowWrap:"anywhere" }}>{ch.value}</div>
               <div style={{ fontSize: ".8125rem", color: "var(--t3)" }}>{ch.sub}</div>
             </a>
           ))}
@@ -874,7 +912,7 @@ export function ContactPage() {
               </div>
               <div style={{ fontFamily: "var(--ff-d)", fontWeight: 800, fontSize: "1.125rem", color: "var(--t1)" }}>Message sent!</div>
               <p style={{ fontSize: ".9rem", color: "var(--t2)", margin: 0 }}>
-                We've received your message and will get back to you at <strong>{CONTACT_EMAIL}</strong> within 1 business day.
+                We've received your message and will get back to you at <strong>{contactEmail}</strong> within 1 business day.
               </p>
               <button onClick={() => setStatus(null)} style={{ padding: "9px 22px", borderRadius: "var(--r3)", border: "none", background: "var(--brand)", color: "#fff", fontWeight: 700, fontSize: ".875rem", cursor: "pointer", fontFamily: "var(--ff-b)" }}>
                 Send another
@@ -885,13 +923,13 @@ export function ContactPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s4)" }}>
                 <div>
                   <label style={{ display: "block", fontSize: ".8125rem", fontWeight: 700, color: "var(--t2)", marginBottom: "var(--s1)", fontFamily: "var(--ff-b)" }}>Your name *</label>
-                  <input required value={name} onChange={e => setName(e.target.value)} placeholder="Arjun Kumar" style={inputStyle}
+                  <input required value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" style={inputStyle}
                     onFocus={e => e.target.style.borderColor = "var(--brand)"}
                     onBlur={e => e.target.style.borderColor = "var(--bd)"}/>
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: ".8125rem", fontWeight: 700, color: "var(--t2)", marginBottom: "var(--s1)", fontFamily: "var(--ff-b)" }}>Email address *</label>
-                  <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="arjun@example.com" style={inputStyle}
+                  <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" style={inputStyle}
                     onFocus={e => e.target.style.borderColor = "var(--brand)"}
                     onBlur={e => e.target.style.borderColor = "var(--bd)"}/>
                 </div>
@@ -902,6 +940,14 @@ export function ContactPage() {
                   onFocus={e => e.target.style.borderColor = "var(--brand)"}
                   onBlur={e => e.target.style.borderColor = "var(--bd)"}/>
               </div>
+              {/* Phone number */}
+              <div>
+                <label style={{ display: "block", fontSize: ".8125rem", fontWeight: 700, color: "var(--t2)", marginBottom: "var(--s1)", fontFamily: "var(--ff-b)" }}>Phone number <span style={{ fontWeight:400, color:"var(--t3)" }}>(optional)</span></label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g,""))} maxLength={10} placeholder="10-digit mobile number" style={inputStyle}
+                  onFocus={e => e.target.style.borderColor = "var(--brand)"}
+                  onBlur={e => e.target.style.borderColor = "var(--bd)"}/>
+              </div>
+
               <div>
                 <label style={{ display: "block", fontSize: ".8125rem", fontWeight: 700, color: "var(--t2)", marginBottom: "var(--s1)", fontFamily: "var(--ff-b)" }}>Message *</label>
                 <textarea required value={message} onChange={e => setMessage(e.target.value)}
@@ -909,6 +955,27 @@ export function ContactPage() {
                   style={{ ...inputStyle, resize: "vertical", minHeight: "120px" }}
                   onFocus={e => e.target.style.borderColor = "var(--brand)"}
                   onBlur={e => e.target.style.borderColor = "var(--bd)"}/>
+              </div>
+
+              {/* Photo upload */}
+              <div>
+                <label style={{ display: "block", fontSize: ".8125rem", fontWeight: 700, color: "var(--t2)", marginBottom: "var(--s1)", fontFamily: "var(--ff-b)" }}>
+                  Attach photo <span style={{ fontWeight:400, color:"var(--t3)" }}>(optional — screenshot or photo of issue)</span>
+                </label>
+                <label style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", border:"1.5px dashed var(--bd)", borderRadius:"var(--r3)", cursor:"pointer", background:"var(--bg)", transition:"border-color .15s" }}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor="var(--brand)"}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor="var(--bd)"}>
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <span style={{ fontSize:".875rem", color: photo ? "var(--ok)" : "var(--t3)" }}>
+                    {photo ? `✓ ${photo.name}` : "Choose a photo…"}
+                  </span>
+                  {photo && (
+                    <button type="button" onClick={e=>{ e.preventDefault(); setPhoto(null); }}
+                      style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", color:"var(--t3)", fontSize:"18px", lineHeight:1 }}>×</button>
+                  )}
+                  <input type="file" accept="image/*" style={{ display:"none" }} onChange={e => setPhoto(e.target.files[0])} />
+                </label>
+                {photo && <img src={URL.createObjectURL(photo)} alt="preview" style={{ marginTop:8, width:"100%", maxHeight:160, objectFit:"cover", borderRadius:"var(--r2)", border:"1px solid var(--bd)" }}/>}
               </div>
 
               {status === "err" && (
@@ -925,31 +992,13 @@ export function ContactPage() {
                 </button>
               </div>
               <p style={{ fontSize: ".75rem", color: "var(--t3)", margin: 0 }}>
-                Your message is sent directly to <strong>{CONTACT_EMAIL}</strong> via our server.
+                Your message is sent directly to <strong>{contactEmail}</strong> via our server.
               </p>
             </form>
           )}
         </div>
 
-        {/* ── Social media ─────────────────────────────────── */}
-        <Section title="Follow Us">
-          <div style={{ display: "flex", gap: "var(--s3)", flexWrap: "wrap" }}>
-            {[
-              { name: "Instagram", color: "#E1306C", href: "https://instagram.com/knfc_official", icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg> },
-              { name: "Facebook",  color: "#1877F2", href: "https://facebook.com/knfcofficial",  icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> },
-              { name: "YouTube",   color: "#FF0000", href: "https://youtube.com/@knfc",          icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 001.46 6.42 29 29 0 001 12a29 29 0 00.46 5.58 2.78 2.78 0 001.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 001.95-1.96A29 29 0 0023 12a29 29 0 00-.46-5.58z"/><polygon points="9.75,15.02 15.5,12 9.75,8.98 9.75,15.02" fill="currentColor" stroke="none"/></svg> },
-              { name: "Twitter / X", color: "#000", href: "https://x.com/knfc_official", icon: <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/></svg> },
-            ].map(s => (
-              <a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer"
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: "var(--rf)", border: "1.5px solid var(--bd)", background: "var(--bg2)", color: "var(--t2)", fontWeight: 700, fontSize: ".875rem", textDecoration: "none", fontFamily: "var(--ff-b)", transition: "all .15s" }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = s.color; e.currentTarget.style.color = s.color; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--bd)"; e.currentTarget.style.color = "var(--t2)"; }}
-              >
-                {s.icon} {s.name}
-              </a>
-            ))}
-          </div>
-        </Section>
+        {/* Follow Us section removed — social links not needed on support page */}
 
       </div>
     </LegalShell>

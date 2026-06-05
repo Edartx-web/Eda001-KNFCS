@@ -49,11 +49,14 @@ function FoodFallback({ size = 100 }) {
 function StarRow({ rating, size = 14 }) {
   return (
     <div style={{ display:"flex", gap:"2px" }}>
-      {[1,2,3,4,5].map(n => (
-        <span key={n} style={{ color:"var(--gold)" }}>
-          {Ic.Star(n <= Math.round(rating))}
-        </span>
-      ))}
+      {[1,2,3,4,5].map(n => {
+        const filled = n <= Math.round(rating);
+        return (
+          <svg key={n} width={size} height={size} fill={filled?"var(--gold)":"none"} stroke={filled?"var(--gold)":"var(--t3)"} strokeWidth="1.5" viewBox="0 0 24 24">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        );
+      })}
     </div>
   );
 }
@@ -166,14 +169,17 @@ export default function ProductDetailPage() {
     </AppLayout>
   );
 
-  const price     = parseFloat(item.offer_price || item.price);
   const base      = parseFloat(item.price);
+  // Use discounted_price (from discount%), then offer_price, then base
+  const discPx    = item.discounted_price ? parseFloat(item.discounted_price) : null;
+  const offerPx   = item.offer_price      ? parseFloat(item.offer_price)      : null;
+  const price     = discPx ?? offerPx ?? base;
+  const hasDisc   = price < base;
   const extraCost = selected.reduce((s, c) => s + parseFloat(c.extra_price || 0), 0);
   const unitPrice = price + extraCost;
   const total     = unitPrice * qty;
   const dietary   = DIETARY_DOT[item.dietary_type] || DIETARY_DOT.non_veg;
   const spiceDots = SPICE_DOTS[item.spice_level] || 2;
-  const hasDisc   = item.offer_price && parseFloat(item.offer_price) < base;
   const isOOS     = item.stock_status === "out" || !item.is_available;
 
   const handleAdd = () => {
@@ -215,24 +221,7 @@ export default function ProductDetailPage() {
   return (
     <AppLayout>
       <div style={{ maxWidth:"1000px", margin:"0 auto" }}>
-        {/* ── CATEGORY PILLS ────────────────────────────────────────── */}
-        {allCats.length > 1 && (
-          <div style={{ marginBottom:"var(--s4)", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollbarWidth:"none" }}>
-            <div style={{ display:"flex", gap:"var(--s2)", paddingBottom:"2px", width:"max-content" }}>
-              {allCats.map(c => {
-                const active = c.slug === item.category_slug;
-                return (
-                  <button key={c.id}
-                    onClick={() => navigate(`/menu/category/${c.slug}`)}
-                    style={{ display:"flex", alignItems:"center", gap:"6px", padding:"7px 14px", borderRadius:"var(--rf)", border:`1.5px solid ${active?"var(--brand)":"var(--bd)"}`, background:active?"var(--brand-tint)":"var(--bg2)", color:active?"var(--brand)":"var(--t2)", fontSize:".8125rem", fontWeight:active?700:500, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)", flexShrink:0 }}>
-                    {c.emoji && <span style={{ fontSize:"1rem", lineHeight:1 }}>{c.emoji}</span>}
-                    {c.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* category pills removed — navigation via back button */}
 
         <div className="dp-grid">
 
@@ -420,22 +409,36 @@ export default function ProductDetailPage() {
             )}
 
             {/* Price */}
-            <div style={{ display:"flex", alignItems:"baseline", gap:"var(--s3)", marginBottom:hasDisc?"var(--s1)":"var(--s5)" }}>
+            <div style={{ display:"flex", alignItems:"baseline", gap:"var(--s3)", marginBottom:"var(--s1)", flexWrap:"wrap" }}>
               <span className="price" style={{ fontSize:"2.25rem", letterSpacing:"-.02em" }}>{formatPrice(price)}</span>
               {hasDisc && <span style={{ fontSize:"1.25rem", color:"var(--t4)", textDecoration:"line-through" }}>{formatPrice(base)}</span>}
+              {item.discount > 0 && (
+                <span style={{ fontSize:".8125rem", fontWeight:800, background:"rgba(29,158,117,.12)", color:"var(--ok)", borderRadius:"var(--rf)", padding:"2px 9px", border:"1px solid rgba(29,158,117,.2)" }}>
+                  {item.discount}% off
+                </span>
+              )}
             </div>
+            {/* Unit / serving size */}
+            {formatUnit(item.unit_quantity, item.measurement_unit) && (
+              <div style={{ fontSize:".875rem", color:"var(--t3)", marginBottom:"var(--s2)", display:"flex", alignItems:"center", gap:5 }}>
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
+                {formatUnit(item.unit_quantity, item.measurement_unit)}
+              </div>
+            )}
             {hasDisc && (
-              <div style={{ fontSize:".875rem", fontWeight:700, color:"var(--ok)", marginBottom:"var(--s5)", display:"flex", alignItems:"center", gap:"5px" }}>
-                <Ic.Check/> You save {formatPrice(base - price)} today
+              <div style={{ fontSize:".875rem", fontWeight:700, color:"var(--ok)", marginBottom:"var(--s4)", display:"flex", alignItems:"center", gap:"5px" }}>
+                <Ic.Check/> You save {formatPrice(base - price)}
               </div>
             )}
 
-            {/* Info grid */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"var(--s2)", marginBottom:"var(--s5)" }}>
-              <InfoTile label="Calories"  value={formatCalories(item.calories)}/>
+            {/* Info grid — no Calories */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"var(--s2)", marginBottom:"var(--s5)" }}>
               <InfoTile label="Prep time" value={item.prep_time_display || "8–15 min"}/>
-              <InfoTile label="Rating"    value={item.avg_rating > 0 ? `${Number(item.avg_rating).toFixed(1)} / 5` : "No reviews"} color="var(--gold)"/>
-              <InfoTile label="Stock"     value={isOOS && item.stock_remaining === 0 && item.stock_status === "out" ? "Not available" : item.stock_remaining > 0 ? `${item.stock_remaining} left` : "Out of stock"} color={isOOS ? "var(--err)" : item.stock_remaining < 10 ? "var(--warn)" : "var(--ok)"}/>
+              <InfoTile label="Rating"    value={item.avg_rating > 0 ? `${Number(item.avg_rating).toFixed(1)} ★` : "No reviews"} color="var(--gold)"/>
+              <InfoTile label="Stock"     value={isOOS ? "Out of stock" : item.stock_remaining > 0 ? `${item.stock_remaining} left` : "Available"} color={isOOS ? "var(--err)" : item.stock_remaining < 10 ? "var(--warn)" : "var(--ok)"}/>
+              {item.measurement_unit && item.measurement_unit !== "pcs" && (
+                <InfoTile label="Unit" value={formatUnit(item.unit_quantity, item.measurement_unit) || item.measurement_unit}/>
+              )}
             </div>
 
             {/* Customisations */}
@@ -484,7 +487,7 @@ export default function ProductDetailPage() {
             <div ref={addAreaRef}>
               {isOOS ? (
                 <div style={{ width:"100%", padding:"15px 28px", borderRadius:"var(--r4)", background:"var(--bg3)", border:"2px solid var(--bd)", display:"flex", alignItems:"center", justifyContent:"center", gap:"var(--s2)", fontSize:"1rem", fontWeight:800, color:"var(--t4)", userSelect:"none" }}>
-                  🚫 Out of Stock — Not available today
+                  Out of Stock — Not available today
                 </div>
               ) : (
                 <button ref={addBtnRef} onClick={handleAdd}
@@ -501,8 +504,8 @@ export default function ProductDetailPage() {
                 <div style={{ display:"flex", gap:"var(--s1)", marginBottom:"var(--s3)" }}>
                   {[1,2,3,4,5].map(n => (
                     <button key={n} type="button" onClick={() => setReviewRating(n)}
-                      style={{ background:"none", border:"none", cursor:"pointer", padding:"2px", color:n<=reviewRating?"var(--gold)":"var(--t4)", transition:"color var(--d1) var(--ease)" }}>
-                      <svg width="28" height="28" fill="currentColor" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                      style={{ background:"none", border:"none", cursor:"pointer", padding:"3px", transition:"transform var(--d1) var(--ease)", transform: n <= reviewRating ? "scale(1.15)" : "scale(1)" }}>
+                      <svg width="30" height="30" fill={n<=reviewRating?"var(--gold)":"none"} stroke={n<=reviewRating?"var(--gold)":"var(--t2)"} strokeWidth="1.5" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     </button>
                   ))}
                 </div>
@@ -563,7 +566,7 @@ export default function ProductDetailPage() {
                       </div>
                       <div style={{ display:"flex", gap:"2px", justifyContent:"center", margin:"6px 0 4px" }}>
                         {[1,2,3,4,5].map(n => (
-                          <svg key={n} width="12" height="12" fill={n <= Math.round(item.avg_rating) ? "var(--gold)" : "var(--bg3)"} viewBox="0 0 24 24">
+                          <svg key={n} width="12" height="12" fill={n <= Math.round(item.avg_rating) ? "var(--gold)" : "none"} stroke={n <= Math.round(item.avg_rating) ? "var(--gold)" : "var(--t3)"} strokeWidth="1.5" viewBox="0 0 24 24">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                           </svg>
                         ))}
@@ -608,7 +611,7 @@ export default function ProductDetailPage() {
           </div>
           {isOOS ? (
             <span style={{ padding:"10px 22px", background:"var(--bg3)", borderRadius:"var(--rf)", color:"var(--t4)", fontWeight:700, fontSize:".875rem", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"6px" }}>
-              🚫 Out of Stock
+              Out of Stock
             </span>
           ) : (
             <button onClick={handleAdd}

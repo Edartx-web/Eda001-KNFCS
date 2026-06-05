@@ -1,0 +1,32 @@
+{% extends "emails/_base.html" %}
+{% block body %}
+<h1>Welcome to KNFC, {{ name }}!</h1>
+<p>Your staff account has been created. Here are your login credentials to access the KNFC Staff Portal.</p>
+
+<div class="info-box brand">
+  <h2 style="margin-bottom:16px;font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:#E8521A">Login Details</h2>
+  <div class="kv-row">
+    <span class="kv-label">User ID</span>
+    <span class="kv-value mono" style="color:#E8521A">{{ user_id }}</span>
+  </div>
+  <div class="kv-row">
+    <span class="kv-label">Temporary password</span>
+    <span class="kv-value mono">{{ password }}</span>
+  </div>
+  <div class="kv-row">
+    <span class="kv-label">Branch</span>
+    <span class="kv-value">{{ branch|default:"—" }}</span>
+  </div>
+</div>
+
+<div class="info-box warning">
+  <strong style="color:#92400E">Important:</strong>
+  <p style="margin-top:4px;font-size:14px;color:#92400E">You will be asked to verify your email and set a new password on first login. Keep your credentials private.</p>
+</div>
+
+<div style="text-align:center;margin:28px 0">
+  <a href="{{ login_url|default:'https://knfcs.com/login/staff' }}" class="btn">Sign in to Staff Portal →</a>
+</div>
+
+<p class="small">Questions? Contact your branch admin or email us at <a href="mailto:{{ support_email|default:'support@knfc.com' }}" style="color:#E8521A">{{ support_email|default:'support@knfc.com' }}</a></p>
+{% endblock %}

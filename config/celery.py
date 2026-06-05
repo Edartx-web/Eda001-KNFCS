@@ -52,6 +52,13 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=8, minute=0),
         "options":  {"expires": 3600},
     },
+    # Auto-cancel stale orders — runs every 5 minutes
+    # Cancels 'placed' orders with no staff confirmation within 30 minutes
+    "auto-cancel-stale-orders": {
+        "task":     "orders.auto_cancel_stale_orders",
+        "schedule": crontab(minute="*/5"),
+        "options":  {"expires": 300},
+    },
 }
 
 app.conf.timezone = "Asia/Kolkata"

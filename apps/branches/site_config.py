@@ -75,6 +75,22 @@ class SiteConfig(models.Model):
         )
     )
 
+    # ── Home Section Images ───────────────────────────────────────────
+    home_section_images  = models.JSONField(
+        default=dict, blank=True,
+        help_text=(
+            'Images shown as banners for themed home-page sections. '
+            'Keys: "is_hotdeals", "is_chicken", "is_snacks", "is_cold_drinks". '
+            'Each value: {"image_url": "...", "tagline": "..."}'
+        )
+    )
+
+    # ── Home Page Ads ─────────────────────────────────────────────────
+    home_ads             = models.JSONField(
+        default=list, blank=True,
+        help_text='JSON array of home page banner ads. Each: {"id","title","image_url","link","active"}'
+    )
+
     # ── General Site URL ──────────────────────────────────────────────
     site_url             = models.CharField(
         max_length=200, blank=True, default="",
@@ -95,6 +111,46 @@ class SiteConfig(models.Model):
         max_length=20, default="SCRATCH15",
         help_text="Coupon code revealed by scratch card"
     )
+
+    # ── Contact Us ───────────────────────────────────────────────────
+    contact_phone      = models.CharField(max_length=25, blank=True, default="",
+        help_text="Phone number shown on Contact page and footer")
+    contact_email      = models.EmailField(blank=True, default="",
+        help_text="Support email address")
+    contact_wa_number  = models.CharField(max_length=25, blank=True, default="",
+        help_text="WhatsApp number for chat support (digits only, e.g. 919876543210)")
+    contact_address    = models.TextField(blank=True, default="",
+        help_text="Physical address shown on Contact and About pages")
+
+    # ── About page ────────────────────────────────────────────────────
+    about_headline     = models.CharField(max_length=200, blank=True, default="About KNFC Fried Chicken")
+    about_tagline      = models.CharField(max_length=300, blank=True, default="")
+    about_content      = models.TextField(blank=True, default="",
+        help_text="Rich text / paragraphs for the About page body")
+    about_image        = models.ImageField(upload_to="site/about/", null=True, blank=True)
+    about_video_url    = models.CharField(max_length=500, blank=True, default="",
+        help_text="YouTube / direct MP4 URL for About page hero video")
+    about_stats        = models.JSONField(default=list, blank=True,
+        help_text='[{"label":"Branches","value":"3"},{"label":"Happy Customers","value":"10000+"}]')
+
+    # ── Blog posts ────────────────────────────────────────────────────
+    blog_posts         = models.JSONField(default=list, blank=True,
+        help_text='[{"id","title","slug","excerpt","content","image_url","author","date","tags":[]}]')
+
+    # ── Careers ───────────────────────────────────────────────────────
+    careers_intro      = models.TextField(blank=True, default="",
+        help_text="Intro text for the Careers page")
+    careers_openings   = models.JSONField(default=list, blank=True,
+        help_text='[{"title","department","location","type":"Full-time","description","apply_email"}]')
+
+    # ── Re-engagement global default ──────────────────────────────────
+    reengagement_default_days = models.PositiveSmallIntegerField(default=7,
+        help_text="Default inactive_days used when creating re-engagement offers")
+
+    # ── Footer visibility ─────────────────────────────────────────────
+    footer_show_map    = models.BooleanField(default=True, help_text="Show Google Map in desktop footer")
+    footer_map_query   = models.CharField(max_length=200, blank=True, default="KNFC+Fried+Chicken",
+        help_text="Google Maps search query for the footer embed")
 
     # ── Singleton boilerplate ─────────────────────────────────────────
     class Meta:

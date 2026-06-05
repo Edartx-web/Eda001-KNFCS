@@ -2,10 +2,10 @@
 from rest_framework             import status
 from rest_framework.views       import APIView
 from rest_framework.response    import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
-from apps.branches.models      import Branch
-from apps.branches.serializers import BranchSerializer, BranchCreateSerializer
+from apps.branches.models      import Branch, BranchTable
+from apps.branches.serializers import BranchSerializer, BranchCreateSerializer, BranchTableSerializer
 from apps.accounts.permissions import IsSuperAdminOnly, IsAdminOrAbove
 
 
@@ -117,7 +117,8 @@ class PublicBranchListView(APIView):
     Only exposes safe public fields — no staff/admin data.
     Used by the frontend branch-selector popup before login/ordering.
     """
-    permission_classes = []   # AllowAny — public endpoint
+    permission_classes  = []   # AllowAny — public endpoint
+    throttle_classes    = []   # No rate-limiting — this endpoint must always respond
 
     def get(self, request):
         from rest_framework.permissions import AllowAny
@@ -125,6 +126,8 @@ class PublicBranchListView(APIView):
             "id", "name", "address", "phone", "email",
             "latitude", "longitude",
             "operating_hours", "is_active",
+            "upi_id", "gpay_upi_id", "phonepe_upi_id", "supermoney_upi_id",
+            "enable_pickup", "enable_dine_in", "pickup_upi_only",
         )
         branches = list(qs)
         return Response({
@@ -289,14 +292,21 @@ class BranchOperatingHoursView(APIView):
             return err("Branch not found.", 404)
         hours   = branch.operating_hours or {}
         is_open = self._is_open_now(hours)
-        return ok({
-            "operating_hours": hours,
-            "is_open_now":     is_open,
-            "next_open_at":    None if is_open else self._next_open_at(hours),
-            "enable_dine_in":  branch.enable_dine_in,
-            "enable_pickup":   branch.enable_pickup,
-            "pickup_upi_only": branch.pickup_upi_only,
-        })
+        payload = {
+            "operating_hours":   hours,
+            "is_open_now":       is_open,
+            "next_open_at":      None if is_open else self._next_open_at(hours),
+            "enable_dine_in":    branch.enable_dine_in,
+            "enable_pickup":     branch.enable_pickup,
+            "pickup_upi_only":   branch.pickup_upi_only,
+            "upi_id":            branch.upi_id or "",
+        }
+        # Include payment QR URL if UPI ID is set
+        if branch.upi_id:
+            payload["payment_qr_url"] = (
+                f"/api/v1/branches/{branch.id}/payment-qr/"
+            )
+        return ok(payload)
 
     def patch(self, request, pk):
         branch = self._get(pk, request)
@@ -415,6 +425,155 @@ class BranchQRCodeView(APIView):
         })
 
 
+# ── Payment QR helpers ─────────────────────────────────────────────────────────
+
+import hashlib as _hashlib
+import hmac    as _hmac
+import time    as _time
+
+
+def _qr_sign(branch_id: str, amount: str, ts: str) -> str:
+    """
+    HMAC-SHA256 signature over "branch_id:amount:ts" using the Django
+    SECRET_KEY.  Truncated to 32 hex chars for a compact URL parameter.
+    """
+    from django.conf import settings
+    msg = f"{branch_id}:{amount}:{ts}".encode()
+    return _hmac.new(settings.SECRET_KEY.encode(), msg, _hashlib.sha256).hexdigest()[:32]
+
+
+def _qr_verify(branch_id: str, amount: str, ts: str, sig: str) -> bool:
+    """Return True when *sig* is valid and the token is not older than 30 min."""
+    try:
+        issued = int(ts)
+    except (TypeError, ValueError):
+        return False
+    if abs(_time.time() - issued) > 1800:   # 30-minute window
+        return False
+    expected = _qr_sign(branch_id, amount, ts)
+    return _hmac.compare_digest(expected, sig)
+
+
+# ── Payment QR ─────────────────────────────────────────────────────────────────
+
+class BranchPaymentQRView(APIView):
+    """
+    GET /api/v1/branches/<pk>/payment-qr/
+    Returns a PNG QR encoding the UPI payment deep-link.
+
+    Security:
+    - Requires authenticated customer (JWT Bearer token).
+    - Requires HMAC-signed query parameters (ts + sig) issued by payment-info.
+    - Rate-limited to 10 requests/minute per user.
+    - Response carries Cache-Control: no-store, Pragma: no-cache.
+    """
+    from rest_framework.permissions import IsAuthenticated
+    from rest_framework.throttling  import UserRateThrottle
+
+    class _QRThrottle(UserRateThrottle):
+        rate = "10/min"
+        scope = "payment_qr"
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes   = [_QRThrottle]
+
+    def get(self, request, pk):
+        import io
+        import qrcode
+        from django.http import HttpResponse
+        from urllib.parse import quote
+
+        # ── HMAC verification ──────────────────────────────────────────────
+        amount = request.GET.get("am", "")
+        ts     = request.GET.get("ts", "")
+        sig    = request.GET.get("sig", "")
+
+        if not _qr_verify(str(pk), amount, ts, sig):
+            return HttpResponse(status=403, content=b"Invalid or expired QR token.")
+
+        try:
+            branch = Branch.objects.get(pk=pk, is_active=True)
+        except Branch.DoesNotExist:
+            return HttpResponse(status=404)
+
+        if not branch.upi_id:
+            return HttpResponse(status=404)
+
+        note    = request.GET.get("tn", "KNFC Order Payment")
+        upi_str = f"upi://pay?pa={quote(branch.upi_id)}&pn={quote(branch.name)}&cu=INR"
+        if amount:
+            try:
+                # Validate amount is a positive number
+                float(amount)
+                upi_str += f"&am={amount}"
+            except ValueError:
+                pass
+        upi_str += f"&tn={quote(note)}"
+
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(upi_str)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        resp = HttpResponse(buf.read(), content_type="image/png")
+        resp["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp["Pragma"]        = "no-cache"
+        resp["X-Content-Type-Options"] = "nosniff"
+        return resp
+
+
+class BranchPaymentInfoView(APIView):
+    """
+    GET /api/v1/branches/<pk>/payment-info/?am=<total>
+    Returns UPI details + a signed QR URL for the given amount.
+
+    Security:
+    - Requires authenticated customer (JWT Bearer token).
+    - UPI IDs are decrypted only on demand — never stored in logs or caches.
+    - The returned payment_qr_url contains an HMAC signature valid for 30 min.
+    """
+    from rest_framework.permissions import IsAuthenticated
+    permission_classes = [IsAuthenticated]
+    throttle_classes   = []
+
+    def get(self, request, pk):
+        try:
+            branch = Branch.objects.get(pk=pk, is_active=True)
+        except Branch.DoesNotExist:
+            return Response({"success": False, "error": "Branch not found."}, status=404)
+
+        qr_url = None
+        if branch.upi_id:
+            amount = request.GET.get("am", "")
+            ts     = str(int(_time.time()))
+            sig    = _qr_sign(str(pk), amount, ts)
+            base   = request.build_absolute_uri(f"/api/v1/branches/{pk}/payment-qr/")
+            qr_url = f"{base}?am={amount}&ts={ts}&sig={sig}"
+            if request.GET.get("tn"):
+                from urllib.parse import quote as _q
+                qr_url += f"&tn={_q(request.GET['tn'])}"
+
+        return Response({
+            "success":          True,
+            "branch_id":        str(branch.id),
+            "branch_name":      branch.name,
+            "upi_id":           branch.upi_id,
+            "gpay_upi_id":      branch.gpay_upi_id,
+            "phonepe_upi_id":   branch.phonepe_upi_id,
+            "supermoney_upi_id":branch.supermoney_upi_id,
+            "payment_qr_url":   qr_url,
+            "pickup_upi_only":  branch.pickup_upi_only,
+        })
+
+
 # ── SiteConfig ─────────────────────────────────────────────────────────────────
 
 class SiteConfigView(APIView):
@@ -439,6 +598,13 @@ class SiteConfigView(APIView):
                 login_image_url = request.build_absolute_uri(cfg.login_image.url)
             except Exception:
                 login_image_url = cfg.login_image.url
+        about_image_url = None
+        if cfg.about_image:
+            try:
+                about_image_url = request.build_absolute_uri(cfg.about_image.url)
+            except Exception:
+                about_image_url = cfg.about_image.url
+
         return Response({"success": True, "config": {
             "loyalty_enabled":        cfg.loyalty_enabled,
             "loyalty_earn_rate":      float(cfg.loyalty_earn_rate),
@@ -456,7 +622,31 @@ class SiteConfigView(APIView):
             "login_image_url":        login_image_url,
             "login_video_url":        cfg.login_video_url or "",
             "login_slides":           cfg.login_slides or [],
+            "home_ads":               cfg.home_ads or [],
+            "home_section_images":    cfg.home_section_images or {},
             "site_url":               cfg.site_url or "",
+            # Contact
+            "contact_phone":          cfg.contact_phone or "",
+            "contact_email":          cfg.contact_email or "",
+            "contact_wa_number":      cfg.contact_wa_number or "",
+            "contact_address":        cfg.contact_address or "",
+            # About
+            "about_headline":         cfg.about_headline or "About KNFC Fried Chicken",
+            "about_tagline":          cfg.about_tagline or "",
+            "about_content":          cfg.about_content or "",
+            "about_image_url":        about_image_url,
+            "about_video_url":        cfg.about_video_url or "",
+            "about_stats":            cfg.about_stats or [],
+            # Blog
+            "blog_posts":             cfg.blog_posts or [],
+            # Careers
+            "careers_intro":          cfg.careers_intro or "",
+            "careers_openings":       cfg.careers_openings or [],
+            # Re-engagement
+            "reengagement_default_days": cfg.reengagement_default_days,
+            # Footer
+            "footer_show_map":        cfg.footer_show_map,
+            "footer_map_query":       cfg.footer_map_query or "KNFC+Fried+Chicken",
         }})
 
     def patch(self, request):
@@ -467,7 +657,12 @@ class SiteConfigView(APIView):
             "loyalty_min_redeem", "loyalty_redeem_step", "loyalty_max_redeem_pct",
             "spin_enabled", "spin_max_uses", "spin_prizes",
             "scratch_enabled", "scratch_discount_pct", "scratch_max_uses", "scratch_coupon_code",
-            "login_video_url", "login_slides", "site_url",
+            "login_video_url", "login_slides", "home_ads", "site_url",
+            "home_section_images",
+            "contact_phone", "contact_email", "contact_wa_number", "contact_address",
+            "about_headline", "about_tagline", "about_content", "about_video_url", "about_stats",
+            "blog_posts", "careers_intro", "careers_openings",
+            "reengagement_default_days", "footer_show_map", "footer_map_query",
         ]
         for f in fields:
             if f in request.data:
@@ -477,6 +672,11 @@ class SiteConfigView(APIView):
         elif request.data.get("login_image_clear") == "true" and cfg.login_image:
             cfg.login_image.delete(save=False)
             cfg.login_image = None
+        if "about_image" in request.FILES:
+            cfg.about_image = request.FILES["about_image"]
+        elif request.data.get("about_image_clear") == "true" and cfg.about_image:
+            cfg.about_image.delete(save=False)
+            cfg.about_image = None
         cfg.save()
         return Response({"success": True, "message": "Settings saved."})
 
@@ -553,3 +753,125 @@ class SpinView(APIView):
             "prize_pct":  prize_pct,
             "spins_left": max(0, max_uses - today_count - 1),
         })
+
+
+class UploadMediaView(APIView):
+    """
+    POST /api/v1/branches/upload-media/
+    Upload an image or video file; returns its absolute URL.
+    Used for home-page ad banners and offer media.
+    SuperAdmin only.
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdminOnly]
+
+    def post(self, request):
+        import os, uuid
+        from django.conf import settings
+        from django.core.files.storage import default_storage
+        from django.core.files.base import ContentFile
+
+        f = request.FILES.get("file")
+        if not f:
+            return err("No file provided.")
+
+        ext  = os.path.splitext(f.name)[-1].lower()
+        name = f"uploads/{uuid.uuid4().hex}{ext}"
+        path = default_storage.save(name, ContentFile(f.read()))
+        media_relative = settings.MEDIA_URL + path  # e.g. /media/uploads/abc.jpg
+        backend_url    = getattr(settings, "BACKEND_URL", "").rstrip("/")
+        if backend_url:
+            url = f"{backend_url}{media_relative}"
+        else:
+            url = request.build_absolute_uri(media_relative)
+        return Response({"success": True, "url": url, "path": path})
+
+
+class BranchTableListView(APIView):
+    """
+    GET  /api/v1/branches/<pk>/tables/  — list tables + live availability (public)
+    POST /api/v1/branches/<pk>/tables/  — create table (BranchAdmin / SuperAdmin)
+    """
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAdminOrAbove()]
+
+    def _occupied_numbers(self, branch_id):
+        from apps.orders.models import Order
+        from django.utils import timezone
+        return set(
+            Order.objects.filter(
+                branch_id=branch_id,
+                order_type="dine_in",
+                status__in=["placed", "confirmed", "preparing", "ready"],
+                created_at__date=timezone.localdate(),
+            ).values_list("table_number", flat=True)
+        )
+
+    def get(self, request, pk):
+        try:
+            branch = Branch.objects.get(pk=pk, is_active=True)
+        except Branch.DoesNotExist:
+            return Response({"success": False, "error": "Branch not found."}, status=404)
+
+        tables   = branch.tables.filter(is_active=True).order_by("table_number")
+        occupied = self._occupied_numbers(pk)
+        result   = []
+        for t in tables:
+            d = BranchTableSerializer(t).data
+            d["is_available"] = t.table_number not in occupied
+            result.append(d)
+
+        return Response({"success": True, "tables": result})
+
+    def post(self, request, pk):
+        try:
+            branch = Branch.objects.get(pk=pk)
+        except Branch.DoesNotExist:
+            return Response({"success": False, "error": "Branch not found."}, status=404)
+
+        user = request.user
+        if user.role == "branch_admin" and str(user.branch_id) != str(pk):
+            return Response({"success": False, "error": "Access denied."}, status=403)
+
+        s = BranchTableSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+
+        table = s.save(branch=branch)
+        return Response({"success": True, "table": BranchTableSerializer(table).data}, status=201)
+
+
+class BranchTableDetailView(APIView):
+    """
+    PATCH  /api/v1/branches/<pk>/tables/<tid>/  — update (BranchAdmin / SuperAdmin)
+    DELETE /api/v1/branches/<pk>/tables/<tid>/  — delete (BranchAdmin / SuperAdmin)
+    """
+    permission_classes = [IsAdminOrAbove]
+
+    def _get_table(self, pk, tid, user):
+        try:
+            table = BranchTable.objects.get(pk=tid, branch_id=pk)
+        except BranchTable.DoesNotExist:
+            return None
+        if user.role == "branch_admin" and str(user.branch_id) != str(pk):
+            return None
+        return table
+
+    def patch(self, request, pk, tid):
+        table = self._get_table(pk, tid, request.user)
+        if not table:
+            return Response({"success": False, "error": "Table not found."}, status=404)
+        s = BranchTableSerializer(table, data=request.data, partial=True)
+        if not s.is_valid():
+            return Response({"success": False, "errors": s.errors}, status=400)
+        s.save()
+        return Response({"success": True, "table": s.data})
+
+    def delete(self, request, pk, tid):
+        table = self._get_table(pk, tid, request.user)
+        if not table:
+            return Response({"success": False, "error": "Table not found."}, status=404)
+        table.delete()
+        return Response({"success": True, "message": "Table deleted."})

@@ -4,13 +4,10 @@ import { gsap } from "gsap";
 import { useAuth } from "../../context/AuthContext";
 import KNCLoader from "../../components/common/KNCLoader";
 import ThemeToggle from "../../components/common/ThemeToggle";
-import { ScrambleTextPlugin } from "gsap/ScrambleTextPlugin";
 import axiosClient from "../../api/axiosClient";
 import "../../styles/global.css";
 import "../../styles/authpage/customerlogin.css";
 import knfcHeroVideo from "../../components/videoclips/KNFC-hero.mp4";
-
-gsap.registerPlugin(ScrambleTextPlugin);
 
 /* ─── API ─────────────────────────────────────────────────────── */
 const API = axiosClient
@@ -53,14 +50,7 @@ const BRAND_DATA = [
   { char: "C", icon: <FriesIcon /> },
 ];
 
-/* ─── Country codes ───────────────────────────────────────────── */
-const COUNTRIES = [
-  { code: "+91", name: "India" },
-  { code: "+1",  name: "USA"   },
-  { code: "+44", name: "UK"    },
-  { code: "+61", name: "AU"    },
-  { code: "+65", name: "SG"    },
-];
+const PHONE_CODE = "+91";
 
 /* ─── Mobile Slides ───────────────────────────────────────────── */
 const MOB_SLIDES = [
@@ -164,8 +154,7 @@ export default function CustomerLogin() {
       const cfg = r.data.config || {};
       setLoginImageUrl(cfg.login_image_url || null);
       setLoginVideoUrl(cfg.login_video_url || null);
-      if (Array.isArray(cfg.login_slides) && cfg.login_slides.length >= 2) {
-        // Merge API slides with default SVG icons (icons can't be stored in JSON)
+      if (Array.isArray(cfg.login_slides) && cfg.login_slides.length >= 1) {
         const icons = [<DrumstickIcon/>, <BurgerIcon/>, <FriesIcon/>, <DrinkIcon/>, <FlameIcon/>];
         setMobSlides(cfg.login_slides.map((sl, i) => ({
           ...sl,
@@ -178,7 +167,6 @@ export default function CustomerLogin() {
   /* ── Auth state ──────────────────────────────────────────────── */
   const [step,        setStep]        = useState("phone");
   const [name,        setName]        = useState("");
-  const [countryCode, setCountryCode] = useState("+91");
   const [phone,       setPhone]       = useState("");
   const [otp,         setOtp]         = useState(["","","","","",""]);
   const [loading,     setLoading]     = useState(false);
@@ -186,13 +174,18 @@ export default function CustomerLogin() {
   const [info,        setInfo]        = useState("");
   const [resend,      setResend]      = useState(0);
   const [devOtp,      setDevOtp]      = useState("");
-  const [agreedTerms, setAgreedTerms] = useState(false);
   const [modalType,   setModalType]   = useState(null);
 
   /* ── Desktop animation state ─────────────────────────────────── */
   const [videoEnded,         setVideoEnded]         = useState(false);
   const [hoveredIndex,       setHoveredIndex]       = useState(null);
   const [animationTriggered, setAnimationTriggered] = useState(false);
+
+  // Fallback: if video fails or won't autoplay, show the UI after 6 s
+  useEffect(() => {
+    const t = setTimeout(() => setVideoEnded(v => v || true), 6000);
+    return () => clearTimeout(t);
+  }, []);
 
   /* ── Mobile swiper state ─────────────────────────────────────── */
   const [mobSlide,    setMobSlide]    = useState(0);
@@ -210,7 +203,6 @@ export default function CustomerLogin() {
   const otpAbortRef = useRef(null);
 
   const smashWords = ["CRAVE", "SMASH", "ENJOY"];
-  const country    = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[0];
 
   /* ════════════ MOBILE SWIPER AUTO ══════════════════════════ */
   const startAuto = useCallback(() => {
@@ -328,17 +320,29 @@ export default function CustomerLogin() {
   };
 
   /* ════════════ AUTH HANDLERS ════════════════════════════════ */
+  const handleBack = () => {
+    setStep("phone");
+    setOtp(["","","","","",""]);
+    setError("");
+    setInfo("");
+    setDevOtp("");
+    setResend(0);
+  };
+
   const handleSend = async (e) => {
     e?.preventDefault();
     const trimName  = name.trim();
-    const fullPhone = `${country.code}${phone.trim()}`;
+    const trimPhone = phone.trim();
     if (!trimName)              { setError("Please enter your name");                          return; }
     if (trimName.length < 2)    { setError("Name must be at least 2 characters");             return; }
     if (/\d/.test(trimName))    { setError("Name should not contain numbers");                 return; }
-    if (phone.length === 0)     { setError("Enter your mobile number");                        return; }
-    if (phone.length !== 10)    { setError("Enter a valid 10-digit mobile number");            return; }
-    if (!agreedTerms)           { setError("Please accept the Terms & Privacy Policy");        return; }
+    if (trimPhone.length === 0) { setError("Enter your mobile number");                        return; }
+    if (trimPhone.length !== 10){ setError("Enter a valid 10-digit mobile number");            return; }
+    if (!/^[6-9]/.test(trimPhone)) {
+      setError("Enter a valid mobile number (must start with 6, 7, 8 or 9)"); return;
+    }
     setError(""); setLoading(true);
+    const fullPhone = `${PHONE_CODE}${trimPhone}`;
     try {
       const res = await customerRegister(trimName, fullPhone);
       const d   = res.data;
@@ -357,8 +361,19 @@ export default function CustomerLogin() {
     if (code.length < 6) { setError("Enter the 6-digit code"); return; }
     setError(""); setLoading(true);
     try {
-      const res = await customerVerifyOtp(`${country.code}${phone.trim()}`, code);
+      const res = await customerVerifyOtp(`${PHONE_CODE}${phone.trim()}`, code);
       login(res.data.user, res.data.tokens);
+
+      /* Auto-claim pending referral if friend signed up via a referral link */
+      const pendingRef = localStorage.getItem("knfc_pending_referral");
+      if (pendingRef) {
+        try {
+          await API.post("/offers/referral/claim/", { code: pendingRef });
+        } catch {} // non-fatal — already claimed or expired is fine
+        localStorage.removeItem("knfc_pending_referral");
+      }
+
+      /* Redirect back to referral landing page's offer if pending, else menu */
       navigate("/menu");
     } catch (err) {
       setError(err.response?.data?.error || "Invalid OTP.");
@@ -371,7 +386,7 @@ export default function CustomerLogin() {
     if (resend > 0) return;
     setError(""); setLoading(true);
     try {
-      const res = await customerResendOtp(`${country.code}${phone.trim()}`);
+      const res = await customerResendOtp(`${PHONE_CODE}${phone.trim()}`);
       if (res.data.dev_otp) setDevOtp(res.data.dev_otp);
       setResend(60); setInfo("New OTP sent via WhatsApp.");
       setOtp(["","","","","",""]);
@@ -465,13 +480,16 @@ export default function CustomerLogin() {
 
           {/* Desktop Video / Image */}
           <div className="video-container">
-            {loginImageUrl && !loginVideoUrl ? (
-              <img src={loginImageUrl} alt="KNFC Login"
-                style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}/>
+            {loginImageUrl ? (
+              <img src={loginImageUrl} alt="hero"
+                style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
+                onLoad={() => setVideoEnded(true)}
+                onError={() => setVideoEnded(true)} />
             ) : (
-              <video key={loginVideoUrl || "default"} ref={videoRef} autoPlay muted playsInline
-                onEnded={()=>setVideoEnded(true)} onTimeUpdate={handleTimeUpdate}
-                className="hero-vid" style={{width:"100%",height:"100%",objectFit:"cover"}}>
+              <video ref={videoRef} autoPlay muted playsInline
+                onEnded={() => setVideoEnded(true)} onTimeUpdate={handleTimeUpdate}
+                onError={() => setVideoEnded(true)}
+                className="hero-vid" style={{ width:"100%", height:"100%", objectFit:"cover" }}>
                 <source src={loginVideoUrl || knfcHeroVideo} type="video/mp4"/>
               </video>
             )}
@@ -532,37 +550,24 @@ export default function CustomerLogin() {
                   <label className="input-label">Your name</label>
                   <div className="input-wrap" style={{marginBottom:"14px"}}>
                     <input type="text" value={name} onChange={e=>setName(e.target.value)}
-                      placeholder="e.g. Ravi Kumar" className="input-field" autoComplete="name"/>
+                      placeholder="Your full name" className="input-field" autoComplete="name"/>
                   </div>
 
                   <label className="input-label">Phone number</label>
                   <div className="phone-row" style={{marginBottom:"14px"}}>
-                    <div className="country-wrapper">
-                      <select value={countryCode} onChange={e=>setCountryCode(e.target.value)} className="country-sel" >
-                        {COUNTRIES.map(c=><option style={{color:"var(--t1)", backgroundColor:"var(--bg)"}} key={c.code} value={c.code}>{c.code} {c.name}</option>)}
-                      </select>
-                      <svg className="sel-caret" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                    <div className="country-wrapper" style={{pointerEvents:"none",userSelect:"none"}}>
+                      <span style={{display:"flex",alignItems:"center",height:"100%",padding:"0 12px",fontWeight:700,fontSize:".9375rem",color:"var(--t2)"}}>+91</span>
                     </div>
                     <input type="tel" value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,"").slice(0,10))}
-                      placeholder="98765 43210" className="input-field phone-input" autoComplete="tel"/>
+                      placeholder="10-digit mobile number" className="input-field phone-input" autoComplete="tel"/>
                   </div>
 
-                  <div className="terms-row">
-                    <label className="terms-check-label">
-                      <input type="checkbox" checked={agreedTerms} onChange={e=>setAgreedTerms(e.target.checked)} className="terms-checkbox"/>
-                      <span className="terms-check-box" aria-hidden="true">
-                        {agreedTerms && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                      </span>
-                      <span className="terms-text">
-                        I agree to the{" "}
-                        <button type="button" className="terms-link" onClick={()=>setModalType("terms")}>Terms of Service</button>
-                        {" "}and{" "}
-                        <button type="button" className="terms-link" onClick={()=>setModalType("privacy")}>Privacy Policy</button>
-                      </span>
-                    </label>
-                  </div>
+                  <p style={{ fontSize:".8125rem", color:"var(--t3)", marginBottom:"14px", lineHeight:1.5 }}>
+                    By continuing you agree to our{" "}
+                    <button type="button" className="terms-link" onClick={()=>setModalType("terms")}>Terms of Service</button>
+                    {" "}and{" "}
+                    <button type="button" className="terms-link" onClick={()=>setModalType("privacy")}>Privacy Policy</button>
+                  </p>
 
                   {error && <Alert type="error">{error}</Alert>}
                   <button type="submit" disabled={loading} className="btn btn-p btn-xl btn-full">
@@ -588,14 +593,14 @@ export default function CustomerLogin() {
                   </div>
                 </div>
 
-                <button onClick={()=>setStep("phone")} style={{ background:"none", border:"none", color:"var(--t3)", cursor:"pointer", marginBottom:"16px", padding:0, fontSize:".875rem", display:"flex", alignItems:"center", gap:"4px" }}>
+                <button onClick={handleBack} style={{ background:"none", border:"none", color:"var(--t3)", cursor:"pointer", marginBottom:"16px", padding:0, fontSize:".875rem", display:"flex", alignItems:"center", gap:"4px" }}>
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   Back
                 </button>
                 <h1 className="form-title" style={{ textAlign:"center" }}>Verify your number</h1>
                 <p className="form-sub" style={{ textAlign:"center" }}>
                   Check WhatsApp on{" "}
-                  <span style={{ fontWeight:700, color:"var(--t1)" }}>{country.code} {phone}</span>
+                  <span style={{ fontWeight:700, color:"var(--t1)" }}>{PHONE_CODE} {phone}</span>
                   {" "}for the 6-digit code
                 </p>
                 {info   && <Alert type="info">{info}</Alert>}

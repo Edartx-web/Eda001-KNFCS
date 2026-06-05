@@ -285,7 +285,7 @@ export function OfferPopup() {
             <button onClick={dismiss} className="btn btn-s">Maybe later</button>
           </div>
           <div style={{ textAlign:"center", marginTop:"var(--s3)", fontSize:".75rem", color:"var(--t2)" }}>
-            Today only · Branch Alpha, Chennai
+            Today only · Claim Offer, Kanchipuram
           </div>
         </div>
       </div>

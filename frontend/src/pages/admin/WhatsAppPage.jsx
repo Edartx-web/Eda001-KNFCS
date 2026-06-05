@@ -70,7 +70,7 @@ function SessionCard({ name, label, icon, sessionData, onLogout, loggingOut }) {
         gap:           "10px",
       }}>
         <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-          <span style={{ fontSize:"1.5rem" }}>{icon}</span>
+          <span style={{ display:"flex", alignItems:"center", justifyContent:"center", width:36, height:36, borderRadius:"var(--r3,10px)", background:"var(--brand-tint,rgba(232,82,26,.1))", flexShrink:0 }}>{icon}</span>
           <div>
             <div style={{ fontFamily:"var(--ff-d,Syne,sans-serif)", fontWeight:800, fontSize:"1rem" }}>
               {label}
@@ -101,27 +101,33 @@ function SessionCard({ name, label, icon, sessionData, onLogout, loggingOut }) {
           </>
         ) : status === "connected" ? (
           <>
-            <div style={{ fontSize:"3rem" }}>✅</div>
-            <div style={{ fontWeight:700, color:GREEN }}>WhatsApp Connected</div>
-            {phone && <div style={{ fontSize:".875rem", color:GRAY }}>+{phone}</div>}
+            <div style={{ width:52, height:52, borderRadius:"50%", background:"#dcfce7", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke={GREEN} strokeWidth="2.5"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </div>
+            <div style={{ fontWeight:700, fontSize:"1rem", color:GREEN }}>WhatsApp Connected</div>
+            {phone && <div style={{ fontSize:".875rem", color:GRAY, fontWeight:600 }}>+{phone}</div>}
             <p style={{ fontSize:".8125rem", color:GRAY, maxWidth:"280px", textAlign:"center" }}>
-              This number is ready to send {name === "otp" ? "OTP messages" : "broadcast offers"}.
+              Ready to send {name === "otp" ? "OTP messages" : "broadcast offers"}.
             </p>
           </>
         ) : status === "service_down" ? (
           <>
-            <div style={{ fontSize:"2.5rem" }}>🔌</div>
-            <div style={{ fontWeight:700, color:GRAY }}>WhatsApp service is not running</div>
+            <div style={{ width:52, height:52, borderRadius:"50%", background:"#f3f4f6", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke={GRAY} strokeWidth="1.8"><path d="M18.36 6.64A9 9 0 0121 12a9 9 0 01-9 9 9 9 0 01-5.37-1.77M12 3a9 9 0 016.36 15.36M3 3l18 18" strokeLinecap="round"/></svg>
+            </div>
+            <div style={{ fontWeight:700, fontSize:"1rem", color:GRAY }}>Service Offline</div>
             <p style={{ fontSize:".8125rem", color:GRAY, maxWidth:"280px" }}>
-              Start it with: <code style={{ background:"#f3f4f6", padding:"2px 6px", borderRadius:"4px" }}>cd whatsapp-service && npm start</code>
+              The WhatsApp service is not running. Please contact your administrator.
             </p>
           </>
         ) : (
           <>
-            <div style={{ fontSize:"2.5rem" }}>📵</div>
-            <div style={{ fontWeight:700, color:RED }}>Disconnected</div>
+            <div style={{ width:52, height:52, borderRadius:"50%", background:"#fee2e2", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke={RED} strokeWidth="1.8"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><circle cx="12" cy="16" r=".5" fill={RED}/></svg>
+            </div>
+            <div style={{ fontWeight:700, fontSize:"1rem", color:RED }}>Not Connected</div>
             <p style={{ fontSize:".8125rem", color:GRAY, maxWidth:"280px" }}>
-              Waiting for QR… The service will generate one shortly.
+              Waiting for connection. Scan the QR code when it appears.
             </p>
           </>
         )}
@@ -201,7 +207,7 @@ export default function WhatsAppPage() {
         }
       `}</style>
       <Header />
-      <div style={{ paddingTop:"60px" }}>
+      <div style={{ paddingTop:"60px", paddingBottom:"calc(72px + env(safe-area-inset-bottom,0px))" }}>
         <div style={{ maxWidth:"960px", margin:"0 auto", padding:"32px clamp(16px,4vw,40px)" }}>
 
           {/* Page header */}
@@ -213,7 +219,7 @@ export default function WhatsAppPage() {
               WhatsApp Management
             </h1>
             <p style={{ fontSize:".9375rem", color:GRAY }}>
-              Manage Baileys WhatsApp sessions for OTP delivery and offer broadcasts.
+              Manage WhatsApp connections for OTP delivery and offer broadcasts.
             </p>
           </div>
 
@@ -232,7 +238,7 @@ export default function WhatsAppPage() {
               <SessionCard
                 name="otp"
                 label="OTP Number"
-                icon="🔑"
+                icon={<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke={BRAND} strokeWidth="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>}
                 sessionData={waState?.otp}
                 onLogout={handleLogout}
                 loggingOut={loggingOut}
@@ -240,7 +246,7 @@ export default function WhatsAppPage() {
               <SessionCard
                 name="broadcast"
                 label="Broadcast Number"
-                icon="📢"
+                icon={<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke={BRAND} strokeWidth="1.8"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" strokeLinecap="round"/></svg>}
                 sessionData={waState?.broadcast}
                 onLogout={handleLogout}
                 loggingOut={loggingOut}

@@ -514,22 +514,34 @@ export function StaffLogin() {
     if (password.length < 6)    { setError("Password must be at least 6 characters"); return; }
     setError(""); setLoading(true);
     try {
-      // Capture location silently — don't block login if denied
+      // Location is REQUIRED — login blocked if denied
       let locPayload = {};
+      if (!navigator.geolocation) {
+        setLoading(false);
+        setError("Location access is not supported by your browser. Use a modern browser (Chrome/Safari).");
+        return;
+      }
       try {
         const pos = await new Promise((res, rej) =>
-          navigator.geolocation?.getCurrentPosition(res, rej, { timeout: 4000 })
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000, enableHighAccuracy: false })
         );
         locPayload = {
           lat:  pos.coords.latitude,
           lng:  pos.coords.longitude,
           addr: `${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}`,
         };
-      } catch {}
+      } catch {
+        setLoading(false);
+        setError("Location permission is required to log in. Tap 'Allow' when the browser asks, then try again.");
+        return;
+      }
 
       const { data } = await staffLogin({ user_id: userId.trim(), password, ...locPayload });
       if (data.requires_verification) {
-        navigate(`/login/staff/verify?email=${encodeURIComponent(data.email)}`);
+        navigate(
+          `/login/staff/verify?email=${encodeURIComponent(data.email)}`,
+          { state: { dev_otp: data.dev_otp || "" } }
+        );
         return;
       }
       login(data.user, data.tokens);
@@ -641,7 +653,42 @@ export function AdminLogin() {
     if (password.length < 6)                        { setError("Password must be at least 6 characters"); return; }
     setError(""); setLoading(true);
     try {
-      const { data } = await adminLogin({ email: email.trim().toLowerCase(), password });
+      let locPayload = {};
+      if (role === "branch_admin") {
+        // Branch admin MUST provide location
+        if (!navigator.geolocation) {
+          setLoading(false);
+          setError("Location access is not supported by your browser. Use a modern browser (Chrome/Safari).");
+          return;
+        }
+        try {
+          const pos = await new Promise((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000, enableHighAccuracy: false })
+          );
+          locPayload = {
+            lat:  pos.coords.latitude,
+            lng:  pos.coords.longitude,
+            addr: `${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}`,
+          };
+        } catch {
+          setLoading(false);
+          setError("Location permission is required for Branch Admin login. Tap 'Allow' when the browser asks, then try again.");
+          return;
+        }
+      } else {
+        // Super admin — location optional
+        try {
+          const pos = await new Promise((res, rej) =>
+            navigator.geolocation?.getCurrentPosition(res, rej, { timeout: 4000 })
+          );
+          locPayload = {
+            lat:  pos.coords.latitude,
+            lng:  pos.coords.longitude,
+            addr: `${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}`,
+          };
+        } catch {}
+      }
+      const { data } = await adminLogin({ email: email.trim().toLowerCase(), password, ...locPayload });
       const actualRole = data.user.role;
       if (actualRole !== role) {
         setError(`This account is a ${actualRole.replace("_", " ")}. Please select the correct role.`);

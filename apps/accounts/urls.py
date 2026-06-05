@@ -35,6 +35,8 @@ urlpatterns = [
     path("sessions/",                 views.StaffSessionListView.as_view(),      name="staff-sessions"),
     path("ping/",                     views.StaffPingView.as_view(),             name="staff-ping"),
     path("admin/users/",              views.SuperAdminUserListView.as_view(),    name="superadmin-users"),
+    path("admin/users/<uuid:pk>/",          views.AdminUserDetailView.as_view(),  name="admin-user-detail"),
+    path("admin/users/<uuid:pk>/terminate/", views.TerminateUserView.as_view(),   name="terminate-user"),
     path("admin/forgot-password/",    views.AdminForgotPasswordView.as_view(),   name="admin-forgot-password"),
     path("admin/reset-password/",     views.AdminResetPasswordView.as_view(),    name="admin-reset-password"),
 

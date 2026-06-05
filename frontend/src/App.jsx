@@ -16,7 +16,8 @@ import useBranch             from "./hooks/useBranch";
 import BranchSelector        from "./components/common/BranchSelector";
 import KNCLoader             from "./components/common/KNCLoader";
 import Footer                from "./components/layout/Footer";
-import { CookieBanner, OfferPopup } from "./components/common/CookieBanner";
+import { CookieBanner, OfferPopup }  from "./components/common/CookieBanner";
+import NearestBranchBanner           from "./components/common/NearestBranchBanner";
 import { NotificationProvider } from "./components/common/NotificationSystem";
 import "./styles/global.css";
 
@@ -37,10 +38,13 @@ const CartPage          = lazy(() => import("./pages/customer/CartPage"));
 const OfferDetailPage   = lazy(() => import("./pages/customer/OfferDetailPage"));
 const AccountPage       = lazy(() => import("./pages/customer/AccountPage"));
 const OffersPage        = lazy(() => import("./pages/customer/OffersPage"));
-const OrderConfirmPage  = lazy(() => import("./pages/customer/OrderPages").then(m => ({ default: m.OrderConfirmPage })));
-const OrderTrackPage    = lazy(() => import("./pages/customer/OrderPages").then(m => ({ default: m.OrderTrackPage   })));
+const OrderConfirmPage      = lazy(() => import("./pages/customer/OrderPages").then(m => ({ default: m.OrderConfirmPage })));
+const OrderTrackPage        = lazy(() => import("./pages/customer/OrderPages").then(m => ({ default: m.OrderTrackPage   })));
+const AwaitingPaymentPage   = lazy(() => import("./pages/customer/AwaitingPaymentPage"));
+const InvoicePage       = lazy(() => import("./pages/customer/InvoicePage"));
 const SearchPage        = lazy(() => import("./pages/customer/SearchPage"));
-const SpinWheelPage     = lazy(() => import("./pages/customer/SpinWheelPage"));
+const SpinWheelPage        = lazy(() => import("./pages/customer/SpinWheelPage"));
+const ReferralLandingPage  = lazy(() => import("./pages/customer/ReferralLandingPage"));
 const PrivacyPage  = lazy(() => import("./pages/customer/LegalPages").then(m => ({ default: m.PrivacyPage  })));
 const CookiePage   = lazy(() => import("./pages/customer/LegalPages").then(m => ({ default: m.CookiePage   })));
 const TermsPage    = lazy(() => import("./pages/customer/LegalPages").then(m => ({ default: m.TermsPage    })));
@@ -54,6 +58,7 @@ const ContactPage  = lazy(() => import("./pages/customer/LegalPages").then(m => 
 const QueuePage    = lazy(() => import("./pages/staff/StaffPages").then(m => ({ default: m.QueuePage    })));
 const StockPage    = lazy(() => import("./pages/staff/StaffPages").then(m => ({ default: m.StockPage    })));
 const NewOrderPage = lazy(() => import("./pages/staff/StaffPages").then(m => ({ default: m.NewOrderPage })));
+const ProfilePage  = lazy(() => import("./pages/admin/ProfilePage"));
 
 const BranchDashboard    = lazy(() => import("./pages/admin/AdminPages").then(m => ({ default: m.BranchDashboard     })));
 const SuperAdminDash     = lazy(() => import("./pages/admin/AdminPages").then(m => ({ default: m.SuperAdminDashboard })));
@@ -158,8 +163,9 @@ function BranchGate({ children }) {
 
   useEffect(() => {
     if (isLoading) return;
-    if (user && user.role !== "customer") return; // staff/admin never need branch picker
-    if (!hasBranch) setShowPicker(true);
+    if (user && user.role !== "customer") return;
+    // Only auto-show on cart page if still no branch selected
+    // For browsing, branch is auto-selected if single branch, or user can dismiss
   }, [isLoading, user, hasBranch]);
 
   const handleSelected = useCallback((branch) => {
@@ -170,7 +176,9 @@ function BranchGate({ children }) {
   return (
     <>
       {children}
-      {showPicker && <BranchSelector onSelected={handleSelected} allowDismiss={false} />}
+      {/* Nearest-branch suggestion — shown after login if closer branch found */}
+      <NearestBranchBanner />
+      {showPicker && <BranchSelector onSelected={handleSelected} allowDismiss={true} onDismiss={() => setShowPicker(false)} />}
     </>
   );
 }
@@ -203,9 +211,10 @@ function RequireCustomer({ children }) {
 
 /* ── Active order shortcut ──────────────────────────────────────────── */
 function TrackRedirect() {
+  const { user } = useAuth();
   try {
     const o = JSON.parse(localStorage.getItem("active_order") || "null");
-    if (o?.id) return <Navigate to={`/order/track/${o.id}`} replace />;
+    if (o?.id && (!o._uid || o._uid === user?.id)) return <Navigate to={`/order/track/${o.id}`} replace />;
   } catch {}
   return <Navigate to="/menu" replace />;
 }
@@ -278,14 +287,15 @@ const PA = ({ roles, C }) => (
 function RootOverlays() {
   const { user }   = useAuth();
   const location   = useLocation();
-  const isAuthPage = location.pathname.startsWith("/login") || location.pathname === "/change-password";
+  const isAuthPage    = location.pathname.startsWith("/login") || location.pathname === "/change-password";
+  const isInvoicePage = location.pathname.startsWith("/order/invoice/");
   const isCustomer = user?.role === "customer";
   if (isAuthPage) return null;
   return (
     <>
-      <Footer />
+      {!isInvoicePage && <Footer />}
       <CookieBanner />
-      {isCustomer && <OfferPopup />}
+      {isCustomer && !isInvoicePage && <OfferPopup />}
     </>
   );
 }
@@ -337,6 +347,7 @@ export default function App() {
           <Route path="/offers"              element={<PG C={OffersPage} />} />
           <Route path="/offers/:id"          element={<PG C={OfferDetailPage} />} />
           <Route path="/spin"                element={<PG C={SpinWheelPage} />} />
+          <Route path="/refer/:code"        element={<PG C={ReferralLandingPage} />} />
           <Route path="/offer/:id"           element={<PG C={OfferDetailPage} />} />
           <Route path="/about"               element={<PG C={AboutPage} />} />
           <Route path="/privacy"             element={<PG C={PrivacyPage} />} />
@@ -351,8 +362,10 @@ export default function App() {
           {/* ── Customer actions — login required ─────────────────────── */}
           <Route path="/cart"                element={<PC C={CartPage} />} />
           <Route path="/account"             element={<PC C={AccountPage} />} />
-          <Route path="/order/confirm/:id"   element={<PC C={OrderConfirmPage} />} />
-          <Route path="/order/track/:id"     element={<PC C={OrderTrackPage} />} />
+          <Route path="/order/confirm/:id"            element={<PC C={OrderConfirmPage} />} />
+          <Route path="/order/awaiting-payment/:orderId" element={<PC C={AwaitingPaymentPage} />} />
+          <Route path="/order/track/:id"              element={<PC C={OrderTrackPage} />} />
+          <Route path="/order/invoice/:orderId" element={<PG C={InvoicePage} />} />
           <Route path="/order/track" element={
             <RequireCustomer>
               <BranchGate><TrackRedirect /></BranchGate>
@@ -363,23 +376,25 @@ export default function App() {
           <Route path="/staff/queue"     element={<P roles={["staff","branch_admin"]} C={QueuePage} />} />
           <Route path="/staff/stock"     element={<P roles={["staff","branch_admin"]} C={StockPage} />} />
           <Route path="/staff/new-order" element={<P roles={["staff","branch_admin"]} C={NewOrderPage} />} />
+          <Route path="/profile"         element={<P roles={["staff","branch_admin"]} C={ProfilePage} />} />
 
           {/* ── Branch Admin ──────────────────────────────────────────── */}
           <Route path="/admin/dashboard"  element={<PA roles={["branch_admin"]}              C={BranchDashboard} />} />
-          <Route path="/admin/menu"       element={<PA roles={["branch_admin","super_admin"]} C={AdminMenuPage} />} />
-          <Route path="/admin/analytics"  element={<PA roles={["branch_admin","super_admin"]} C={AnalyticsDashboard} />} />
           <Route path="/admin/staff"      element={<PA roles={["branch_admin","super_admin"]} C={AdminStaffPage} />} />
           <Route path="/admin/stock"      element={<PA roles={["branch_admin","super_admin"]} C={AdminStockPage} />} />
           <Route path="/admin/offers"     element={<PA roles={["branch_admin","super_admin"]} C={AdminOffersPage} />} />
-          <Route path="/admin/broadcast"  element={<PA roles={["branch_admin"]}              C={BroadcastPage} />} />
           <Route path="/admin/*"          element={<PA roles={["branch_admin"]}              C={BranchDashboard} />} />
+
+          {/* ── Menu, Analytics, Broadcast — super_admin only ─────────── */}
+          <Route path="/admin/menu"       element={<PA roles={["super_admin"]} C={AdminMenuPage} />} />
+          <Route path="/admin/analytics"  element={<PA roles={["super_admin"]} C={AnalyticsDashboard} />} />
+          <Route path="/admin/broadcast"  element={<PA roles={["super_admin"]} C={BroadcastPage} />} />
 
           {/* ── Super Admin ───────────────────────────────────────────── */}
           <Route path="/superadmin/dashboard"  element={<P roles={["super_admin"]} C={SuperAdminDash} />} />
           <Route path="/superadmin/branches"   element={<P roles={["super_admin"]} C={SuperAdminDash} />} />
           <Route path="/superadmin/menu"       element={<PA roles={["super_admin"]} C={AdminMenuPage} />} />
           <Route path="/superadmin/stock"      element={<PA roles={["super_admin"]} C={AdminStockPage} />} />
-          <Route path="/superadmin/offers"     element={<P roles={["super_admin"]} C={AdminOffersPage} />} />
           <Route path="/superadmin/analytics"  element={<P roles={["super_admin"]} C={AnalyticsDashboard} />} />
           <Route path="/superadmin/staff"      element={<P roles={["super_admin"]} C={AdminStaffPage} />} />
           <Route path="/superadmin/whatsapp"   element={<P roles={["super_admin"]} C={WhatsAppPage} />} />

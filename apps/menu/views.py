@@ -98,13 +98,24 @@ class MenuItemListView(APIView):
             Q(branch_id=branch_id) | Q(all_branches=True),
         ).select_related("category").prefetch_related("offers", "stock_records")
 
+        # Deduplicate: if a branch has its own version of an item (same name,
+        # all_branches=False), prefer it over the global all_branches=True copy.
+        # This prevents the global item from appearing alongside the branch item
+        # and ensures stock lookups find the right StockRecord.
+        branch_item_names = list(
+            MenuItem.objects.filter(branch_id=branch_id, all_branches=False)
+            .values_list("name", flat=True)
+        )
+        if branch_item_names:
+            qs = qs.exclude(all_branches=True, name__in=branch_item_names)
+
         # Filters
         category = request.query_params.get("category")
         if category:
             qs = qs.filter(category__slug=category)
 
         # Home-page section flags
-        for flag in ("is_hotdeals", "is_chicken", "is_snacks", "is_cold_drinks"):
+        for flag in ("is_hotdeals", "is_chicken", "is_snacks", "is_cold_drinks", "is_buckets", "is_combo"):
             if request.query_params.get(flag, "").lower() == "true":
                 qs = qs.filter(**{flag: True})
 
@@ -550,6 +561,8 @@ class AdminMenuItemListCreateView(APIView):
             is_chicken=str_to_bool(data.get("is_chicken"), False),
             is_snacks=str_to_bool(data.get("is_snacks"), False),
             is_cold_drinks=str_to_bool(data.get("is_cold_drinks"), False),
+            is_buckets=str_to_bool(data.get("is_buckets"), False),
+            is_combo=str_to_bool(data.get("is_combo"), False),
             display_order=int(data.get("display_order", 0)),
             low_stock_threshold=int(data.get("low_stock_threshold", 10)),
             all_branches=str_to_bool(data.get("all_branches"), False),
@@ -613,7 +626,7 @@ class AdminMenuItemDetailView(APIView):
             "calories", "prep_time_min", "prep_time_max",
             "display_order", "low_stock_threshold",
         ]
-        bool_fields = ["is_available", "is_featured", "is_new", "is_bestseller", "is_hotdeals", "is_chicken", "is_snacks", "is_cold_drinks", "all_branches"]
+        bool_fields = ["is_available", "is_featured", "is_new", "is_bestseller", "is_hotdeals", "is_chicken", "is_snacks", "is_cold_drinks", "is_buckets", "is_combo", "all_branches"]
         
         updated = []
         for f in fields:
@@ -723,10 +736,17 @@ class AdminReviewListView(APIView):
 
     def get(self, request):
         from apps.accounts.permissions import get_request_branch_id
-        branch_id = get_request_branch_id(request)
-        qs = ItemReview.objects.filter(
-            menu_item__branch_id=branch_id
-        ).select_related("menu_item", "customer").order_by("-created_at")
+        from apps.accounts.models import Role
+        if request.user.role == Role.SUPER_ADMIN:
+            qs = ItemReview.objects.select_related("menu_item", "menu_item__branch", "customer").order_by("-created_at")
+            branch_id_param = request.query_params.get("branch_id")
+            if branch_id_param:
+                qs = qs.filter(menu_item__branch_id=branch_id_param)
+        else:
+            branch_id = get_request_branch_id(request)
+            qs = ItemReview.objects.filter(
+                menu_item__branch_id=branch_id
+            ).select_related("menu_item", "menu_item__branch", "customer").order_by("-created_at")
 
         # Optional filters
         item_id = request.query_params.get("item_id")
@@ -748,6 +768,7 @@ class AdminReviewListView(APIView):
             "item_id":      str(r.menu_item_id),
             "item_name":    r.menu_item.name,
             "item_emoji":   r.menu_item.emoji,
+            "branch_name":  r.menu_item.branch.name if r.menu_item.branch else "—",
             "customer_name": r.customer.name,
             "customer_phone": (r.customer.phone or "")[-4:].rjust(10, "•"),
             "rating":       r.rating,
@@ -756,7 +777,7 @@ class AdminReviewListView(APIView):
             "is_visible":   r.is_visible,
             "photo_url": request.build_absolute_uri(r.photo.url) if r.photo else None,
             "created_at":   r.created_at.isoformat(),
-        } for r in qs[:100]]
+        } for r in qs[:200]]
 
         return ok({"reviews": data, "count": len(data)})
 

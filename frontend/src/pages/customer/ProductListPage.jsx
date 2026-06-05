@@ -16,7 +16,7 @@ import { gsap } from "gsap";
 import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
 import AppLayout from "../../components/layout/AppLayout";
 import { getCategoryDetail, getCategories, getItems } from "../../api/menu";
-import { formatPrice, formatUnit, formatCalories } from "../../utils/format";
+import { formatPrice, formatUnit } from "../../utils/format";
 import { SORT_OPTIONS, DIETARY_DOT } from "../../utils/constants";
 import useCartStore from "../../store/cartStore";
 
@@ -110,16 +110,16 @@ const GridCard = memo(function GridCard({ item, navigate }) {
             {item.discount}% OFF
           </div>
         )}
-        {/* Low stock */}
+        {/* Hurry badge — low stock only */}
         {item.stock_status === "low" && !isOOS && (
-          <div style={{ position:"absolute", bottom:"7px", right:"7px", background:"rgba(0,0,0,.6)", backdropFilter:"blur(8px)", color:"var(--warn)", fontSize:".5625rem", fontWeight:800, padding:"2px 8px", borderRadius:"var(--rf)", border:"1px solid rgba(239,159,39,.3)", letterSpacing:".04em" }}>
-            {item.stock_remaining != null && item.stock_remaining > 0 ? `Only ${item.stock_remaining} left` : "Few left"}
+          <div style={{ position:"absolute", bottom:"7px", right:"7px", background:"linear-gradient(135deg,#ff4444,#cc0000)", color:"#fff", fontSize:".5625rem", fontWeight:800, padding:"2px 7px", borderRadius:"var(--rf)", letterSpacing:".06em", textTransform:"uppercase", boxShadow:"0 2px 6px rgba(204,0,0,.4)" }}>
+            Hurry!
           </div>
         )}
-        {/* Sold out */}
+        {/* Out of Stock */}
         {isOOS && (
           <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,.55)", backdropFilter:"blur(3px)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <span style={{ fontSize:".75rem", fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"rgba(255,255,255,.85)" }}>Sold out</span>
+            <span style={{ fontSize:".75rem", fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"rgba(255,255,255,.85)" }}>Out of Stock</span>
           </div>
         )}
       </div>
@@ -129,23 +129,25 @@ const GridCard = memo(function GridCard({ item, navigate }) {
         <div style={{ fontWeight:700, fontSize:".9rem", color:"var(--t1)", lineHeight:1.35, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>
           {item.name}
         </div>
-        {item.avg_rating > 0 && (
-          <div style={{ display:"flex", alignItems:"center", gap:"4px" }}>
-            <span style={{ color:"var(--gold)" }}><Ic.Star/></span>
-            <span style={{ fontSize:".75rem", color:"var(--t2)", fontWeight:700 }}>{Number(item.avg_rating).toFixed(1)}</span>
-            {item.review_count > 0 && <span style={{ fontSize:".6875rem", color:"var(--t4)" }}>({item.review_count})</span>}
-            <span style={{ color:"var(--bd2)" }}>·</span>
-            <span style={{ color:"var(--t4)" }}><Ic.Clock/></span>
-            <span style={{ fontSize:".75rem", color:"var(--t2)" }}>{item.prep_time_display || "8–15 min"}</span>
-          </div>
-        )}
+        <div style={{ display:"flex", alignItems:"center", gap:"4px", flexWrap:"wrap" }}>
+          {item.avg_rating > 0 && (
+            <>
+              <span style={{ color:"var(--gold)" }}><Ic.Star/></span>
+              <span style={{ fontSize:".75rem", color:"var(--t2)", fontWeight:700 }}>{Number(item.avg_rating).toFixed(1)}</span>
+              {item.review_count > 0 && <span style={{ fontSize:".6875rem", color:"var(--t4)" }}>({item.review_count})</span>}
+              <span style={{ color:"var(--bd2)" }}>·</span>
+            </>
+          )}
+          <span style={{ color:"var(--t4)", display:"flex" }}><Ic.Clock/></span>
+          <span style={{ fontSize:".75rem", color:"var(--t3)" }}>{item.prep_time_display || "8–15 min"}</span>
+        </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:"auto", paddingTop:"var(--s1)" }}>
           <div>
             <span className="price" style={{ fontSize:".9375rem" }}>{formatPrice(price)}</span>
             {hasDisc && <span style={{ fontSize:".75rem", color:"var(--t4)", textDecoration:"line-through", marginLeft:"5px" }}>{formatPrice(item.price)}</span>}
             {formatUnit(item.unit_quantity, item.measurement_unit) && (
-              <span style={{ fontSize:".6875rem", color:"var(--t4)", marginLeft:"5px", fontWeight:500 }}>
-                / {formatUnit(item.unit_quantity, item.measurement_unit)}
+              <span style={{ display:"inline-flex", alignItems:"center", marginLeft:"5px", padding:"1px 6px", borderRadius:"var(--rf)", background:"var(--bg3)", border:"1px solid var(--bd)", fontSize:".625rem", color:"var(--t3)", fontWeight:600, letterSpacing:".02em", flexShrink:0 }}>
+                {formatUnit(item.unit_quantity, item.measurement_unit)}
               </span>
             )}
           </div>
@@ -200,11 +202,14 @@ const ListCard = memo(function ListCard({ item, navigate }) {
         <div title={dietary.label} style={{ position:"absolute", top:"8px", left:"8px", width:"16px", height:"16px", borderRadius:"3px", background:"#fff", border:`2px solid ${dietary.color}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><div style={{ width:"6px", height:"6px", borderRadius:"50%", background:dietary.color }}/></div>
         {isOOS && (
           <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,.55)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <span style={{ fontSize:".5rem", fontWeight:800, letterSpacing:".08em", color:"rgba(255,255,255,.8)" }}>SOLD OUT</span>
+            <span style={{ fontSize:".5rem", fontWeight:800, letterSpacing:".08em", color:"rgba(255,255,255,.8)" }}>OUT OF STOCK</span>
           </div>
         )}
         {(item.is_bestseller || item.is_featured) && (
           <div style={{ position:"absolute", bottom:"5px", left:"5px", background:"var(--brand)", color:"#fff", fontSize:".5rem", fontWeight:800, padding:"2px 6px", borderRadius:"var(--rf)" }}>BEST</div>
+        )}
+        {item.stock_status === "low" && !isOOS && (
+          <div style={{ position:"absolute", bottom:"5px", right:"5px", background:"linear-gradient(135deg,#ff4444,#cc0000)", color:"#fff", fontSize:".5rem", fontWeight:800, padding:"2px 6px", borderRadius:"var(--rf)" }}>HURRY</div>
         )}
       </div>
 
@@ -217,22 +222,24 @@ const ListCard = memo(function ListCard({ item, navigate }) {
               {item.description}
             </div>
           )}
-          {item.avg_rating > 0 && (
-            <div style={{ display:"flex", alignItems:"center", gap:"4px" }}>
-              <span style={{ color:"var(--gold)" }}><Ic.Star/></span>
-              <span style={{ fontSize:".75rem", color:"var(--t2)", fontWeight:500 }}>{Number(item.avg_rating).toFixed(1)}</span>
-              <span style={{ color:"var(--bd2)" }}>·</span>
-              <span style={{ fontSize:".75rem", color:"var(--t2)" }}>{item.prep_time_display || "8–15 min"}</span>
-            </div>
-          )}
+          <div style={{ display:"flex", alignItems:"center", gap:"4px", flexWrap:"wrap" }}>
+            {item.avg_rating > 0 && (
+              <>
+                <span style={{ color:"var(--gold)" }}><Ic.Star/></span>
+                <span style={{ fontSize:".75rem", color:"var(--t2)", fontWeight:500 }}>{Number(item.avg_rating).toFixed(1)}</span>
+                <span style={{ color:"var(--bd2)" }}>·</span>
+              </>
+            )}
+            <span style={{ fontSize:".75rem", color:"var(--t3)" }}>{item.prep_time_display || "8–15 min"}</span>
+          </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div>
             <span className="price" style={{ fontSize:"1.0625rem" }}>{formatPrice(price)}</span>
             {hasDisc && <span style={{ fontSize:".8125rem", color:"var(--t4)", textDecoration:"line-through", marginLeft:"6px" }}>{formatPrice(item.price)}</span>}
             {formatUnit(item.unit_quantity, item.measurement_unit) && (
-              <span style={{ fontSize:".6875rem", color:"var(--t4)", marginLeft:"5px", fontWeight:500 }}>
-                / {formatUnit(item.unit_quantity, item.measurement_unit)}
+              <span style={{ display:"inline-flex", alignItems:"center", marginLeft:"5px", padding:"1px 6px", borderRadius:"var(--rf)", background:"var(--bg3)", border:"1px solid var(--bd)", fontSize:".625rem", color:"var(--t3)", fontWeight:600, letterSpacing:".02em", flexShrink:0 }}>
+                {formatUnit(item.unit_quantity, item.measurement_unit)}
               </span>
             )}
           </div>
@@ -383,33 +390,7 @@ export default function ProductListPage() {
         </div>
       </div>
 
-      {/* ── CATEGORY PILLS ─────────────────────────────────────────── */}
-      {allCats.length > 0 && (
-        <div style={{ marginBottom:"var(--s4)", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }}>
-          <div style={{ display:"flex", gap:"var(--s2)", paddingBottom:"2px", width:"max-content" }}>
-            {/* "All" pill */}
-            <button
-              onClick={() => navigate("/menu/all")}
-              style={{ display:"flex", alignItems:"center", gap:"6px", padding:"7px 14px", borderRadius:"var(--rf)", border:`1.5px solid ${isAllMode?"var(--brand)":"var(--bd)"}`, background:isAllMode?"var(--brand-tint)":"var(--bg2)", color:isAllMode?"var(--brand)":"var(--t2)", fontSize:".8125rem", fontWeight:isAllMode?700:500, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)", flexShrink:0 }}>
-              All
-              {isAllMode && <span style={{ fontSize:".625rem", fontWeight:800, background:"var(--brand)", color:"#fff", borderRadius:"var(--rf)", padding:"1px 6px", marginLeft:"2px" }}>{items.length}</span>}
-            </button>
-            {allCats.map(c => {
-              const active = !isAllMode && c.slug === slug;
-              return (
-                <button key={c.id}
-                  onClick={() => navigate(`/menu/category/${c.slug}`)}
-                  style={{ display:"flex", alignItems:"center", gap:"6px", padding:"7px 14px", borderRadius:"var(--rf)", border:`1.5px solid ${active?"var(--brand)":"var(--bd)"}`, background:active?"var(--brand-tint)":"var(--bg2)", color:active?"var(--brand)":"var(--t2)", fontSize:".8125rem", fontWeight:active?700:500, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)", flexShrink:0 }}>
-                  {c.emoji && <span style={{ fontSize:"1rem", lineHeight:1 }}>{c.emoji}</span>}
-                  {c.name}
-                  {active && <span style={{ fontSize:".625rem", fontWeight:800, background:"var(--brand)", color:"#fff", borderRadius:"var(--rf)", padding:"1px 6px", marginLeft:"2px" }}>{items.length}</span>}
-                </button>
-              );
-            })}
-          </div>
-          <style>{`.cat-pills::-webkit-scrollbar{display:none}`}</style>
-        </div>
-      )}
+      <style>{`@media(max-width:639px){.sort-btn-wrap{display:none}}`}</style>
 
       {/* ── STICKY FILTER BAR ───────────────────────────────────────── */}
       <div ref={filterRef} style={{ position:"sticky", top:"var(--nav-h)", zIndex:30, marginBottom:"var(--s4)", transition:"all var(--d2) var(--ease)" }}>
@@ -437,7 +418,7 @@ export default function ProductListPage() {
             </div>
 
             {/* Sort */}
-            <div style={{ position:"relative" }}>
+            <div className="sort-btn-wrap" style={{ position:"relative" }}>
               <button onClick={() => setShowSort(v => !v)}
                 style={{ height:"40px", padding:"0 var(--s3)", display:"flex", alignItems:"center", gap:"var(--s1)", background:showSort?"var(--brand-tint)":"var(--bg2)", border:`1px solid ${showSort?"var(--bdb)":"var(--bd)"}`, borderRadius:"var(--r3)", cursor:"pointer", color:showSort?"var(--brand)":"var(--t2)", fontSize:".8125rem", fontWeight:500, transition:"all var(--d1) var(--ease)", fontFamily:"var(--ff-b)" }}>
                 <Ic.Filter/> Sort

@@ -16,7 +16,9 @@ ALLOWED_HOSTS = [
     "knfcs.com",
     "www.knfcs.com",
     "api.knfcs.com",
-    "*.knfcs.com",
+    "wa.knfcs.com",
+    ".knfcs.com",           # wildcard: all subdomains
+    ".trycloudflare.com",   # quick-tunnel fallback
 ]
 
 # Trust Cloudflare Tunnels/Reverse Proxy headers
@@ -42,10 +44,10 @@ DATABASES = {
 CELERY_WORKER_POOL = "solo"
 
 # ─── OTP Dev Bypass ───────────────────────────────────────────────────────────
-# When True, any OTP input is accepted without calling 2Factor.in
-# Set to False before deploying to production
-OTP_BYPASS     = False
-OTP_BYPASS_CODE = "123456"
+# When True: the plain OTP is returned in the register response as dev_otp
+# (shown as a green banner on the login screen) AND any 6-digit code is accepted.
+# MUST be False in production.
+OTP_BYPASS = False
 
 
 # ─── Email ────────────────────────────────────────────────────────────────────
@@ -67,13 +69,16 @@ CORS_ALLOWED_ORIGINS = [
     "https://knfcs.com",
     "https://www.knfcs.com",
     "https://api.knfcs.com",
+    "https://wa.knfcs.com",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
     "http://192.168.1.38:3000",
     "https://knfcs.com",
     "https://www.knfcs.com",
     "https://api.knfcs.com",
+    "https://wa.knfcs.com",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [

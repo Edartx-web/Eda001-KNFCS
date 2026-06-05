@@ -8,6 +8,7 @@ from apps.orders.views import (
     MarkPaymentView, CancelOrderView, CancelReasonsView,
     ExportOrdersCSVView, ExportCustomersCSVView,
     StaffCompletionStatsView, PaymentLogsView,
+    PublicInvoiceView,
 )
 
 urlpatterns = [
@@ -23,6 +24,7 @@ urlpatterns = [
     path("payment-logs/",                  PaymentLogsView.as_view(),          name="payment-logs"),
     path("export/csv/",                    ExportOrdersCSVView.as_view(),      name="export-orders-csv"),
     path("export/customers/",             ExportCustomersCSVView.as_view(),   name="export-customers-csv"),
+    path("<uuid:order_id>/invoice/",       PublicInvoiceView.as_view(),        name="order-invoice"),
     path("<uuid:order_id>/",               OrderDetailView.as_view(),          name="order-detail"),
     path("<uuid:order_id>/status/",        UpdateOrderStatusView.as_view(),    name="update-status"),
     path("<uuid:order_id>/payment/",       MarkPaymentView.as_view(),          name="mark-payment"),

@@ -83,22 +83,33 @@ export default function SpinWheelPage() {
     );
   }
 
-  if (!spinEnabled) {
+  const alreadyUsedToday = spinsLeft === 0 && !wonPrize;
+
+  if (!spinEnabled || alreadyUsedToday) {
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    const resetTime = tomorrow.toLocaleDateString("en-IN", { weekday:"long", day:"numeric", month:"long" });
     return (
       <AppLayout>
-        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"60vh", gap:"12px", padding:"32px" }}>
-          <div style={{ display:"flex", justifyContent:"center", color:"var(--brand)" }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="15" y2="15"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"60vh", gap:"16px", padding:"32px", textAlign:"center" }}>
+          <div style={{ width:72, height:72, borderRadius:"50%", background: alreadyUsedToday ? "rgba(29,158,117,.1)" : "rgba(232,82,26,.08)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            {alreadyUsedToday ? (
+              <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="var(--ok)" strokeWidth="1.8"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            ) : (
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="15" y2="15"/><circle cx="12" cy="12" r="1" fill="var(--brand)"/></svg>
+            )}
           </div>
-          <h2 style={{ fontFamily:"var(--ff-d)", fontWeight:900, fontSize:"1.5rem", color:"var(--t1)" }}>
-            Spin Wheel Unavailable
+          <h2 style={{ fontFamily:"var(--ff-d)", fontWeight:900, fontSize:"1.5rem", color:"var(--t1)", margin:0 }}>
+            {alreadyUsedToday ? "Already spun today!" : "Spin Wheel Unavailable"}
           </h2>
-          <p style={{ color:"var(--t3)", textAlign:"center", maxWidth:"340px" }}>
-            The spin wheel is currently disabled. Check back later!
+          <p style={{ color:"var(--t3)", maxWidth:"320px", lineHeight:1.6, margin:0 }}>
+            {alreadyUsedToday
+              ? `You've already used your spin for today. Come back on ${resetTime} for another chance!`
+              : "The spin wheel is currently disabled. Check back later!"
+            }
           </p>
-          <button onClick={() => navigate(-1)}
-            style={{ padding:"10px 24px", borderRadius:"10px", background:"var(--brand)", color:"#fff", border:"none", fontWeight:700, cursor:"pointer", marginTop:"8px" }}>
-            Go Back
+          <button onClick={() => navigate("/")}
+            style={{ padding:"11px 28px", borderRadius:"12px", background:"var(--brand)", color:"#fff", border:"none", fontWeight:700, cursor:"pointer", fontSize:".9375rem" }}>
+            Back to menu
           </button>
         </div>
       </AppLayout>

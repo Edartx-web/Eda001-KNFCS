@@ -51,15 +51,16 @@ export default function AccountPage() {
   const pageRef   = useRef(null);
   const heroRef   = useRef(null);
 
-  const [orders,     setOrders]     = useState([]);
-  const [orderFilter, setOrderFilter] = useState("all");
-  const [favourites, setFavourites] = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [tab,        setTab]        = useState("orders");
-  const [removing,   setRemoving]   = useState({});
-  const [reordering, setReordering] = useState({});
-  const [cancelling, setCancelling] = useState({});
-  const [siteConfig, setSiteConfig] = useState(null);
+  const [orders,       setOrders]       = useState([]);
+  const [orderFilter,  setOrderFilter]  = useState("all");
+  const [showAllOrders, setShowAllOrders] = useState(false);
+  const [favourites,   setFavourites]   = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [tab,          setTab]          = useState("orders");
+  const [removing,     setRemoving]     = useState({});
+  const [reordering,   setReordering]   = useState({});
+  const [cancelling,   setCancelling]   = useState({});
+  const [siteConfig,   setSiteConfig]   = useState(null);
 
   const points = user?.loyalty_points || 0;
   const tier   = getTier(points);
@@ -156,11 +157,11 @@ const handleCancelOrder = async (order) => {
                 <div style={{ width:"60px", height:"60px", borderRadius:"50%", background:"rgba(255,255,255,.2)", border:"2.5px solid rgba(255,255,255,.35)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"var(--ff-d)", fontSize:"1.625rem", fontWeight:900, color:"#fff", flexShrink:0 }}>
                   {(user?.name || "?")[0].toUpperCase()}
                 </div>
-                <div>
-                  <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.375rem", fontWeight:900, color:"#fff", letterSpacing:"-.015em", marginBottom:"3px" }}>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontFamily:"var(--ff-d)", fontSize:"clamp(1rem,4vw,1.5rem)", fontWeight:900, color:"#fff", letterSpacing:"-.02em", lineHeight:1.1, marginBottom:"5px", wordBreak:"break-word" }}>
                     {user?.name || "Customer"}
                   </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:"5px", color:"rgba(255,255,255,.65)", fontSize:".875rem" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:"5px", color:"rgba(255,255,255,.7)", fontSize:".8125rem", fontWeight:500 }}>
                     <Ic.Phone/> {user?.phone || "Not set"}
                   </div>
                 </div>
@@ -213,6 +214,36 @@ const handleCancelOrder = async (order) => {
             </div>
           ))}
         </div>
+
+        {/* ── Loyalty tier explanation ──────────────────────────────── */}
+        {loyaltyOn && (
+          <div className="ac-section" style={{ marginBottom:"var(--s5)" }}>
+            <div style={{ fontSize:".6875rem", fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:"var(--t3)", marginBottom:"var(--s3)" }}>
+              How Loyalty Tiers Work
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"var(--s2)" }}>
+              {TIERS.map(t => {
+                const isCurrent = tier.label === t.label;
+                const isReached = points >= t.min;
+                return (
+                  <div key={t.label} style={{ padding:"var(--s3) var(--s4)", borderRadius:"var(--r3)", background: isCurrent ? t.bg : "var(--bg2)", border:`1.5px solid ${isCurrent ? t.color : "var(--bd)"}`, opacity: isReached ? 1 : .5, transition:"all .2s ease" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", marginBottom:"4px" }}>
+                      <span style={{ color: t.color }}>{t.icon}</span>
+                      <span style={{ fontWeight:800, fontSize:".9375rem", color: isCurrent ? t.color : "var(--t1)" }}>{t.label}</span>
+                      {isCurrent && <span style={{ fontSize:".5625rem", fontWeight:800, padding:"1px 6px", borderRadius:"var(--rf)", background:t.color, color:"#fff", letterSpacing:".06em" }}>YOU</span>}
+                    </div>
+                    <div style={{ fontSize:".75rem", color:"var(--t3)" }}>
+                      {t.max === Infinity ? `${t.min}+ pts` : `${t.min} – ${t.max} pts`}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ marginTop:"var(--s3)", padding:"var(--s3) var(--s4)", background:"var(--bg2)", borderRadius:"var(--r3)", border:"1px solid var(--bd)", fontSize:".8125rem", color:"var(--t2)", lineHeight:1.6 }}>
+              <strong>How to earn points:</strong> Complete orders → earn points automatically (rate set by admin). Redeem at checkout for ₹ off. New → Regular (100 pts) → Fan (300 pts) → VIP (500 pts).
+            </div>
+          </div>
+        )}
 
         {/* ── Games — scratch card (if enabled) ───────────────────── */}
         {siteConfig?.scratch_enabled && (
@@ -308,14 +339,18 @@ const handleCancelOrder = async (order) => {
                 <p style={{ color:"var(--t2)", fontSize:".875rem", marginBottom:"var(--s5)" }}>Your order history will appear here.</p>
                 <button onClick={() => navigate("/menu")} className="btn btn-p btn-lg">Browse menu →</button>
               </div>
-            ) : (
+            ) : (() => {
+              const filteredOrders = orders.filter(order => {
+                if (orderFilter === "active")    return !["completed","cancelled"].includes(order.status);
+                if (orderFilter === "completed") return order.status === "completed";
+                if (orderFilter === "cancelled") return order.status === "cancelled";
+                return true;
+              });
+              const visibleOrders = showAllOrders ? filteredOrders : filteredOrders.slice(0, 5);
+              return (
+              <div>
               <div className="card" style={{ overflow:"hidden" }}>
-                {orders.filter(order => {
-                  if (orderFilter === "active")    return !["completed","cancelled"].includes(order.status);
-                  if (orderFilter === "completed") return order.status === "completed";
-                  if (orderFilter === "cancelled") return order.status === "cancelled";
-                  return true;
-                }).map((order, i, arr) => {
+                {visibleOrders.map((order, i, arr) => {
                   const meta = STATUS_META[order.status] || STATUS_META.placed;
                   const isActive = !["completed","cancelled"].includes(order.status);
                   const badgeClass = order.status==="completed"?"badge-ok":order.status==="cancelled"?"badge-err":order.status==="ready"?"badge-p":"badge-warn";
@@ -358,12 +393,24 @@ const handleCancelOrder = async (order) => {
                               style={{ fontSize:".75rem", color:"var(--brand)", fontWeight:700, background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:"3px", fontFamily:"var(--ff-b)" }}>
                               Track <Ic.Arrow/>
                             </button>
-                            {order.status === "placed" && (
-                              <button onClick={() => handleCancelOrder(order)} disabled={cancelling[order.id]}
-                                style={{ fontSize:".75rem", color:"var(--err)", fontWeight:600, background:"none", border:"none", cursor:cancelling[order.id]?"not-allowed":"pointer", display:"flex", alignItems:"center", gap:"3px", fontFamily:"var(--ff-b)", opacity:cancelling[order.id]?.5:1 }}>
-                                {cancelling[order.id] ? "Cancelling…" : "Cancel"}
-                              </button>
-                            )}
+                            {order.status === "placed" && (() => {
+                              const expireMs = 3600000 - (Date.now() - new Date(order.created_at).getTime());
+                              const minLeft  = Math.max(0, Math.floor(expireMs / 60000));
+                              return (
+                                <>
+                                  {minLeft < 60 && (
+                                    <span style={{ fontSize:".6875rem", color: minLeft < 10 ? "var(--err)" : "var(--warn)", fontWeight:700, display:"flex", alignItems:"center", gap:"3px" }}>
+                                      <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+                                      {minLeft}m left
+                                    </span>
+                                  )}
+                                  <button onClick={() => handleCancelOrder(order)} disabled={cancelling[order.id]}
+                                    style={{ fontSize:".75rem", color:"var(--err)", fontWeight:600, background:"none", border:"none", cursor:cancelling[order.id]?"not-allowed":"pointer", display:"flex", alignItems:"center", gap:"3px", fontFamily:"var(--ff-b)", opacity:cancelling[order.id]?.5:1 }}>
+                                    {cancelling[order.id] ? "Cancelling…" : "Cancel"}
+                                  </button>
+                                </>
+                              );
+                            })()}
                           </>
                         ) : order.status === "completed" && (
                           <button onClick={() => handleReorder(order)} disabled={reordering[order.id]}
@@ -376,7 +423,17 @@ const handleCancelOrder = async (order) => {
                   );
                 })}
               </div>
-            )}
+              {filteredOrders.length > 5 && (
+                <button onClick={() => setShowAllOrders(v => !v)}
+                  style={{ width:"100%", marginTop:"var(--s3)", padding:"var(--s3)", background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--r3)", cursor:"pointer", fontSize:".875rem", fontWeight:600, color:"var(--brand)", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor="var(--brand)"; e.currentTarget.style.background="var(--brand-tint)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor="var(--bd)"; e.currentTarget.style.background="var(--bg2)"; }}>
+                  {showAllOrders ? `Show less ↑` : `Show all ${filteredOrders.length} orders ↓`}
+                </button>
+              )}
+              </div>
+              );
+            })()}
           </div>
         )}
 
@@ -418,6 +475,48 @@ const handleCancelOrder = async (order) => {
         )}
 
         <GoogleReviewBanner style={{ margin:"var(--s6) 0 var(--s8)" }}/>
+
+        {/* ── Mobile mini-footer (links + Edartx credit) ────────────── */}
+        <div style={{ borderTop:"1px solid var(--bd)", marginTop:"var(--s6)", paddingTop:"var(--s5)", paddingBottom:"var(--s8)" }}>
+          {/* Navigation links */}
+          <div style={{ display:"flex", flexWrap:"wrap", gap:"var(--s3) var(--s5)", justifyContent:"center", marginBottom:"var(--s5)" }}>
+            {[
+              ["About Us", "/about"],
+              ["Blog", "/blog"],
+              ["Careers", "/careers"],
+              ["Contact", "/contact"],
+              ["FAQ", "/faq"],
+              ["Privacy", "/privacy"],
+              ["Terms", "/terms"],
+            ].map(([label, path]) => (
+              <a key={label} href={path}
+                style={{ fontSize:".8125rem", color:"var(--t3)", textDecoration:"none", fontWeight:500, transition:"color .15s" }}
+                onMouseEnter={e => e.target.style.color="var(--brand)"}
+                onMouseLeave={e => e.target.style.color="var(--t3)"}>
+                {label}
+              </a>
+            ))}
+          </div>
+
+          {/* Edartx powered-by badge */}
+          <a href="https://edartx.com" target="_blank" rel="noopener noreferrer"
+            style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"10px", textDecoration:"none", padding:"12px 24px", borderRadius:"var(--rf)", background:"linear-gradient(135deg,#0A0A0A,#1A1300)", border:"1.5px solid #B8860B", margin:"0 auto", maxWidth:"280px", transition:"all .2s ease", boxShadow:"0 2px 12px rgba(184,134,11,.2)" }}
+            onMouseEnter={e => { e.currentTarget.style.boxShadow="0 4px 20px rgba(184,134,11,.4)"; e.currentTarget.style.borderColor="#DAA520"; }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow="0 2px 12px rgba(184,134,11,.2)"; e.currentTarget.style.borderColor="#B8860B"; }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DAA520" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <div>
+              <div style={{ fontSize:".625rem", fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:"#B8860B", lineHeight:1 }}>Powered by</div>
+              <div style={{ fontFamily:"var(--ff-d)", fontSize:".9375rem", fontWeight:900, letterSpacing:".04em", color:"#DAA520", lineHeight:1.2 }}>Edartx</div>
+            </div>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#B8860B" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
+
+          <div style={{ textAlign:"center", marginTop:"var(--s4)", fontSize:".6875rem", color:"var(--t4)" }}>
+            © {new Date().getFullYear()} KNFC Fried Chicken. All rights reserved.
+          </div>
+        </div>
       </div>
     </AppLayout>
   );

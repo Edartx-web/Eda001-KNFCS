@@ -20,12 +20,14 @@ from django.utils import timezone
 
 
 class ChangeType(models.TextChoices):
-    OPENING_SET      = "opening_set",      "Opening Stock Set"
-    TOP_UP           = "top_up",           "Mid-Day Top-Up"
-    AUTO_DEDUCTION   = "auto_deduction",   "Order Deduction"
+    OPENING_SET       = "opening_set",       "Opening Stock Set"
+    TOP_UP            = "top_up",            "Mid-Day Top-Up"
+    AUTO_DEDUCTION    = "auto_deduction",    "Order Deduction"
     MANUAL_CORRECTION = "manual_correction", "Manual Correction"
-    CARRYOVER        = "carryover",        "Nightly Carryover"
-    WASTE            = "waste",            "Waste / Damage"
+    CARRYOVER         = "carryover",         "Nightly Carryover"
+    ROLLBACK          = "rollback",          "Manual Rollback from Yesterday"
+    WASTE             = "waste",             "Waste / Damage"
+    LOCK              = "lock",              "Stock Locked for Day"
 
 
 class StockRecord(models.Model):
@@ -208,6 +210,44 @@ class StockLog(models.Model):
             f"{self.menu_item.name} | {self.change_type} | "
             f"{direction}{self.qty_changed} | {self.qty_before}→{self.qty_after}"
         )
+
+
+class StockDailyLock(models.Model):
+    """
+    Locks stock edits for a branch on a specific date.
+    Created manually by Admin/Staff or automatically by the midnight task.
+    Stores end-of-day summary stats visible to SuperAdmin.
+    """
+    id            = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch        = models.ForeignKey("branches.Branch", on_delete=models.CASCADE, related_name="stock_locks")
+    date          = models.DateField()
+
+    locked_by     = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="stock_locks_created",
+    )
+    locked_at     = models.DateTimeField(auto_now_add=True)
+    note          = models.CharField(max_length=200, blank=True)
+    is_system     = models.BooleanField(default=False)  # True = created by midnight task
+
+    # End-of-day summary (captured at lock time)
+    total_added     = models.IntegerField(default=0)   # sum of new_stock_added across all items
+    total_used      = models.IntegerField(default=0)   # sum of used_stock
+    total_remaining = models.IntegerField(default=0)   # sum of remaining_stock (pending for tomorrow)
+    rollback_count  = models.IntegerField(default=0)   # carryovers discarded today
+    items_count     = models.IntegerField(default=0)   # total items tracked
+
+    class Meta:
+        db_table        = "stock_daily_locks"
+        unique_together = [("branch", "date")]
+        ordering        = ["-date"]
+        indexes         = [models.Index(fields=["branch", "date"])]
+
+    def __str__(self):
+        who = self.locked_by.name if self.locked_by else "System"
+        return f"Lock — {self.branch} — {self.date} — by {who}"
 
 
 class StockAlert(models.Model):

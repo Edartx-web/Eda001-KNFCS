@@ -49,6 +49,82 @@ const Ic = {
   People: () => <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
 };
 
+/* ─── Web-Audio bell for UPI payment alerts ──────────────────────────── */
+function playUPIBell() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // First strike — high bell
+    const o1 = ctx.createOscillator(), g1 = ctx.createGain();
+    o1.connect(g1); g1.connect(ctx.destination);
+    o1.type = "sine"; o1.frequency.value = 1046; // C6
+    g1.gain.setValueAtTime(0.7, ctx.currentTime);
+    g1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.4);
+    o1.start(); o1.stop(ctx.currentTime + 1.4);
+    // Second strike — mid bell (50 ms later)
+    const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    o2.connect(g2); g2.connect(ctx.destination);
+    o2.type = "sine"; o2.frequency.value = 784; // G5
+    g2.gain.setValueAtTime(0, ctx.currentTime + 0.05);
+    g2.gain.setValueAtTime(0.5, ctx.currentTime + 0.06);
+    g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.0);
+    o2.start(ctx.currentTime + 0.05); o2.stop(ctx.currentTime + 1.0);
+    // Third strike — low bell (200 ms later)
+    const o3 = ctx.createOscillator(), g3 = ctx.createGain();
+    o3.connect(g3); g3.connect(ctx.destination);
+    o3.type = "sine"; o3.frequency.value = 523; // C5
+    g3.gain.setValueAtTime(0, ctx.currentTime + 0.2);
+    g3.gain.setValueAtTime(0.45, ctx.currentTime + 0.21);
+    g3.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+    o3.start(ctx.currentTime + 0.2); o3.stop(ctx.currentTime + 1.2);
+  } catch {}
+}
+
+/* ─── Mobile-responsive CSS for queue cards ──────────────────────────── */
+if (typeof document !== "undefined" && !document.getElementById("staff-queue-css")) {
+  const s = document.createElement("style");
+  s.id = "staff-queue-css";
+  s.textContent = `
+    /* Stats grid — 2 cols on mobile, 4 on desktop */
+    .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    @media (max-width:640px) {
+      .stats-grid { grid-template-columns:repeat(2,1fr); gap:8px; }
+    }
+
+    /* Tabs — scrollable on mobile */
+    .tabs { display:flex; gap:8px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:4px; scrollbar-width:none; }
+    .tabs::-webkit-scrollbar { display:none; }
+
+    /* Order grid — 1 col on mobile */
+    .order-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
+    @media (max-width:640px) {
+      .order-grid { grid-template-columns:1fr; gap:12px; }
+    }
+
+    /* Order card action row — stack vertically on mobile */
+    .order-card-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    @media (max-width:480px) {
+      .order-card-actions { flex-direction:column; align-items:stretch; }
+      .order-card-actions .action-main { width:100%; justify-content:center; font-size:1rem; padding:14px 18px; }
+      .order-card-actions .action-sec  { width:100%; justify-content:center; }
+    }
+
+    /* Item pills — horizontal scroll on mobile */
+    .item-pills { display:flex; flex-wrap:wrap; gap:6px; }
+    @media (max-width:480px) {
+      .item-pills { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:4px; scrollbar-width:none; }
+      .item-pills::-webkit-scrollbar { display:none; }
+      .item-pills span { flex-shrink:0; }
+    }
+
+    /* UPI banner — stack on narrow screens */
+    @media (max-width:380px) {
+      .upi-banner { flex-direction:column; gap:8px; }
+      .upi-banner .upi-banner-btn { width:100%; justify-content:center; }
+    }
+  `;
+  document.head.appendChild(s);
+}
+
 /* ─── Stat card ─────────────────────────────────────────────────────── */
 function StatCard({ label, value, color, sub }) {
   return (
@@ -195,28 +271,29 @@ function CancelReasonModal({ order, onConfirm, onClose }) {
   );
 }
 
-/* ─── UPI Confirm Payment Modal ─────────────────────────────────────── */
+/* ─── Payment Confirm Modal — payment_serial is auto-generated server-side ── */
 function PaymentSerialModal({ order, onConfirm, onClose }) {
-  const [serial,  setSerial]  = useState("");
+  const [upiRef,  setUpiRef]  = useState("");
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef(null);
 
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
+  const isUpi = order.payment_method === "upi";
 
   const handleSubmit = async () => {
-    if (!serial.trim()) { inputRef.current?.focus(); return; }
     setLoading(true);
     try {
-      await onConfirm(order.id, serial.trim().toUpperCase());
+      // payment_serial is auto-generated server-side — only send upi_ref for UPI orders
+      await onConfirm(order.id, upiRef.trim());
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKey = e => { if (e.key === "Enter") handleSubmit(); };
-
-  const methodIcon = order.payment_method === "upi" ? <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg> : order.payment_method === "card" ? <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> : <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>;
-  const methodLabel = order.payment_method === "upi" ? "UPI" : order.payment_method === "card" ? "Card" : "Cash";
+  const methodLabel = isUpi ? "UPI / QR" : order.payment_method === "card" ? "Card" : "Cash";
+  const methodIcon  = isUpi
+    ? <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    : order.payment_method === "card"
+    ? <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+    : <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>;
 
   return (
     <div style={{ position:"fixed", top:0, left:0, right:0, bottom:"72px", background:"rgba(0,0,0,.65)", zIndex:160, display:"flex", alignItems:"center", justifyContent:"center", padding:"var(--s4)" }}>
@@ -224,54 +301,55 @@ function PaymentSerialModal({ order, onConfirm, onClose }) {
 
         {/* Header */}
         <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", marginBottom:"var(--s5)" }}>
-          <div style={{ width:"48px", height:"48px", borderRadius:"var(--r3)", background:"var(--ok-t)", border:"1px solid rgba(29,158,117,.25)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem", flexShrink:0 }}>
+          <div style={{ width:"48px", height:"48px", borderRadius:"var(--r3)", background:"var(--ok-t)", border:"1px solid rgba(29,158,117,.25)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--ok)", flexShrink:0 }}>
             {methodIcon}
           </div>
           <div>
-            <h3 style={{ fontFamily:"var(--ff-d)", fontWeight:900, fontSize:"1.125rem", marginBottom:"2px" }}>
-              Mark Payment Received
-            </h3>
+            <h3 style={{ fontFamily:"var(--ff-d)", fontWeight:900, fontSize:"1.125rem", marginBottom:"2px" }}>Mark Payment Received</h3>
             <p style={{ fontSize:".875rem", color:"var(--t3)" }}>
               Token {order.token_number} · {formatPrice(order.total)} · {methodLabel}
             </p>
           </div>
         </div>
 
-        {/* Customer info */}
+        {/* Customer */}
         <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", padding:"var(--s3) var(--s4)", background:"var(--bg2)", borderRadius:"var(--r3)", border:"1px solid var(--bd)", marginBottom:"var(--s4)" }}>
           <span style={{ fontSize:".8125rem", color:"var(--t3)" }}>Customer:</span>
           <span style={{ fontSize:".9375rem", fontWeight:700 }}>{order.customer_name || "Walk-in"}</span>
-          {order.payment_method === "upi" && (
-            <span style={{ marginLeft:"auto", fontSize:".75rem", fontWeight:700, padding:"2px 8px", borderRadius:"var(--rf)", background:"rgba(55,138,221,.1)", color:"var(--info)", border:"1px solid rgba(55,138,221,.2)" }}>
-              UPI — verify screenshot
-            </span>
-          )}
         </div>
 
-        {/* Serial number input */}
-        <div style={{ marginBottom:"var(--s5)" }}>
-          <label style={{ fontSize:".8125rem", fontWeight:800, color:"var(--t1)", display:"block", marginBottom:"8px", letterSpacing:".02em" }}>
-            Payment Serial Number <span style={{ color:"var(--err)" }}>*</span>
-          </label>
-          <input
-            ref={inputRef}
-            value={serial}
-            onChange={e => setSerial(e.target.value.replace(/[^a-zA-Z0-9]/g, ""))}
-            onKeyDown={handleKey}
-            placeholder="e.g. PAY001"
-            maxLength={20}
-            style={{ width:"100%", padding:"12px var(--s4)", border:"2px solid var(--bd)", borderRadius:"var(--r3)", background:"var(--bg2)", color:"var(--t1)", fontSize:"1.125rem", fontWeight:800, fontFamily:"var(--ff-d)", letterSpacing:".08em", outline:"none", boxSizing:"border-box", textTransform:"uppercase", transition:"border-color var(--d1) var(--ease)" }}
-            onFocus={e => e.target.style.borderColor="var(--ok)"}
-            onBlur={e  => e.target.style.borderColor="var(--bd)"}
-          />
-          <p style={{ fontSize:".75rem", color:"var(--t4)", marginTop:"6px" }}>
-            Enter the serial from your payment voucher book (PAY001, PAY002…). This is recorded in admin logs.
-          </p>
+        {/* Payment serial — read-only, assigned by server */}
+        <div style={{ padding:"var(--s3) var(--s4)", background:"var(--bg2)", borderRadius:"var(--r3)", border:"1px solid var(--bd)", marginBottom:"var(--s4)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontSize:".625rem", fontWeight:800, letterSpacing:".08em", textTransform:"uppercase", color:"var(--t4)", marginBottom:2 }}>Payment Serial</div>
+            <div style={{ fontSize:".875rem", color:"var(--t3)" }}>Auto-assigned by system on confirmation</div>
+          </div>
+          <span style={{ fontSize:".75rem", fontWeight:700, padding:"3px 10px", borderRadius:"var(--rf)", background:"var(--ok-t)", color:"var(--ok)", border:"1px solid rgba(29,158,117,.2)", flexShrink:0 }}>
+            Auto · Read-only
+          </span>
         </div>
+
+        {/* UPI ref input — only for UPI payments */}
+        {isUpi && (
+          <div style={{ marginBottom:"var(--s5)" }}>
+            <label style={{ fontSize:".8125rem", fontWeight:800, color:"var(--t1)", display:"block", marginBottom:"8px" }}>
+              UPI Transaction ID <span style={{ color:"var(--t3)", fontWeight:500 }}>(from customer screenshot)</span>
+            </label>
+            <input
+              value={upiRef}
+              onChange={e => setUpiRef(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              maxLength={50}
+              placeholder="e.g. 316524897412"
+              style={{ width:"100%", padding:"12px var(--s4)", border:"1.5px solid var(--bd)", borderRadius:"var(--r3)", background:"var(--bg2)", color:"var(--t1)", fontSize:"1rem", fontFamily:"var(--ff-d)", outline:"none", boxSizing:"border-box" }}
+            />
+            <p style={{ fontSize:".75rem", color:"var(--t4)", marginTop:6 }}>Optional — enter the UPI transaction reference from the customer's payment screenshot.</p>
+          </div>
+        )}
 
         <div style={{ display:"flex", gap:"var(--s2)" }}>
-          <button onClick={handleSubmit} disabled={loading || !serial.trim()}
-            style={{ flex:2, padding:"13px", borderRadius:"var(--r3)", border:"none", background:serial.trim()?"var(--ok)":"var(--bg3)", color:serial.trim()?"#fff":"var(--t4)", fontWeight:800, fontSize:".9375rem", cursor:(loading||!serial.trim())?"not-allowed":"pointer", fontFamily:"var(--ff-b)", opacity:loading?.7:1, boxShadow:serial.trim()?"0 4px 14px rgba(29,158,117,.35)":"none", transition:"all var(--d1) var(--ease)" }}>
+          <button onClick={handleSubmit} disabled={loading}
+            style={{ flex:2, padding:"13px", borderRadius:"var(--r3)", border:"none", background:"var(--ok)", color:"#fff", fontWeight:800, fontSize:".9375rem", cursor:loading?"not-allowed":"pointer", fontFamily:"var(--ff-b)", opacity:loading?.7:1, boxShadow:"0 4px 14px rgba(29,158,117,.35)" }}>
             {loading ? "Recording…" : "✓ Confirm Payment Received"}
           </button>
           <button onClick={onClose} disabled={loading}
@@ -388,16 +466,15 @@ function printBill(order) {
   w.onload = () => { w.print(); w.onafterprint = () => w.close(); };
 }
 
-/* ─── Order card (queue) ────────────────────────────────────────────── */
+/* ─── Order card (queue) ─────────────────────────────────────────────── */
+/* onCancel(order) — just signals QueuePage to open the cancel modal there */
 function OrderCard({ order, updating, onStatus, onMarkPaid, onCancel }) {
   const cardRef = useRef(null);
-  const [showCancel, setShowCancel] = useState(false);
   const next    = NEXT[order.status];
   const meta    = STATUS_META[order.status] || STATUS_META.placed;
   const elapsed = Math.floor((Date.now() - new Date(order.created_at)) / 60000);
   const isLate  = elapsed >= 15;
   const needsPayment = order.payment_method === "upi" && order.payment_status === "pending";
-  const isPickupUPI  = order.order_type === "pickup" && needsPayment;
 
   const statusBadgeStyle = {
     placed:    { bg:"var(--info-t)",  color:"var(--info)",  border:"rgba(55,138,221,.2)"   },
@@ -409,28 +486,23 @@ function OrderCard({ order, updating, onStatus, onMarkPaid, onCancel }) {
 
   return (
     <div ref={cardRef} data-order={order.id}
-      style={{ background:"var(--bgc)", border:`1px solid ${isPickupUPI?"rgba(239,159,39,.6)":order.carried_over?"rgba(226,75,74,.35)":isLate?"rgba(239,159,39,.3)":"var(--bd)"}`, borderRadius:"var(--r5)", overflow:"hidden", transition:"box-shadow var(--d1) var(--ease)", boxShadow: isPickupUPI?"0 0 0 2px rgba(239,159,39,.4), var(--sh-md)":order.status === "ready" ? "0 0 0 2px var(--brand), var(--sh-md)" : "var(--sh-xs)" }}
-      onMouseEnter={e => e.currentTarget.style.boxShadow = isPickupUPI?"0 0 0 2px rgba(239,159,39,.6), var(--sh-lg)":order.status === "ready" ? "0 0 0 2px var(--brand), var(--sh-lg)" : "var(--sh-md)"}
-      onMouseLeave={e => e.currentTarget.style.boxShadow = isPickupUPI?"0 0 0 2px rgba(239,159,39,.4), var(--sh-md)":order.status === "ready" ? "0 0 0 2px var(--brand), var(--sh-md)" : "var(--sh-xs)"}>
+      style={{ background:"var(--bgc)", border:`1px solid ${needsPayment?"rgba(239,159,39,.6)":order.carried_over?"rgba(226,75,74,.35)":isLate?"rgba(239,159,39,.3)":"var(--bd)"}`, borderRadius:"var(--r5)", overflow:"hidden", transition:"box-shadow var(--d1) var(--ease)", boxShadow: needsPayment?"0 0 0 2px rgba(239,159,39,.4), var(--sh-md)":order.status === "ready" ? "0 0 0 2px var(--brand), var(--sh-md)" : "var(--sh-xs)" }}
+      onMouseEnter={e => e.currentTarget.style.boxShadow = needsPayment?"0 0 0 2px rgba(239,159,39,.6), var(--sh-lg)":order.status === "ready" ? "0 0 0 2px var(--brand), var(--sh-lg)" : "var(--sh-md)"}
+      onMouseLeave={e => e.currentTarget.style.boxShadow = needsPayment?"0 0 0 2px rgba(239,159,39,.4), var(--sh-md)":order.status === "ready" ? "0 0 0 2px var(--brand), var(--sh-md)" : "var(--sh-xs)"}>
 
-      {/* Pickup UPI awaiting payment banner */}
-      {isPickupUPI && (
-        <div style={{ background:"linear-gradient(135deg,rgba(239,159,39,.15),rgba(239,159,39,.05))", borderBottom:"1px solid rgba(239,159,39,.3)", padding:"var(--s2) var(--s5)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", color:"var(--warn)", fontWeight:700, fontSize:".8125rem" }}>
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg> Awaiting UPI payment confirmation
+      {/* UPI awaiting payment banner — shown for ALL UPI-pending orders (pickup and dine-in) */}
+      {needsPayment && (
+        <div className="upi-banner" style={{ background:"linear-gradient(135deg,rgba(239,159,39,.18),rgba(239,159,39,.05))", borderBottom:"2px solid rgba(239,159,39,.45)", padding:"var(--s3) var(--s4)", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", color:"var(--warn)", fontWeight:700, fontSize:".8125rem", minWidth:0 }}>
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg>
+            <span>UPI payment pending — verify before confirming</span>
           </div>
-          <button onClick={() => onMarkPaid(order)}
-            style={{ padding:"5px 14px", borderRadius:"var(--rf)", border:"none", background:"var(--warn)", color:"#fff", fontWeight:800, fontSize:".8125rem", cursor:"pointer", fontFamily:"var(--ff-b)", boxShadow:"0 2px 8px rgba(239,159,39,.4)" }}>
-            ✓ Mark as Paid
+          <button className="upi-banner-btn" onClick={() => onMarkPaid(order)}
+            style={{ flexShrink:0, padding:"8px 18px", borderRadius:"var(--rf)", border:"none", background:"var(--ok)", color:"#fff", fontWeight:800, fontSize:".875rem", cursor:"pointer", fontFamily:"var(--ff-b)", boxShadow:"0 2px 8px rgba(29,158,117,.4)", display:"flex", alignItems:"center", gap:6 }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg>
+            Mark Paid
           </button>
         </div>
-      )}
-
-      {/* CancelReasonModal */}
-      {showCancel && (
-        <CancelReasonModal order={order}
-          onConfirm={(reason, note) => { setShowCancel(false); onCancel(order.id, reason, note); }}
-          onClose={() => setShowCancel(false)}/>
       )}
 
       {/* Card header */}
@@ -486,7 +558,7 @@ function OrderCard({ order, updating, onStatus, onMarkPaid, onCancel }) {
         </div>
 
         {/* Item pills */}
-        <div style={{ display:"flex", flexWrap:"wrap", gap:"6px", marginBottom:"var(--s4)" }}>
+        <div className="item-pills" style={{ marginBottom:"var(--s4)" }}>
           {(order.items || []).map(item => (
             <span key={item.id}
               style={{ fontSize:".875rem", fontWeight:500, padding:"5px 12px", borderRadius:"var(--r2)", background:"var(--bg2)", border:"1px solid var(--bd)", color:"var(--t2)", lineHeight:1.3 }}>
@@ -501,65 +573,77 @@ function OrderCard({ order, updating, onStatus, onMarkPaid, onCancel }) {
           ))}
         </div>
 
-        {/* Footer: total + action */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"var(--s2)" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", flexWrap:"wrap" }}>
-            <span className="price" style={{ fontSize:"1.25rem" }}>{formatPrice(order.total)}</span>
-            {/* UPI payment indicator */}
-            {order.payment_method === "upi" && (
-              <span style={{ fontSize:".6875rem", fontWeight:700, padding:"3px 8px", borderRadius:"var(--rf)", background:order.payment_status==="paid"?"var(--ok-t)":"rgba(55,138,221,.12)", color:order.payment_status==="paid"?"var(--ok)":"var(--info)", border:`1px solid ${order.payment_status==="paid"?"rgba(29,158,117,.25)":"rgba(55,138,221,.25)"}` }}>
-                {order.payment_status==="paid" ? <><svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="var(--ok)" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg> UPI paid</> : <><svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg> UPI pending</>}
-              </span>
-            )}
+        {/* Footer: total + price row */}
+        <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", flexWrap:"wrap", marginBottom:"var(--s3)" }}>
+          <span className="price" style={{ fontSize:"1.25rem" }}>{formatPrice(order.total)}</span>
+          {order.payment_method === "upi" && (
+            <span style={{ fontSize:".6875rem", fontWeight:700, padding:"3px 8px", borderRadius:"var(--rf)", background:order.payment_status==="paid"?"var(--ok-t)":"rgba(55,138,221,.12)", color:order.payment_status==="paid"?"var(--ok)":"var(--info)", border:`1px solid ${order.payment_status==="paid"?"rgba(29,158,117,.25)":"rgba(55,138,221,.25)"}` }}>
+              {order.payment_status==="paid" ? <><svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="var(--ok)" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg> UPI paid</> : <><svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg> UPI pending</>}
+            </span>
+          )}
+          {order.status === "completed" && (
+            <span style={{ fontSize:".8125rem", fontWeight:700, color:"var(--ok)", display:"flex", alignItems:"center", gap:"5px", marginLeft:"auto" }}>
+              <Ic.Check/> Done
+            </span>
+          )}
+        </div>
+
+        {/* Action buttons row — wraps on mobile */}
+        {/* UPI PAYMENT FLOW: show "Mark as Paid" first; Confirm only after payment confirmed */}
+        {needsPayment && (
+          <div style={{ padding:"var(--s3) var(--s4)", background:"rgba(55,138,221,.06)", border:"1px solid rgba(55,138,221,.25)", borderRadius:"var(--r3)", marginBottom:"var(--s2)", fontSize:".8125rem", color:"var(--info)", fontWeight:700, display:"flex", alignItems:"center", gap:"6px" }}>
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01" strokeLinecap="round"/></svg>
+            Awaiting Payment Confirmation — mark payment received before confirming the order
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)" }}>
-            {/* Mark paid — only for UPI pending orders */}
-            {needsPayment && (
-              <button onClick={() => onMarkPaid(order)}
-                style={{ padding:"8px 14px", borderRadius:"var(--r3)", border:"1px solid rgba(55,138,221,.4)", background:"rgba(55,138,221,.1)", cursor:"pointer", fontSize:".8125rem", fontWeight:700, color:"var(--info)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"5px", transition:"all var(--d1) var(--ease)", flexShrink:0 }}
-                onMouseEnter={e=>{e.currentTarget.style.background="var(--info)";e.currentTarget.style.color="#fff";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="rgba(55,138,221,.1)";e.currentTarget.style.color="var(--info)";}}>
-                ✓ Mark paid
-              </button>
-            )}
-            {/* KOT print button */}
-            <button onClick={() => printKOT(order)} title="Print kitchen ticket"
-              style={{ padding:"8px 12px", borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontSize:".8125rem", fontWeight:600, color:"var(--t2)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"5px", transition:"all var(--d1) var(--ease)", flexShrink:0 }}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--brand)";e.currentTarget.style.color="var(--brand)";}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--bd)";e.currentTarget.style.color="var(--t2)";}}>
-              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-              KOT
+        )}
+        <div className="order-card-actions" style={{ display:"flex", alignItems:"center", gap:"var(--s2)", flexWrap:"wrap" }}>
+          {/* UPI pending: show "Mark as Paid" prominently; hide Confirm until paid */}
+          {needsPayment ? (
+            <button onClick={() => onMarkPaid(order)}
+              className="action-main"
+              style={{ flex:"1 1 auto", minWidth:"160px", padding:"12px 18px", borderRadius:"var(--r3)", border:"none", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".9375rem", fontWeight:800, background:"var(--info)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", gap:"6px", boxShadow:"0 4px 14px rgba(55,138,221,.4)" }}>
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg>
+              Mark as Paid
             </button>
-            {/* Bill print — all orders */}
-            <button onClick={() => printBill(order)} title="Print / download bill"
-              style={{ padding:"8px 12px", borderRadius:"var(--r3)", border:"1px solid rgba(29,158,117,.3)", background:"var(--ok-t)", cursor:"pointer", fontSize:".8125rem", fontWeight:600, color:"var(--ok)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"5px", transition:"all var(--d1) var(--ease)", flexShrink:0 }}
-              onMouseEnter={e=>{e.currentTarget.style.background="var(--ok)";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="var(--ok)";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="var(--ok-t)";e.currentTarget.style.color="var(--ok)";e.currentTarget.style.borderColor="rgba(29,158,117,.3)";}}>
-              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Bill
-            </button>
-            {/* Staff cancel — opens reason picker modal */}
-            {order.status !== "completed" && order.status !== "cancelled" && onCancel && (
-              <button onClick={() => setShowCancel(true)}
-                style={{ padding:"8px 12px", borderRadius:"var(--r3)", border:"1px solid rgba(226,75,74,.3)", background:"transparent", cursor:"pointer", fontSize:".8125rem", fontWeight:600, color:"var(--err)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"4px", transition:"all var(--d1) var(--ease)", flexShrink:0 }}
-                onMouseEnter={e=>{e.currentTarget.style.background="var(--err-t)";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
-                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                Cancel
-              </button>
-            )}
-            {next && (
+          ) : (
+            /* Main status action after payment is confirmed */
+            next && (
               <button onClick={() => onStatus(order.id, next.next)} disabled={updating}
-                style={{ padding:"10px 22px", borderRadius:"var(--r3)", border:"none", cursor:updating?"not-allowed":"pointer", fontFamily:"var(--ff-b)", fontSize:".9375rem", fontWeight:800, background:updating?"var(--bg3)":next.bg, color:updating?"var(--t3)":next.text, opacity:updating?.7:1, transition:"all var(--d1) var(--ease)", display:"flex", alignItems:"center", gap:"6px", boxShadow:updating?"none":`0 4px 14px ${next.bg}55` }}>
+                className="action-main"
+                style={{ flex:"1 1 auto", minWidth:"140px", padding:"12px 18px", borderRadius:"var(--r3)", border:"none", cursor:updating?"not-allowed":"pointer", fontFamily:"var(--ff-b)", fontSize:".9375rem", fontWeight:800, background:updating?"var(--bg3)":next.bg, color:updating?"var(--t3)":next.text, opacity:updating?.7:1, transition:"all var(--d1) var(--ease)", display:"flex", alignItems:"center", justifyContent:"center", gap:"6px", boxShadow:updating?"none":`0 4px 14px ${next.bg}55` }}>
                 {updating ? <>⟳ Updating…</> : <>{next.label} →</>}
               </button>
-            )}
-            {order.status === "completed" && (
-              <span style={{ fontSize:".8125rem", fontWeight:700, color:"var(--ok)", display:"flex", alignItems:"center", gap:"5px" }}>
-                <Ic.Check/> Done
-              </span>
-            )}
-          </div>
+            )
+          )}
+          {/* KOT */}
+          <button onClick={() => printKOT(order)} title="Print kitchen ticket"
+            className="action-sec"
+            style={{ flex:"0 0 auto", padding:"10px 14px", borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontSize:".8125rem", fontWeight:600, color:"var(--t2)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"5px", transition:"all var(--d1) var(--ease)" }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--brand)";e.currentTarget.style.color="var(--brand)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--bd)";e.currentTarget.style.color="var(--t2)";}}>
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            KOT
+          </button>
+          {/* Bill */}
+          <button onClick={() => printBill(order)} title="Print / download bill"
+            className="action-sec"
+            style={{ flex:"0 0 auto", padding:"10px 14px", borderRadius:"var(--r3)", border:"1px solid rgba(29,158,117,.3)", background:"var(--ok-t)", cursor:"pointer", fontSize:".8125rem", fontWeight:600, color:"var(--ok)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"5px", transition:"all var(--d1) var(--ease)" }}
+            onMouseEnter={e=>{e.currentTarget.style.background="var(--ok)";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="var(--ok)";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="var(--ok-t)";e.currentTarget.style.color="var(--ok)";e.currentTarget.style.borderColor="rgba(29,158,117,.3)";}}>
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Bill
+          </button>
+          {/* Cancel */}
+          {order.status !== "completed" && order.status !== "cancelled" && onCancel && (
+            <button onClick={() => onCancel(order)}
+              className="action-sec"
+              style={{ flex:"0 0 auto", padding:"10px 12px", borderRadius:"var(--r3)", border:"1px solid rgba(226,75,74,.3)", background:"transparent", cursor:"pointer", fontSize:".8125rem", fontWeight:600, color:"var(--err)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"4px", transition:"all var(--d1) var(--ease)" }}
+              onMouseEnter={e=>{e.currentTarget.style.background="var(--err-t)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              Cancel
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -608,12 +692,15 @@ export function QueuePage() {
   const [alertCount,  setAlertCount]  = useState(0);
   const [updating,    setUpdating]    = useState({});
   const [upiOrder,    setUpiOrder]    = useState(null); // order awaiting mark-paid confirmation
+  const [cancelOrder, setCancelOrder] = useState(null); // order awaiting cancel confirmation
   const [dataLoading, setDataLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [wsStatus,    setWsStatus]    = useState("connecting");
   const [showDutyPrompt, setShowDutyPrompt] = useState(false); // daily on-duty prompt
   const prevQueueLen  = useRef(0);
   const wsRef         = useRef(null);
+  const upiPendingRef = useRef(new Set()); // tracks order IDs with UPI payment pending
+  const upiReminderRef= useRef(null);      // periodic bell reminder interval
 
   // Show daily on-duty prompt if staff hasn't confirmed today
   useEffect(() => {
@@ -625,9 +712,42 @@ export function QueuePage() {
   }, [user]);
 
   const alertNewOrder = (newQueue) => {
+    // ── UPI payment pending detection ───────────────────────────────────
+    const nowUpiIds = new Set(
+      newQueue
+        .filter(o => o.payment_method === "upi" && o.payment_status === "pending")
+        .map(o => o.id)
+    );
+    const newUpi = [...nowUpiIds].filter(id => !upiPendingRef.current.has(id));
+    if (newUpi.length > 0) {
+      playUPIBell();
+      notify(
+        `${newUpi.length} UPI order${newUpi.length > 1 ? "s" : ""} awaiting payment — mark paid before confirming!`,
+        "warning",
+      );
+      if (navigator.vibrate) navigator.vibrate([100, 60, 100, 60, 200]);
+    }
+    upiPendingRef.current = nowUpiIds;
+
+    // ── Periodic reminder: ring every 60 s while any UPI order is unpaid ─
+    clearInterval(upiReminderRef.current);
+    if (nowUpiIds.size > 0) {
+      upiReminderRef.current = setInterval(() => {
+        if (upiPendingRef.current.size > 0) {
+          playUPIBell();
+          notify(
+            `Reminder: ${upiPendingRef.current.size} UPI payment${upiPendingRef.current.size > 1 ? "s" : ""} still pending!`,
+            "warning",
+          );
+        } else {
+          clearInterval(upiReminderRef.current);
+        }
+      }, 60_000);
+    }
+
+    // ── Standard new-order alert ─────────────────────────────────────────
     if (newQueue.length <= prevQueueLen.current) return;
     const diff = newQueue.length - prevQueueLen.current;
-    // Use global notification system (plays sound + browser notification)
     notify(
       `${diff} new order${diff > 1 ? "s" : ""} in the queue`,
       "order",
@@ -665,10 +785,15 @@ export function QueuePage() {
     const token    = localStorage.getItem("access_token");
     if (!branchId || !token) { setWsStatus("polling"); return; }
 
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const host  = window.location.hostname;
-    const port  = process.env.REACT_APP_WS_PORT || (window.location.port || "8000");
-    const url   = `${proto}://${host}:${port}/ws/queue/${branchId}/?token=${token}`;
+    const proto   = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsHost  = process.env.REACT_APP_WS_HOST || (() => {
+      const h = window.location.hostname;
+      return h.endsWith("knfcs.com") ? "api.knfcs.com" : h;
+    })();
+    const wsPort  = (!process.env.REACT_APP_WS_HOST && window.location.port && window.location.port !== "443" && window.location.port !== "80")
+      ? `:${window.location.port}`
+      : "";
+    const url     = `${proto}://${wsHost}${wsPort}/ws/queue/${branchId}/?token=${token}`;
 
     let ws;
     let reconnectTimer;
@@ -712,6 +837,7 @@ export function QueuePage() {
     connect();
     return () => {
       clearTimeout(reconnectTimer);
+      clearInterval(upiReminderRef.current);
       if (ws && ws.readyState === WebSocket.OPEN) ws.close();
     };
   }, [user?.branch_id]);
@@ -737,13 +863,14 @@ export function QueuePage() {
   };
 
   // Called from PaymentSerialModal on confirm
-  const handleConfirmPayment = async (orderId, paymentSerial = "") => {
+  // payment_serial is auto-generated server-side; we only pass upi_ref if provided
+  const handleConfirmPayment = async (orderId, upiRef = "") => {
     try {
-      await axiosClient.patch(`/orders/${orderId}/payment/`, {
-        payment_status:  "paid",
-        payment_serial:  paymentSerial,
-      });
-      notify(`Payment confirmed — Serial: ${paymentSerial}`, "success");
+      const body = { payment_status: "paid" };
+      if (upiRef) body.upi_ref = upiRef;
+      const res = await axiosClient.patch(`/orders/${orderId}/payment/`, body);
+      const serial = res.data.payment_serial || "";
+      notify(`Payment confirmed${serial ? ` · ${serial}` : ""}`, "success");
       setUpiOrder(null);
       await loadAll(true);
     } catch (e) {
@@ -752,6 +879,7 @@ export function QueuePage() {
   };
 
   const handleCancelOrder = async (orderId, reason = "customer_request", note = "") => {
+    setCancelOrder(null);
     try {
       await axiosClient.patch(`/orders/${orderId}/cancel/`, { reason, note });
       notify(`Order cancelled — ${reason.replace(/_/g," ")}`, "warning");
@@ -809,18 +937,26 @@ export function QueuePage() {
       {upiOrder && (
         <PaymentSerialModal order={upiOrder} onConfirm={handleConfirmPayment} onClose={() => setUpiOrder(null)}/>
       )}
+      {/* Cancel reason modal — rendered at page level so it's never clipped by overflow:hidden cards */}
+      {cancelOrder && (
+        <CancelReasonModal
+          order={cancelOrder}
+          onConfirm={(reason, note) => handleCancelOrder(cancelOrder.id, reason, note)}
+          onClose={() => setCancelOrder(null)}
+        />
+      )}
       {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"var(--s5)" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"var(--s4)", gap:"var(--s3)", flexWrap:"wrap" }}>
         <div>
           <div style={{ fontSize:".625rem", fontWeight:800, letterSpacing:".14em", textTransform:"uppercase", color:"var(--t4)", marginBottom:"3px" }}>KNFC Staff</div>
-          <h1 style={{ fontFamily:"var(--ff-d)", fontSize:"1.625rem", fontWeight:900, letterSpacing:"-.02em" }}>
+          <h1 style={{ fontFamily:"var(--ff-d)", fontSize:"clamp(1.25rem,5vw,1.625rem)", fontWeight:900, letterSpacing:"-.02em" }}>
             {user?.name || "Staff"}
           </h1>
         </div>
 
-        <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)" }}>
-          {/* Last refresh */}
-          <button onClick={() => loadAll()} style={{ display:"flex", alignItems:"center", gap:"5px", padding:"6px 12px", background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--rf)", fontSize:".75rem", color:"var(--t3)", cursor:"pointer", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)" }}
+        <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", flexWrap:"wrap" }}>
+          {/* Refresh */}
+          <button onClick={() => loadAll()} style={{ display:"flex", alignItems:"center", gap:"5px", padding:"8px 12px", background:"var(--bg2)", border:"1px solid var(--bd)", borderRadius:"var(--rf)", fontSize:".75rem", color:"var(--t3)", cursor:"pointer", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)" }}
             onMouseEnter={e => e.currentTarget.style.borderColor="var(--brand)"}
             onMouseLeave={e => e.currentTarget.style.borderColor="var(--bd)"}>
             <Ic.Refresh/> {mins < 5 ? "Just now" : `${mins}s ago`}
@@ -828,22 +964,17 @@ export function QueuePage() {
 
           {/* Alert count */}
           {alertCount > 0 && (
-            <div style={{ display:"flex", alignItems:"center", gap:"5px", padding:"6px 12px", background:"var(--err-t)", border:"1px solid rgba(226,75,74,.25)", borderRadius:"var(--rf)" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"5px", padding:"8px 12px", background:"var(--err-t)", border:"1px solid rgba(226,75,74,.25)", borderRadius:"var(--rf)" }}>
               <Ic.Alert/>
-              <span style={{ fontSize:".75rem", fontWeight:700, color:"var(--err)" }}>{alertCount} alert{alertCount !== 1 ? "s" : ""}</span>
+              <span style={{ fontSize:".75rem", fontWeight:700, color:"var(--err)" }}>{alertCount}</span>
             </div>
           )}
 
-          {/* On duty pill */}
-          <div style={{ display:"flex", alignItems:"center", gap:"5px", padding:"6px 14px", background:"var(--ok-t)", border:"1px solid rgba(29,158,117,.2)", borderRadius:"var(--rf)" }}>
-            <div style={{ width:"7px", height:"7px", borderRadius:"50%", background:"var(--ok)", animation:"pulse 2s infinite", flexShrink:0 }}/>
-            <span style={{ fontSize:".75rem", fontWeight:700, color:"var(--ok)" }}>On duty</span>
-          </div>
-          {/* WebSocket status badge */}
-          <div style={{ display:"flex", alignItems:"center", gap:"5px", padding:"6px 12px", background:wsStatus==="live"?"rgba(29,158,117,.08)":"var(--bg2)", border:`1px solid ${wsStatus==="live"?"rgba(29,158,117,.2)":"var(--bd)"}`, borderRadius:"var(--rf)" }}>
-            <div style={{ width:"6px", height:"6px", borderRadius:"50%", background:wsStatus==="live"?"var(--ok)":wsStatus==="connecting"?"var(--warn)":"var(--t4)", animation:wsStatus==="live"?"pulse 2s infinite":"none", flexShrink:0 }}/>
-            <span style={{ fontSize:".6875rem", fontWeight:700, color:wsStatus==="live"?"var(--ok)":wsStatus==="connecting"?"var(--warn)":"var(--t4)" }}>
-              {wsStatus==="live" ? "Live" : wsStatus==="connecting" ? "Connecting…" : "Polling"}
+          {/* On duty + WS status combined pill */}
+          <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"8px 12px", background:"var(--ok-t)", border:"1px solid rgba(29,158,117,.2)", borderRadius:"var(--rf)" }}>
+            <div style={{ width:"7px", height:"7px", borderRadius:"50%", background:wsStatus==="live"?"var(--ok)":wsStatus==="connecting"?"var(--warn)":"var(--t4)", animation:wsStatus==="live"?"pulse 2s infinite":"none", flexShrink:0 }}/>
+            <span style={{ fontSize:".75rem", fontWeight:700, color:"var(--ok)" }}>
+              {wsStatus==="live" ? "Live" : wsStatus==="connecting" ? "Connecting…" : "On duty"}
             </span>
           </div>
         </div>
@@ -855,6 +986,17 @@ export function QueuePage() {
         <StatCard label="Done today"  value={completed.length}        color="var(--ok)"    />
         <StatCard label="Revenue"     value={formatPrice(todayRev)}   color="var(--brand)" />
         <StatCard label="Stock alerts" value={alertCount}             color={alertCount > 0 ? "var(--err)" : "var(--ok)"} sub={alertCount > 0 ? "Needs attention" : "All good"} />
+      </div>
+
+      {/* Today date strip */}
+      <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", marginBottom:"var(--s4)", padding:"var(--s2) var(--s3)", background:"var(--bg2)", borderRadius:"var(--r3)", border:"1px solid var(--bd)" }}>
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span style={{ fontSize:".75rem", fontWeight:700, color:"var(--t2)" }}>
+          {new Date().toLocaleDateString("en-IN", { weekday:"long", day:"2-digit", month:"long", year:"numeric" })}
+        </span>
+        <span style={{ marginLeft:"auto", fontSize:".6875rem", fontWeight:700, padding:"2px 8px", borderRadius:"var(--rf)", background:"var(--ok-t)", color:"var(--ok)", border:"1px solid rgba(29,158,117,.2)" }}>
+          Queue resets at midnight
+        </span>
       </div>
 
       {/* Tabs */}
@@ -884,15 +1026,15 @@ export function QueuePage() {
           )}
 
           {dataLoading ? (
-            <div style={{ display:"flex", flexDirection:"column", gap:"var(--s3)" }}>
-              {[1,2,3].map(i => <div key={i} className="skel" style={{ height:"180px", borderRadius:"var(--r5)" }}/>)}
+            <div className="order-grid">
+              {[1,2,3].map(i => <div key={i} className="skel" style={{ height:"200px", borderRadius:"var(--r5)" }}/>)}
             </div>
           ) : queue.length === 0 ? (
             <Empty title="Queue is clear" sub="No active orders right now. Ready for the next one!"/>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:"var(--s3)" }}>
+            <div className="order-grid">
               {queue.map(order => (
-                <OrderCard key={order.id} order={order} updating={updating[order.id]} onStatus={handleStatus} onMarkPaid={handleMarkPaid} onCancel={handleCancelOrder}/>
+                <OrderCard key={order.id} order={order} updating={updating[order.id]} onStatus={handleStatus} onMarkPaid={handleMarkPaid} onCancel={order => setCancelOrder(order)}/>
               ))}
             </div>
           )}
@@ -925,6 +1067,7 @@ export function QueuePage() {
                         <div style={{ fontSize:".9375rem", fontWeight:600, marginBottom:"2px" }}>{o.customer_name || "Walk-in"}</div>
                         <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>
                           {o.item_count} items · {o.order_type === "dine_in" ? `Table ${o.table_number}` : "Pickup"}
+                          {o.confirmed_by_name && <> · <span style={{ color:"var(--ok)", fontWeight:600 }}>by {o.confirmed_by_name}</span></>}
                         </div>
                       </div>
                     </div>
@@ -933,6 +1076,13 @@ export function QueuePage() {
                         <div className="price" style={{ fontSize:"1rem" }}>{formatPrice(o.total)}</div>
                         {o.completed_at && <div style={{ fontSize:".75rem", color:"var(--t4)", marginTop:"2px" }}>{formatTime(o.completed_at)}</div>}
                       </div>
+                      <button onClick={() => printKOT(o)} title="Print KOT"
+                        style={{ padding:"6px 10px", borderRadius:"var(--r2)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontSize:".75rem", fontWeight:600, color:"var(--t2)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"4px", flexShrink:0, transition:"all var(--d1) var(--ease)" }}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--brand)";e.currentTarget.style.color="var(--brand)";}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--bd)";e.currentTarget.style.color="var(--t2)";}}>
+                        <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                        KOT
+                      </button>
                       <button onClick={() => printBill(o)} title="Print bill"
                         style={{ padding:"6px 10px", borderRadius:"var(--r2)", border:"1px solid rgba(29,158,117,.3)", background:"var(--ok-t)", cursor:"pointer", fontSize:".75rem", fontWeight:600, color:"var(--ok)", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", gap:"4px", flexShrink:0, transition:"all var(--d1) var(--ease)" }}
                         onMouseEnter={e=>{e.currentTarget.style.background="var(--ok)";e.currentTarget.style.color="#fff";}}
@@ -965,8 +1115,8 @@ export function QueuePage() {
           )}
 
           <div style={{ background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r5)", overflow:"hidden" }}>
-            {/* Table header */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 64px 64px 80px", gap:"var(--s2)", padding:"var(--s3) var(--s5)", background:"var(--bg2)", borderBottom:"1px solid var(--bd)" }}>
+            {/* Table header — hidden on mobile via CSS */}
+            <div className="stock-table-header" style={{ display:"grid", gridTemplateColumns:"1fr 64px 64px 80px", gap:"var(--s2)", padding:"var(--s3) var(--s5)", background:"var(--bg2)", borderBottom:"1px solid var(--bd)" }}>
               {["Item","Total","Used","Left"].map((h, i) => (
                 <div key={h} style={{ fontSize:".5625rem", fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"var(--t4)", textAlign:i > 0 ? "center" : "left" }}>{h}</div>
               ))}
@@ -979,19 +1129,27 @@ export function QueuePage() {
             {stock.map((s, i) => {
               const statusColor = s.status === "out" ? "var(--err)" : s.status === "low" ? "var(--warn)" : "var(--ok)";
               return (
-                <div key={s.menu_item_id}
+                <div key={s.menu_item_id} className="stock-table-row"
                   style={{ display:"grid", gridTemplateColumns:"1fr 64px 64px 80px", gap:"var(--s2)", padding:"var(--s4) var(--s5)", borderBottom:i < stock.length-1 ? "1px solid var(--bd)" : "none", alignItems:"center", background:s.status !== "ok" ? `${statusColor}05` : "transparent", borderLeft:s.status !== "ok" ? `3px solid ${statusColor}` : "3px solid transparent", transition:"background var(--d1) var(--ease)" }}>
                   <div>
                     <div style={{ fontSize:".9375rem", fontWeight:600 }}>{s.menu_item_name}</div>
                     {s.status !== "ok" && (
                       <div style={{ fontSize:".6875rem", fontWeight:800, textTransform:"uppercase", letterSpacing:".06em", color:statusColor, marginTop:"2px" }}>
-                        {s.status === "out" ? <><svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{display:"inline"}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="3"/></svg> Out of stock</> : <><svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{display:"inline"}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="3"/></svg> Running low</>}
+                        {s.status === "out" ? "Out of stock" : "Running low"}
                       </div>
                     )}
                   </div>
-                  <div style={{ textAlign:"center", fontSize:".9375rem", fontWeight:600, color:"var(--t3)" }}>{s.today_stock}</div>
-                  <div style={{ textAlign:"center", fontSize:".9375rem", fontWeight:600, color:"var(--t3)" }}>{s.used_stock}</div>
-                  <div style={{ textAlign:"center" }}>
+                  {/* Numbers row — shown inline on desktop, stacked on mobile */}
+                  <div className="stock-table-num-cell" style={{ textAlign:"center", fontSize:".9375rem", fontWeight:600, color:"var(--t3)" }}>
+                    <span className="stock-mobile-label" style={{ display:"none", fontSize:".6875rem", color:"var(--t4)", marginRight:"4px" }}>Total:</span>
+                    {s.today_stock}
+                  </div>
+                  <div className="stock-table-num-cell" style={{ textAlign:"center", fontSize:".9375rem", fontWeight:600, color:"var(--t3)" }}>
+                    <span className="stock-mobile-label" style={{ display:"none", fontSize:".6875rem", color:"var(--t4)", marginRight:"4px" }}>Used:</span>
+                    {s.used_stock}
+                  </div>
+                  <div className="stock-table-num-cell" style={{ textAlign:"center" }}>
+                    <span className="stock-mobile-label" style={{ display:"none", fontSize:".6875rem", color:"var(--t4)", marginRight:"4px" }}>Left:</span>
                     <span style={{ fontFamily:"var(--ff-d)", fontSize:"1.25rem", fontWeight:900, color:statusColor }}>{s.remaining_stock}</span>
                   </div>
                 </div>
@@ -1011,6 +1169,8 @@ export function QueuePage() {
 ══════════════════════════════════════════════════════════════════════ */
 export function StockPage() {
   const { loading: pageLoading } = usePageLoader(800);
+  const { user } = useAuth();
+  const isAdmin  = user?.role === "branch_admin" || user?.role === "super_admin";
   const [stock,      setStock]      = useState([]);
   const [alerts,     setAlerts]     = useState([]);
   const [topUpItem,  setTopUpItem]  = useState(null);
@@ -1107,12 +1267,16 @@ export function StockPage() {
                   <span style={{ fontFamily:"var(--ff-d)", fontSize:"1.25rem", fontWeight:900, color:c }}>{s.remaining_stock}</span>
                 </div>
                 <div style={{ textAlign:"center" }}>
-                  <button onClick={() => setTopUpItem(s)}
-                    style={{ padding:"6px 12px", borderRadius:"var(--r2)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontSize:".8125rem", fontWeight:600, color:"var(--t2)", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)", display:"inline-flex", alignItems:"center", gap:"4px" }}
-                    onMouseEnter={e => { e.currentTarget.style.background="var(--brand-tint)"; e.currentTarget.style.borderColor="var(--brand)"; e.currentTarget.style.color="var(--brand)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background="var(--bg2)"; e.currentTarget.style.borderColor="var(--bd)"; e.currentTarget.style.color="var(--t2)"; }}>
-                    <Ic.Plus/> Add
-                  </button>
+                  {isAdmin ? (
+                    <button onClick={() => setTopUpItem(s)}
+                      style={{ padding:"6px 12px", borderRadius:"var(--r2)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontSize:".8125rem", fontWeight:600, color:"var(--t2)", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)", display:"inline-flex", alignItems:"center", gap:"4px" }}
+                      onMouseEnter={e => { e.currentTarget.style.background="var(--brand-tint)"; e.currentTarget.style.borderColor="var(--brand)"; e.currentTarget.style.color="var(--brand)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background="var(--bg2)"; e.currentTarget.style.borderColor="var(--bd)"; e.currentTarget.style.color="var(--t2)"; }}>
+                      <Ic.Plus/> Add
+                    </button>
+                  ) : (
+                    <span style={{ fontSize:".75rem", color:"var(--t4)" }}>View only</span>
+                  )}
                 </div>
               </div>
             );
@@ -1175,22 +1339,40 @@ export function NewOrderPage() {
   const navigate = useNavigate();
   const { loading: pageLoading } = usePageLoader(800);
 
-  const [items,       setItems]       = useState([]);
-  const [search,      setSearch]      = useState("");
-  const [cart,        setCart]        = useState([]);
-  const [walkinName,  setWalkinName]  = useState("");
-  const [walkinPhone, setWalkinPhone] = useState("");
-  const [orderType,   setOrderType]   = useState("pickup");
-  const [tableNum,    setTableNum]    = useState("");
-  const [placing,     setPlacing]     = useState(false);
-  const [placed,      setPlaced]      = useState(false);
-  const [imgErrors,   setImgErrors]   = useState({});
+  const [items,        setItems]        = useState([]);
+  const [stockMap,     setStockMap]     = useState({});  // menu_item_id → remaining_stock
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [search,       setSearch]       = useState("");
+  const [cart,         setCart]         = useState([]);
+  const [walkinName,   setWalkinName]   = useState("");
+  const [walkinPhone,  setWalkinPhone]  = useState("");
+  const [orderType,    setOrderType]    = useState("pickup");
+  const [tableNum,     setTableNum]     = useState("");
+  const [placing,      setPlacing]      = useState(false);
+  const [placed,       setPlaced]       = useState(false);
+  const [placeError,   setPlaceError]   = useState(null);
+  const [imgErrors,    setImgErrors]    = useState({});
 
   useEffect(() => {
     const bid = localStorage.getItem("branch_id");
-    if (bid) {
-      getItems({ branch_id: bid }).then(r => setItems(r.data.items || [])).catch(() => {});
-    }
+    if (!bid) { setItemsLoading(false); return; }
+    setItemsLoading(true);
+    // Load menu items AND stock in parallel
+    Promise.all([
+      getItems({ branch_id: bid, available: false }),
+      getStockDashboard(bid),
+    ])
+      .then(([itemsRes, stockRes]) => {
+        setItems(itemsRes.data.items || []);
+        // Build stock lookup map by menu_item_id
+        const map = {};
+        for (const s of (stockRes.data.stock || [])) {
+          map[s.menu_item_id] = s.remaining_stock;
+        }
+        setStockMap(map);
+      })
+      .catch(() => {})
+      .finally(() => setItemsLoading(false));
   }, []);
 
   const filtered = search
@@ -1211,9 +1393,22 @@ export function NewOrderPage() {
 
   const total = cart.reduce((s, i) => s + i.qty * parseFloat(i.offer_price || i.price), 0);
 
+  // India mobile validation: 10 digits, starts with 6/7/8/9
+  const validatePhone = (p) => {
+    if (!p) return true; // optional — allow blank
+    const clean = p.replace(/\D/g, "");
+    return clean.length === 10 && /^[6-9]/.test(clean);
+  };
+
   const handlePlace = async () => {
     if (!cart.length) return;
+    // Phone validation for walk-in (if provided)
+    if (walkinPhone && !validatePhone(walkinPhone)) {
+      setPlaceError("Enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).");
+      return;
+    }
     setPlacing(true);
+    setPlaceError(null);
     try {
       await placeOrder({
         order_type:   orderType,
@@ -1225,6 +1420,13 @@ export function NewOrderPage() {
       });
       setPlaced(true);
       setTimeout(() => navigate("/staff/queue"), 1200);
+    } catch (err) {
+      setPlaceError(
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to place order. Please try again."
+      );
     } finally { setPlacing(false); }
   };
 
@@ -1252,17 +1454,45 @@ export function NewOrderPage() {
               {search && <button onClick={() => setSearch("")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--t3)", fontSize:"18px", lineHeight:1, flexShrink:0 }}>×</button>}
             </div>
 
+            {/* Stock warning — if no stock records found for today */}
+            {!itemsLoading && Object.keys(stockMap).length === 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", padding:"var(--s3) var(--s4)", background:"rgba(239,159,39,.08)", border:"1px solid rgba(239,159,39,.3)", borderRadius:"var(--r3)", marginBottom:"var(--s4)", fontSize:".875rem" }}>
+                <Ic.Alert/>
+                <span style={{ fontWeight:700, color:"var(--warn)" }}>Stock not updated for today.</span>
+                <span style={{ color:"var(--t2)" }}>Set opening stock before creating walk-in orders.</span>
+              </div>
+            )}
+
             {/* Grid */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"var(--s2)" }} className="no-item-grid">
-              {filtered.map(item => {
-                const inCart = cart.find(x => x.id === item.id);
-                const isOOS  = !item.is_available;
+              {itemsLoading && [1,2,3,4,5,6].map(i => (
+                <div key={i} style={{ background:"var(--bg2)", borderRadius:"var(--r4)", padding:"var(--s3)", height:"88px", animation:"pulse 1.4s ease-in-out infinite" }}/>
+              ))}
+              {!itemsLoading && filtered.length === 0 && (
+                <div style={{ gridColumn:"1/-1", textAlign:"center", padding:"var(--s8) var(--s4)", color:"var(--t3)", fontSize:".875rem" }}>
+                  {search ? "No items match your search." : "No menu items available."}
+                </div>
+              )}
+              {!itemsLoading && filtered.map(item => {
+                const inCart      = cart.find(x => x.id === item.id);
+                const stockLeft   = stockMap[item.id]; // undefined = no stock record
+                const stockSet    = stockLeft !== undefined;
+                // Block if explicitly 0 stock, or if item is unavailable
+                const isOOS       = !item.is_available || (stockSet && stockLeft <= 0);
+                const noStockData = !stockSet && item.is_available;  // stock not updated today
+                // Block walk-in orders if stock has not been set for the day
+                const blocked     = isOOS || noStockData;
+
+                const borderColor = inCart ? "var(--brand)" : isOOS ? "rgba(226,75,74,.3)" : noStockData ? "rgba(239,159,39,.35)" : "var(--bd)";
+                const bgColor     = inCart ? "var(--brand-tint)" : "var(--bgc)";
+
                 return (
                   <div key={item.id}
-                    onClick={() => !isOOS && addToCart(item)}
-                    style={{ background:"var(--bgc)", border:`1px solid ${inCart?"var(--brand)":"var(--bd)"}`, borderRadius:"var(--r4)", padding:"var(--s3)", cursor:isOOS?"default":"pointer", opacity:isOOS?.4:1, transition:"all var(--d1) var(--ease)", position:"relative", overflow:"hidden" }}
-                    onMouseEnter={e => { if (!isOOS) { e.currentTarget.style.background="var(--brand-tint)"; e.currentTarget.style.borderColor="var(--brand)"; } }}
-                    onMouseLeave={e => { e.currentTarget.style.background="var(--bgc)"; e.currentTarget.style.borderColor=inCart?"var(--brand)":"var(--bd)"; }}>
+                    onClick={() => !blocked && addToCart(item)}
+                    title={noStockData ? "Stock not updated — set opening stock first" : isOOS ? "Out of stock" : ""}
+                    style={{ background:bgColor, border:`1px solid ${borderColor}`, borderRadius:"var(--r4)", padding:"var(--s3)", cursor:blocked?"not-allowed":"pointer", opacity:blocked?.5:1, transition:"all var(--d1) var(--ease)", position:"relative", overflow:"hidden" }}
+                    onMouseEnter={e => { if (!blocked) { e.currentTarget.style.background="var(--brand-tint)"; e.currentTarget.style.borderColor="var(--brand)"; } }}
+                    onMouseLeave={e => { e.currentTarget.style.background=inCart?"var(--brand-tint)":"var(--bgc)"; e.currentTarget.style.borderColor=borderColor; }}>
 
                     {inCart && (
                       <div style={{ position:"absolute", top:"6px", right:"6px", width:"20px", height:"20px", borderRadius:"50%", background:"var(--brand)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:".625rem", fontWeight:900, fontFamily:"var(--ff-d)" }}>
@@ -1272,17 +1502,19 @@ export function NewOrderPage() {
 
                     {/* Small image */}
                     {item.image_url && !imgErrors[item.id] && (
-                      <div style={{ height:"60px", borderRadius:"var(--r2)", overflow:"hidden", marginBottom:"var(--s2)", background:"var(--bg3)" }}>
+                      <div style={{ height:"56px", borderRadius:"var(--r2)", overflow:"hidden", marginBottom:"var(--s2)", background:"var(--bg3)" }}>
                         <img src={item.image_url} alt={item.name}
                           onError={() => setImgErrors(e => ({...e, [item.id]:true}))}
                           style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
                       </div>
                     )}
 
-                    <div style={{ fontSize:".9375rem", fontWeight:600, marginBottom:"4px", overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", lineHeight:1.3 }}>{item.name}</div>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                      <span className="price" style={{ fontSize:".9375rem" }}>{formatPrice(item.offer_price || item.price)}</span>
-                      {isOOS && <span className="badge badge-err" style={{ fontSize:".5625rem" }}>Out</span>}
+                    <div style={{ fontSize:".875rem", fontWeight:600, marginBottom:"4px", overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", lineHeight:1.3 }}>{item.name}</div>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:2 }}>
+                      <span className="price" style={{ fontSize:".875rem" }}>{formatPrice(item.offer_price || item.price)}</span>
+                      {isOOS      && <span className="badge badge-err"  style={{ fontSize:".5625rem" }}>Out</span>}
+                      {noStockData && <span className="badge badge-warn" style={{ fontSize:".5625rem" }}>No stock</span>}
+                      {!blocked && stockSet && <span style={{ fontSize:".625rem", color:"var(--t4)", fontWeight:600 }}>{stockLeft} left</span>}
                     </div>
                   </div>
                 );
@@ -1301,10 +1533,23 @@ export function NewOrderPage() {
                 <Ic.People/>
                 <input value={walkinName} onChange={e => setWalkinName(e.target.value)} placeholder="Name" className="input-field"/>
               </div>
-              <div className="input-wrap">
+              <div className="input-wrap" style={{ border: walkinPhone && !validatePhone(walkinPhone) ? "1.5px solid var(--err)" : undefined }}>
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" strokeLinecap="round"/></svg>
-                <input value={walkinPhone} onChange={e => setWalkinPhone(e.target.value)} placeholder="Phone" className="input-field"/>
+                <input
+                  value={walkinPhone}
+                  onChange={e => setWalkinPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="Phone (optional)"
+                  inputMode="numeric"
+                  maxLength={10}
+                  className="input-field"
+                />
+                {walkinPhone && validatePhone(walkinPhone) && (
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--ok)" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg>
+                )}
               </div>
+              {walkinPhone && !validatePhone(walkinPhone) && (
+                <p style={{ fontSize:".75rem", color:"var(--err)", marginTop:2, padding:"0 var(--s3)" }}>Valid Indian mobile: 10 digits, starts with 6-9</p>
+              )}
             </div>
 
             {/* Order type */}
@@ -1365,6 +1610,12 @@ export function NewOrderPage() {
                   <span className="price" style={{ fontSize:"1.5rem" }}>{formatPrice(total)}</span>
                 </div>
 
+                {placeError && (
+                  <div style={{ marginBottom:"var(--s3)", padding:"var(--s3) var(--s4)", borderRadius:"var(--r3)", background:"var(--err-t)", border:"1px solid rgba(226,75,74,.25)", color:"var(--err)", fontSize:".8125rem", fontWeight:500, display:"flex", alignItems:"flex-start", gap:"var(--s2)" }}>
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{ flexShrink:0, marginTop:"1px" }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {placeError}
+                  </div>
+                )}
                 <button onClick={handlePlace} disabled={placing || placed}
                   style={{ width:"100%", padding:"14px", borderRadius:"var(--r4)", border:"none", cursor:placing||placed?"not-allowed":"pointer", fontFamily:"var(--ff-b)", fontSize:"1rem", fontWeight:800, background:placed?"var(--ok)":placing?"var(--bg3)":"var(--brand)", color:placing?"var(--t3)":"#fff", boxShadow:placed?"0 8px 24px rgba(29,158,117,.4)":placing?"none":"var(--sh-br)", transition:"all .3s var(--ease)", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px" }}>
                   {placed ? <><Ic.Check/> Order placed!</> : placing ? "Placing…" : "Place order →"}

@@ -87,7 +87,17 @@ function ConfirmModal({ member, onConfirm, onCancel }) {
 }
 
 /* ─── Staff Row ──────────────────────────────────────────────────────── */
-function StaffRow({ member, isSuperAdmin, onToggle, onDeactivate, toggling, onShiftSave }) {
+const STAFF_ROW_CSS = `
+  .sr{display:grid;grid-template-columns:1fr 130px 110px 100px 140px 88px 64px;gap:12px;padding:14px 20px;align-items:center;border-bottom:1px solid var(--bd);transition:background var(--d1) var(--ease)}
+  .sr:hover{background:var(--bg2)}
+  .sr-mob{display:none;flex-direction:column;border-bottom:1px solid var(--bd)}
+  .sr-mob-top{display:flex;align-items:center;gap:12px;padding:14px 16px 10px}
+  .sr-mob-body{padding:0 16px 12px;display:flex;flex-direction:column;gap:8px}
+  .sr-mob-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  @media(max-width:700px){.sr{display:none!important}.sr-mob{display:flex!important}.staff-tbl-hdr{display:none!important}}
+`;
+
+function StaffRow({ member, isSuperAdmin, onToggle, onDeactivate, onTerminate, toggling, onShiftSave }) {
   const [editShift, setEditShift] = useState(false);
   const [shiftStart, setShiftStart] = useState(member.shift_start || "");
   const [shiftEnd, setShiftEnd] = useState(member.shift_end || "");
@@ -96,21 +106,17 @@ function StaffRow({ member, isSuperAdmin, onToggle, onDeactivate, toggling, onSh
   const statusColor = member.is_active
     ? member.is_verified ? "var(--ok)" : "var(--warn)"
     : "var(--err)";
-
   const statusLabel = member.is_active
     ? member.is_verified ? "Active" : "Unverified"
     : "Inactive";
 
-  // Is currently in shift?
   const nowInShift = () => {
     if (!member.shift_start || !member.shift_end) return null;
     const now = new Date();
     const [sh, sm] = member.shift_start.split(":").map(Number);
     const [eh, em] = member.shift_end.split(":").map(Number);
     const nowMins = now.getHours() * 60 + now.getMinutes();
-    const startMins = sh * 60 + sm;
-    const endMins = eh * 60 + em;
-    return nowMins >= startMins && nowMins <= endMins;
+    return nowMins >= sh * 60 + sm && nowMins <= eh * 60 + em;
   };
 
   const inShift = nowInShift();
@@ -125,156 +131,131 @@ function StaffRow({ member, isSuperAdmin, onToggle, onDeactivate, toggling, onSh
     }
   };
 
-  return (
-    <div className="staff-row" style={{
-      display: "grid",
-      gridTemplateColumns: "1fr 130px 110px 100px 140px 88px 64px",
-      gap: "var(--s3)",
-      padding: "var(--s4) var(--s5)",
-      alignItems: "center",
-      borderBottom: "1px solid var(--bd)",
-      transition: "background var(--d1) var(--ease)"
-    }}
-      onMouseEnter={e => e.currentTarget.style.background = "var(--bg2)"}
-      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-    >
-      {/* Avatar + Name */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--s3)", minWidth: 0 }}>
-        <div style={{
-          width: "38px", height: "38px", borderRadius: "50%",
-          background: "linear-gradient(135deg,var(--brand),var(--brand-d))",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontFamily: "var(--ff-d)", fontWeight: 900, color: "#fff", fontSize: ".9375rem",
-          flexShrink: 0,
-          outline: member.is_on_duty ? `2px solid var(--ok)` : "none",
-          outlineOffset: "2px"
-        }}>
-          {member.name?.[0]?.toUpperCase() || "?"}
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: ".9375rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {member.name}
-          </div>
-          <div style={{ fontSize: ".75rem", color: "var(--t3)", display: "flex", alignItems: "center", gap: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            <Ic.Mail />{member.email || "—"}
-          </div>
-        </div>
+  const shiftCell = editShift ? (
+    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+      <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+        <input type="time" value={shiftStart} onChange={e => setShiftStart(e.target.value)}
+          style={{ width:82, fontSize:".75rem", border:"1px solid var(--bd)", borderRadius:"var(--r2)", padding:"2px 6px", background:"var(--bgc)", color:"var(--t1)" }} />
+        <span style={{ color:"var(--t3)" }}>–</span>
+        <input type="time" value={shiftEnd} onChange={e => setShiftEnd(e.target.value)}
+          style={{ width:82, fontSize:".75rem", border:"1px solid var(--bd)", borderRadius:"var(--r2)", padding:"2px 6px", background:"var(--bgc)", color:"var(--t1)" }} />
       </div>
-
-      {/* User ID */}
-      <div style={{ textAlign: "center" }}>
-        <code style={{
-          fontSize: ".8125rem", fontWeight: 700, padding: "3px 10px",
-          background: "var(--bg2)", borderRadius: "var(--r2)", border: "1px solid var(--bd)", color: "var(--brand)"
-        }}>
-          {member.user_id_login || "—"}
-        </code>
-      </div>
-
-      {/* Branch / Role */}
-      <div style={{ fontSize: ".8125rem", color: "var(--t3)", textAlign: "center" }}>
-        {isSuperAdmin ? (member.branch_name || "—") : "Staff"}
-      </div>
-
-      {/* Status */}
-      <div style={{ textAlign: "center" }}>
-        <span style={{
-          fontSize: ".6875rem", fontWeight: 700, padding: "3px 9px", borderRadius: "var(--rf)",
-          background: `${statusColor}18`, color: statusColor, border: `1px solid ${statusColor}33`
-        }}>
-          {statusLabel}
-        </span>
-      </div>
-
-      {/* Shift Schedule */}
-      <div style={{ textAlign: "center" }}>
-        {editShift ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
-            <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-              <input type="time" value={shiftStart} onChange={e => setShiftStart(e.target.value)}
-                style={{ width: "78px", fontSize: ".75rem" }} />
-              <span style={{ color: "var(--t3)" }}>–</span>
-              <input type="time" value={shiftEnd} onChange={e => setShiftEnd(e.target.value)}
-                style={{ width: "78px", fontSize: ".75rem" }} />
-            </div>
-            <div style={{ display: "flex", gap: "4px" }}>
-              <button onClick={handleShiftSave} disabled={savingShift}
-                style={{ padding: "2px 10px", background: "var(--ok)", color: "#fff", borderRadius: "var(--r2)", fontSize: ".75rem" }}>
-                {savingShift ? "…" : "Save"}
-              </button>
-              <button onClick={() => setEditShift(false)} style={{ padding: "2px 10px", border: "1px solid var(--bd)", borderRadius: "var(--r2)", fontSize: ".75rem" }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button onClick={() => setEditShift(true)}
-            title="Edit shift hours"
-            style={{
-              background: "none", border: "1px dashed var(--bd)", borderRadius: "var(--r2)",
-              padding: "4px 8px", fontSize: ".75rem", color: "var(--t3)", cursor: "pointer"
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--brand)"; e.currentTarget.style.color = "var(--brand)"; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--bd)"; e.currentTarget.style.color = "var(--t3)"; }}
-          >
-            {member.shift_start && member.shift_end ? (
-              <>
-                <span style={{ color: inShift ? "var(--ok)" : "var(--t3)", fontWeight: 600 }}>{member.shift_start}</span>
-                <span>–</span>
-                <span style={{ color: inShift ? "var(--ok)" : "var(--t3)", fontWeight: 600 }}>{member.shift_end}</span>
-                {inShift !== null && <span style={{ marginLeft: "4px" }}>{inShift ? "🟢" : "⚪"}</span>}
-              </>
-            ) : <span style={{ fontSize: ".6875rem" }}>+ Set shift</span>}
-          </button>
-        )}
-      </div>
-
-      {/* On Duty Toggle */}
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <button
-          onClick={() => onToggle(member, "is_on_duty")}
-          disabled={toggling[`${member.id}_is_on_duty`] || !member.is_active}
-          className={`toggle ${member.is_on_duty ? "on" : "off"}`}
-          title={member.is_on_duty ? "On duty" : "Off duty"}
-        >
-          <div className="toggle-knob" />
+      <div style={{ display:"flex", gap:4 }}>
+        <button onClick={handleShiftSave} disabled={savingShift}
+          style={{ padding:"3px 10px", background:"var(--ok)", color:"#fff", borderRadius:"var(--r2)", fontSize:".75rem", border:"none", cursor:"pointer" }}>
+          {savingShift ? "…" : "Save"}
         </button>
-      </div>
-
-      {/* Deactivate / Reactivate */}
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        {member.is_active ? (
-          <button onClick={() => onDeactivate(member)}
-            style={{
-              width: "32px", height: "32px", borderRadius: "var(--r2)", background: "none",
-              border: "1px solid var(--bd)", color: "var(--t4)", cursor: "pointer"
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = "var(--err-t)";
-              e.currentTarget.style.color = "var(--err)";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = "none";
-              e.currentTarget.style.color = "var(--t4)";
-            }}
-            title="Deactivate"
-          >
-            <Ic.Trash />
-          </button>
-        ) : (
-          <button onClick={() => onToggle(member, "is_active")}
-            style={{
-              padding: "4px 12px", borderRadius: "var(--r2)", background: "none",
-              border: "1px solid var(--bd)", fontSize: ".7rem", fontWeight: 700,
-              color: "var(--ok)", cursor: "pointer"
-            }}
-            title="Reactivate"
-          >
-            Activate
-          </button>
-        )}
+        <button onClick={() => setEditShift(false)}
+          style={{ padding:"3px 8px", border:"1px solid var(--bd)", borderRadius:"var(--r2)", fontSize:".75rem", cursor:"pointer", background:"none", color:"var(--t2)" }}>×</button>
       </div>
     </div>
+  ) : (
+    <button onClick={() => setEditShift(true)} title="Edit shift"
+      style={{ background:"none", border:"1px dashed var(--bd)", borderRadius:"var(--r2)", padding:"4px 8px", fontSize:".75rem", color:"var(--t3)", cursor:"pointer", whiteSpace:"nowrap" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor="var(--brand)"; e.currentTarget.style.color="var(--brand)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor="var(--bd)"; e.currentTarget.style.color="var(--t3)"; }}>
+      {member.shift_start && member.shift_end
+        ? <><span style={{ color:inShift?"var(--ok)":"var(--t3)", fontWeight:600 }}>{member.shift_start}</span>–<span style={{ color:inShift?"var(--ok)":"var(--t3)", fontWeight:600 }}>{member.shift_end}</span>{inShift !== null && <span style={{ marginLeft:4 }}>{inShift ? "🟢" : "⚪"}</span>}</>
+        : <span style={{ fontSize:".6875rem" }}>+ Set shift</span>
+      }
+    </button>
+  );
+
+  const dutyToggle = (
+    <button onClick={() => onToggle(member, "is_on_duty")}
+      disabled={toggling[`${member.id}_is_on_duty`] || !member.is_active}
+      className={`toggle ${member.is_on_duty ? "on" : "off"}`}
+      title={member.is_on_duty ? "On duty" : "Off duty"}>
+      <div className="toggle-knob" />
+    </button>
+  );
+
+  const actionBtn = (
+    <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
+      {member.is_active ? (
+        <button onClick={() => onDeactivate(member)} title="Deactivate (keep account)"
+          style={{ width:32, height:32, borderRadius:"var(--r2)", background:"none", border:"1px solid var(--bd)", color:"var(--t4)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}
+          onMouseEnter={e => { e.currentTarget.style.background="var(--err-t)"; e.currentTarget.style.color="var(--err)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background="none"; e.currentTarget.style.color="var(--t4)"; }}>
+          <Ic.Trash />
+        </button>
+      ) : (
+        <button onClick={() => onToggle(member, "is_active")} title="Reactivate"
+          style={{ padding:"4px 12px", borderRadius:"var(--r2)", background:"none", border:"1px solid var(--bd)", fontSize:".7rem", fontWeight:700, color:"var(--ok)", cursor:"pointer" }}>
+          Activate
+        </button>
+      )}
+      {/* SuperAdmin only: Terminate Profile (irreversible) */}
+      {isSuperAdmin && onTerminate && (
+        <button onClick={() => onTerminate(member)} title="Terminate profile permanently"
+          style={{ width:32, height:32, borderRadius:"var(--r2)", background:"none", border:"1px dashed rgba(226,75,74,.5)", color:"rgba(226,75,74,.5)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:".6rem", fontWeight:900, letterSpacing:"-.02em" }}
+          onMouseEnter={e => { e.currentTarget.style.background="var(--err-t)"; e.currentTarget.style.borderColor="var(--err)"; e.currentTarget.style.color="var(--err)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background="none"; e.currentTarget.style.borderColor="rgba(226,75,74,.5)"; e.currentTarget.style.color="rgba(226,75,74,.5)"; }}>
+          <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </button>
+      )}
+    </div>
+  );
+
+  const avatar = (
+    <div style={{ width:38, height:38, borderRadius:"50%", background:"linear-gradient(135deg,var(--brand),var(--brand-d))", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"var(--ff-d)", fontWeight:900, color:"#fff", fontSize:".9375rem", flexShrink:0, outline:member.is_on_duty?"2px solid var(--ok)":"none", outlineOffset:2 }}>
+      {member.name?.[0]?.toUpperCase() || "?"}
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop table row */}
+      <div className="staff-row sr">
+        <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", minWidth:0 }}>
+          {avatar}
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontWeight:700, fontSize:".9375rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{member.name}</div>
+            <div style={{ fontSize:".75rem", color:"var(--t3)", display:"flex", alignItems:"center", gap:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}><Ic.Mail />{member.email || "—"}</div>
+          </div>
+        </div>
+        <div style={{ textAlign:"center" }}>
+          <code style={{ fontSize:".8125rem", fontWeight:700, padding:"3px 10px", background:"var(--bg2)", borderRadius:"var(--r2)", border:"1px solid var(--bd)", color:"var(--brand)" }}>{member.user_id_login || "—"}</code>
+        </div>
+        <div style={{ fontSize:".8125rem", color:"var(--t3)", textAlign:"center" }}>{isSuperAdmin ? (member.branch_name || "—") : "Staff"}</div>
+        <div style={{ textAlign:"center" }}>
+          <span style={{ fontSize:".6875rem", fontWeight:700, padding:"3px 9px", borderRadius:"var(--rf)", background:`${statusColor}18`, color:statusColor, border:`1px solid ${statusColor}33` }}>{statusLabel}</span>
+        </div>
+        <div style={{ textAlign:"center" }}>{shiftCell}</div>
+        <div style={{ display:"flex", justifyContent:"center" }}>{dutyToggle}</div>
+        <div style={{ display:"flex", justifyContent:"center" }}>{actionBtn}</div>
+      </div>
+
+      {/* Mobile card */}
+      <div className="staff-row sr-mob">
+        <div className="sr-mob-top">
+          {avatar}
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontWeight:700, fontSize:"1rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{member.name}</div>
+            <div style={{ fontSize:".75rem", color:"var(--t3)", marginTop:2 }}>{member.email || member.user_id_login || "—"}</div>
+          </div>
+          <span style={{ fontSize:".6875rem", fontWeight:700, padding:"3px 9px", borderRadius:"var(--rf)", background:`${statusColor}18`, color:statusColor, border:`1px solid ${statusColor}33`, flexShrink:0 }}>{statusLabel}</span>
+        </div>
+        <div className="sr-mob-body">
+          {isSuperAdmin && member.branch_name && (
+            <div style={{ fontSize:".8125rem", color:"var(--t3)" }}>Branch: <strong style={{ color:"var(--t2)" }}>{member.branch_name}</strong></div>
+          )}
+          <div className="sr-mob-row">
+            <div>
+              <div style={{ fontSize:".6875rem", fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--t4)", marginBottom:4 }}>Shift</div>
+              {shiftCell}
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontSize:".6875rem", fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--t4)", marginBottom:4 }}>On Duty</div>
+                {dutyToggle}
+              </div>
+              {actionBtn}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -294,7 +275,8 @@ export default function AdminStaffPage() {
   const [search, setSearch] = useState("");
   const [filterB, setFilterB] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [confirm, setConfirm] = useState(null);
+  const [confirm,   setConfirm]   = useState(null);
+  const [terminate, setTerminate] = useState(null); // for SuperAdmin hard-terminate
   const [toggling, setToggling] = useState({});
   const [toast, setToast] = useState("");
   const [activeTab, setActiveTab] = useState("staff");
@@ -420,6 +402,19 @@ export default function AdminStaffPage() {
       loadStaff();
     } catch {
       showToast("Failed to deactivate");
+    }
+  };
+
+  const handleTerminate = async () => {
+    if (!terminate) return;
+    try {
+      await axiosClient.delete(`/auth/admin/users/${terminate.id}/terminate/`);
+      showToast(`${terminate.name} profile permanently terminated`);
+      setTerminate(null);
+      loadStaff();
+    } catch (e) {
+      showToast(e.response?.data?.error || "Failed to terminate profile");
+      setTerminate(null);
     }
   };
 
@@ -592,27 +587,16 @@ export default function AdminStaffPage() {
               </div>
             ) : (
               <div ref={listRef} style={{ background: "var(--bgc)", border: "1px solid var(--bd)", borderRadius: "var(--r5)", overflow: "hidden" }}>
-                {/* Header */}
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 130px 110px 100px 140px 88px 64px",
-                  gap: "var(--s3)",
-                  padding: "var(--s3) var(--s5)",
-                  background: "var(--bg2)",
-                  borderBottom: "1px solid var(--bd)",
-                  fontSize: ".625rem",
-                  fontWeight: 800,
-                  textTransform: "uppercase",
-                  letterSpacing: ".08em",
-                  color: "var(--t4)"
-                }}>
+                <style>{STAFF_ROW_CSS}</style>
+                {/* Desktop header */}
+                <div className="sr staff-tbl-hdr" style={{ background:"var(--bg2)", borderBottom:"1px solid var(--bd)", fontSize:".625rem", fontWeight:800, textTransform:"uppercase", letterSpacing:".08em", color:"var(--t4)", padding:"var(--s3) var(--s5)" }}>
                   <div>Staff Member</div>
-                  <div style={{ textAlign: "center" }}>User ID</div>
-                  <div style={{ textAlign: "center" }}>{isSuperAdmin ? "Branch" : "Role"}</div>
-                  <div style={{ textAlign: "center" }}>Status</div>
-                  <div style={{ textAlign: "center" }}>Shift</div>
-                  <div style={{ textAlign: "center" }}>On Duty</div>
-                  <div></div>
+                  <div style={{ textAlign:"center" }}>User ID</div>
+                  <div style={{ textAlign:"center" }}>{isSuperAdmin ? "Branch" : "Role"}</div>
+                  <div style={{ textAlign:"center" }}>Status</div>
+                  <div style={{ textAlign:"center" }}>Shift</div>
+                  <div style={{ textAlign:"center" }}>On Duty</div>
+                  <div />
                 </div>
 
                 {filtered.map(member => (
@@ -622,6 +606,7 @@ export default function AdminStaffPage() {
                     isSuperAdmin={isSuperAdmin}
                     onToggle={handleToggle}
                     onDeactivate={setConfirm}
+                    onTerminate={isSuperAdmin ? setTerminate : null}
                     onShiftSave={handleShiftSave}
                     toggling={toggling}
                   />
@@ -639,6 +624,36 @@ export default function AdminStaffPage() {
       </div>
 
       {confirm && <ConfirmModal member={confirm} onConfirm={handleDeactivate} onCancel={() => setConfirm(null)} />}
+
+      {/* Terminate Profile — SuperAdmin only, irreversible */}
+      {terminate && (
+        <div onClick={() => setTerminate(null)} style={{ position:"fixed", inset:0, zIndex:500, background:"rgba(0,0,0,.65)", backdropFilter:"blur(8px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"var(--s4)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:"100%", maxWidth:"400px", background:"var(--bgc)", borderRadius:"var(--r5)", padding:"var(--s6)", boxShadow:"var(--sh-xl)", border:"2px solid rgba(226,75,74,.4)" }}>
+            {/* Icon */}
+            <div style={{ width:52, height:52, borderRadius:"50%", background:"var(--err-t)", border:"2px solid rgba(226,75,74,.3)", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:"var(--s4)" }}>
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="var(--err)" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="3"/></svg>
+            </div>
+            <h3 style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:900, color:"var(--err)", marginBottom:"var(--s2)" }}>
+              Permanently terminate profile?
+            </h3>
+            <p style={{ fontSize:".9375rem", color:"var(--t2)", marginBottom:"var(--s3)", lineHeight:1.6 }}>
+              This will <strong>permanently remove all personal data</strong> for{" "}
+              <strong style={{ color:"var(--t1)" }}>{terminate.name}</strong> ({terminate.user_id_login || terminate.email}).
+            </p>
+            <div style={{ padding:"10px 14px", background:"rgba(226,75,74,.07)", border:"1px solid rgba(226,75,74,.2)", borderRadius:"var(--r3)", marginBottom:"var(--s5)", fontSize:".8125rem", color:"var(--err)", lineHeight:1.55 }}>
+              Their name, email, phone, and login ID will be anonymised. Their orders and work history remain intact.
+              <strong> This action cannot be undone.</strong>
+            </div>
+            <div style={{ display:"flex", gap:"var(--s2)" }}>
+              <button onClick={handleTerminate} className="btn btn-lg" style={{ flex:1, background:"var(--err)", color:"#fff", border:"none" }}>
+                Yes, terminate permanently
+              </button>
+              <button onClick={() => setTerminate(null)} className="btn btn-s btn-lg" style={{ flex:1 }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toast msg={toast} />
     </AppLayout>
   );

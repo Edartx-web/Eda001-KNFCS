@@ -20,19 +20,50 @@ import React, {
 } from "react";
 import { clearAuthTokens } from "../api/axiosClient";
 import {
-  staffLogin  as apiStaffLogin,
-  adminLogin  as apiAdminLogin,
+  staffLogin        as apiStaffLogin,
+  adminLogin        as apiAdminLogin,
   refreshJwt,
+  getPublicBranches,
 } from "../api/auth";
+
+function _haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function _pickNearest(list, lat, lon) {
+  const withCoords = list.filter(b => b.latitude != null && b.longitude != null);
+  if (!withCoords.length) return list[0];
+  return withCoords.reduce((best, b) => {
+    const d  = _haversineKm(lat, lon, Number(b.latitude),    Number(b.longitude));
+    const bd = _haversineKm(lat, lon, Number(best.latitude), Number(best.longitude));
+    return d < bd ? b : best;
+  });
+}
 
 const AuthContext = createContext(null);
 
-const BRANCH_KEY = "knfc_selected_branch";
+const BRANCH_KEY        = "knfc_selected_branch";
+const BRANCHES_CACHE    = "knfc_branches_cache";   // last-known branch list (survives 429s)
+const SUGGESTION_KEY    = "knfc_branch_suggestion_dismissed"; // date when last dismissed
+
+/* Read cached branch list — used as instant fallback when API fails */
+function _cachedBranches() {
+  try { return JSON.parse(localStorage.getItem(BRANCHES_CACHE) || "[]"); } catch { return []; }
+}
+
+/* IP-based geo was removed — external services (ip-api.com etc.) are
+   routinely blocked by ad-blockers (ERR_BLOCKED_BY_CLIENT).
+   Branch selection uses: list[0] instantly → browser GPS suggestion in background. */
 
 export function AuthProvider({ children }) {
-  const [user,           setUser]          = useState(null);
-  const [isLoading,      setLoading]       = useState(true);
-  const [selectedBranch, setSelectedBranch]= useState(null);
+  const [user,            setUser]           = useState(null);
+  const [isLoading,       setLoading]        = useState(true);
+  const [selectedBranch,  setSelectedBranch] = useState(null);
+  const [suggestedBranch, setSuggestedBranch]= useState(null); // nearest ≠ current
 
   /* ── Restore session ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -43,14 +74,56 @@ export function AuthProvider({ children }) {
     if (storedUser && accessToken) {
       try { setUser(JSON.parse(storedUser)); } catch { clearAuthTokens(); }
     }
+
     if (storedBranch) {
       try {
         const branch = JSON.parse(storedBranch);
         setSelectedBranch(branch);
         if (branch?.id) localStorage.setItem("branch_id", branch.id);
-      } catch {}
+        setLoading(false);
+      } catch { setLoading(false); }
+    } else {
+      // No branch stored yet.
+      // Priority: API list → cached list → show picker (last resort)
+      // Branch is ALWAYS set synchronously (list[0]) so the page never waits.
+      // IP-geo and browser-geo run silently in the background.
+
+      const saveBranchFromList = (list) => {
+        if (!list.length) { setLoading(false); return; }
+
+        // ── 1. Set first branch RIGHT NOW — zero waiting, page renders immediately ──
+        const defaultBranch = list[0];
+        setSelectedBranch(defaultBranch);
+        localStorage.setItem(BRANCH_KEY,  JSON.stringify(defaultBranch));
+        localStorage.setItem("branch_id", defaultBranch.id);
+        setLoading(false);   // ← page is live here
+
+        // ── 2. Background browser-GPS (only if multiple branches exist) ──
+        // Non-blocking: asks for location permission AFTER page has loaded.
+        // If a nearer branch is found, the NearestBranchBanner suggests switching.
+        if (list.length <= 1 || !navigator?.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            const nearest = _pickNearest(list, pos.coords.latitude, pos.coords.longitude);
+            if (nearest?.id && nearest.id !== defaultBranch.id) setSuggestedBranch(nearest);
+          },
+          () => { /* denied — default branch is fine */ },
+          { timeout: 5000, maximumAge: 300000 },
+        );
+      };
+
+      getPublicBranches()
+        .then(res => {
+          const list = (res.data?.branches || []).filter(b => b.is_active !== false);
+          if (list.length) localStorage.setItem(BRANCHES_CACHE, JSON.stringify(list));
+          saveBranchFromList(list);
+        })
+        .catch(() => {
+          // API failed (429, network error) — use cached list from previous visit
+          const cached = _cachedBranches().filter(b => b.is_active !== false);
+          saveBranchFromList(cached);  // sets loading=false even when cache is empty
+        });
     }
-    setLoading(false);
   }, []);
 
   /* ── Persist tokens + user ───────────────────────────────────────── */
@@ -63,6 +136,41 @@ export function AuthProvider({ children }) {
       localStorage.setItem("branch_id", userData.branch_id);
     }
     setUser(userData);
+  }, []);
+
+  /* ── Detect nearest branch after customer login (non-blocking) ───── */
+  const _detectNearestAfterLogin = useCallback((currentBranch) => {
+    // Only run for customers; skip if suggestion was already dismissed today
+    const dismissed = localStorage.getItem(SUGGESTION_KEY);
+    const today     = new Date().toISOString().slice(0, 10);
+    if (dismissed === today) return;
+
+    getPublicBranches()
+      .then(res => {
+        const list = (res.data?.branches || []).filter(b => b.is_active !== false);
+        if (!list.length) return;
+
+        const suggest = (branch) => {
+          // Only suggest if it's actually different from the current branch
+          if (!branch || branch.id === currentBranch?.id) return;
+          setSuggestedBranch(branch);
+        };
+
+        if (!navigator?.geolocation) {
+          // No geo — default branch is list[0], no suggestion needed
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            const nearest = _pickNearest(list, pos.coords.latitude, pos.coords.longitude);
+            suggest(nearest);
+          },
+          () => { /* permission denied — don't suggest */ },
+          { timeout: 6000, maximumAge: 300000 },
+        );
+      })
+      .catch(() => {});
   }, []);
 
   /* ── Branch selection (customers) ────────────────────────────────── */
@@ -81,14 +189,28 @@ export function AuthProvider({ children }) {
 
   const clearBranch = useCallback(() => {
     setSelectedBranch(null);
+    setSuggestedBranch(null);
     localStorage.removeItem(BRANCH_KEY);
     localStorage.removeItem("branch_id");
+  }, []);
+
+  const dismissBranchSuggestion = useCallback(() => {
+    setSuggestedBranch(null);
+    localStorage.setItem(SUGGESTION_KEY, new Date().toISOString().slice(0, 10));
   }, []);
 
   /* ── login ───────────────────────────────────────────────────────── */
   const login = useCallback((userData, tokens) => {
     _persist(userData, tokens);
-  }, [_persist]);
+    // For customers: silently check if there's a closer branch after login
+    if (userData.role === "customer") {
+      const currentBranch = (() => {
+        try { return JSON.parse(localStorage.getItem(BRANCH_KEY)); } catch { return null; }
+      })();
+      // Slight delay so UI settles before geolocation prompt
+      setTimeout(() => _detectNearestAfterLogin(currentBranch), 1200);
+    }
+  }, [_persist, _detectNearestAfterLogin]);
 
   /* ── loginWithApi ────────────────────────────────────────────────── */
   const loginWithApi = useCallback(async (role, credentials) => {
@@ -159,6 +281,7 @@ export function AuthProvider({ children }) {
       user, isLoading, isAuthenticated,
       role, isCustomer, isStaff, isBranchAdmin, isSuperAdmin, isAdminOrAbove,
       selectedBranch, selectBranch, clearBranch,
+      suggestedBranch, dismissBranchSuggestion,
       login, loginWithApi, logout, refreshSession,
     }}>
       {children}

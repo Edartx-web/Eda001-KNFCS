@@ -18,11 +18,13 @@
  *   Frontend connects here for real-time QR + status updates.
  */
 
-import makeWASocket, {
+import baileysPkg from "@innovatorssoft/baileys";
+const {
+  default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-} from "@whiskeysockets/baileys";
+} = baileysPkg;
 import { Boom }            from "@hapi/boom";
 import express             from "express";
 import { WebSocketServer, WebSocket } from "ws";

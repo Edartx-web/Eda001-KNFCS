@@ -28,7 +28,7 @@ import {
   adminToggleAvail, adminReplyReview, adminGetReviews, adminToggleReviewVis,
 } from "../../api/menu";
 import { getBranches } from "../../api/auth";
-import { formatPrice } from "../../utils/format";
+import { formatPrice, formatUnit } from "../../utils/format";
 
 /* ── Icon set ─────────────────────────────────────────────────────────── */
 const Ic = {
@@ -1026,11 +1026,14 @@ function ItemsTab({ items, categories, loading, onRefresh, activeBranchId }) {
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize:".75rem", color:"var(--t3)" }}>
+                <div style={{ fontSize:".75rem", color:"var(--t3)", display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
                   {item.avg_rating > 0 && <><Ic.Star />{Number(item.avg_rating).toFixed(1)} · </>}
                   {item.prep_time_display}
-                  {item.is_featured && <span className="badge badge-gold" style={{ marginLeft:"var(--s1)", fontSize:".5625rem" }}>Featured</span>}
-                  {item.is_new && <span className="badge badge-ok" style={{ marginLeft:"4px", fontSize:".5625rem" }}>New</span>}
+                  {formatUnit(item.unit_quantity, item.measurement_unit) && (
+                    <span style={{ color:"var(--t4)", fontWeight:600 }}>· {formatUnit(item.unit_quantity, item.measurement_unit)}</span>
+                  )}
+                  {item.is_featured && <span className="badge badge-gold" style={{ fontSize:".5625rem" }}>Featured</span>}
+                  {item.is_new && <span className="badge badge-ok" style={{ fontSize:".5625rem" }}>New</span>}
                 </div>
               </div>
 
@@ -1040,8 +1043,24 @@ function ItemsTab({ items, categories, loading, onRefresh, activeBranchId }) {
               </div>
 
               {/* Price */}
-              <div style={{ textAlign:"center", fontFamily:"var(--ff-d)", fontWeight:700, color:"var(--brand)", fontSize:".9375rem" }}>
-                {formatPrice(item.price)}
+              <div style={{ textAlign:"center" }}>
+                {item.discount > 0 ? (
+                  <>
+                    <div style={{ fontFamily:"var(--ff-d)", fontWeight:800, color:"var(--brand)", fontSize:".9375rem", lineHeight:1.1 }}>
+                      {formatPrice(item.discounted_price || item.price)}
+                    </div>
+                    <div style={{ fontSize:".6875rem", textDecoration:"line-through", color:"var(--t4)", lineHeight:1.2 }}>
+                      {formatPrice(item.price)}
+                    </div>
+                    <div style={{ fontSize:".5625rem", fontWeight:800, color:"var(--ok)", letterSpacing:".04em" }}>
+                      {item.discount}% OFF
+                    </div>
+                  </>
+                ) : (
+                  <span style={{ fontFamily:"var(--ff-d)", fontWeight:700, color:"var(--brand)", fontSize:".9375rem" }}>
+                    {formatPrice(item.price)}
+                  </span>
+                )}
               </div>
 
               {/* Dietary */}

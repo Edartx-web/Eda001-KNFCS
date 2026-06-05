@@ -1,0 +1,44 @@
+{% extends "emails/_base.html" %}
+{% block body %}
+<h1>Order Confirmed!</h1>
+<p>Hi {{ customer_name }},</p>
+<p>Your order at <strong>{{ branch_name }}</strong> has been placed successfully. Show your token number at the counter.</p>
+
+<div style="text-align:center;margin:28px 0">
+  <div style="display:inline-block;background:linear-gradient(135deg,#E8521A,#C43F0A);color:#fff;border-radius:14px;padding:18px 40px;box-shadow:0 8px 28px rgba(232,82,26,.35)">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:6px">Token Number</div>
+    <div style="font-size:40px;font-weight:900;font-family:'Courier New',monospace;letter-spacing:.04em;line-height:1">{{ token_number }}</div>
+  </div>
+</div>
+
+<div class="info-box">
+  <h2 style="font-size:15px;margin-bottom:14px">Order Summary</h2>
+  {% for item in items %}
+  <div class="kv-row">
+    <span class="kv-label">{{ item.name }} <span style="color:#C0B8B0">× {{ item.quantity }}</span></span>
+    <span class="kv-value">₹{{ item.total }}</span>
+  </div>
+  {% endfor %}
+  {% if discount > 0 %}
+  <div class="kv-row">
+    <span class="kv-label" style="color:#16A34A">Discount</span>
+    <span class="kv-value" style="color:#16A34A">−₹{{ discount }}</span>
+  </div>
+  {% endif %}
+  <div class="kv-row" style="border-bottom:none;margin-top:8px;padding-top:12px;border-top:1px solid #E8E6E0">
+    <span style="font-size:15px;font-weight:800;color:#120B06">Total</span>
+    <span style="font-size:18px;font-weight:900;color:#E8521A">₹{{ total }}</span>
+  </div>
+</div>
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+  <div style="flex:1;min-width:120px;background:#F9F8F6;border:1px solid #E8E6E0;border-radius:10px;padding:14px 16px;text-align:center">
+    <div style="font-size:11px;color:#8C857C;font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Order type</div>
+    <div style="font-weight:700;font-size:14px">{{ order_type|title }}</div>
+  </div>
+  <div style="flex:1;min-width:120px;background:#F9F8F6;border:1px solid #E8E6E0;border-radius:10px;padding:14px 16px;text-align:center">
+    <div style="font-size:11px;color:#8C857C;font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Payment</div>
+    <div style="font-weight:700;font-size:14px">{{ payment_method|title }}</div>
+  </div>
+</div>
+{% endblock %}

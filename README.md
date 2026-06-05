@@ -191,7 +191,7 @@ ingress:
     service: http://localhost:3000
   - hostname: api.knfcs.com
     service: http://localhost:1000
-  - hostname: wa.knfcs.com
+  - hostname: api.knfcs.com
     service: http://localhost:3001
   - service: http_status:404
 ```

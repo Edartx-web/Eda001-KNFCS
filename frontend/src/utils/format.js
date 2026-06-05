@@ -1,8 +1,11 @@
 /**
  * utils/format.js
  */
-export const formatPrice = n =>
-  `₹${Number(n).toLocaleString("en-IN")}`;
+export const formatPrice = n => {
+  const num = Number(n);
+  if (!isFinite(num)) return "₹0";   // guards NaN / Infinity from undefined, null, ""
+  return `₹${num.toLocaleString("en-IN")}`;
+};
 
 export const formatTime = iso => {
   try { return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }); }

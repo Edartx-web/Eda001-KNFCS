@@ -18,6 +18,7 @@ import { formatPrice, formatCountdown } from "../../utils/format";
 import ScratchCoupon from "../../components/common/ScratchCoupon";
 import SpinWheel     from "../../components/common/SpinWheel";
 import useCartStore  from "../../store/cartStore";
+import { useAuth }   from "../../context/AuthContext";
 
 const BID = () => localStorage.getItem("branch_id") || "";
 
@@ -213,6 +214,23 @@ function OfferCard({ offer, index }) {
 }
 
 /* ─── Page ──────────────────────────────────────────────────────────── */
+/* ── per-user scratch-use tracking (localStorage) ──────────────────────── */
+function getScratchUsed(userId, code) {
+  try {
+    const raw = localStorage.getItem(`knfc_sc_${userId}`);
+    if (!raw) return 0;
+    return JSON.parse(raw)[code] || 0;
+  } catch { return 0; }
+}
+function incScratchUsed(userId, code) {
+  try {
+    const raw = localStorage.getItem(`knfc_sc_${userId}`) || "{}";
+    const obj = JSON.parse(raw);
+    obj[code] = (obj[code] || 0) + 1;
+    localStorage.setItem(`knfc_sc_${userId}`, JSON.stringify(obj));
+  } catch {}
+}
+
 export default function OffersPage() {
   const { branchName, branchId, hasBranch } = useBranch();
   const navigate = useNavigate();
@@ -220,18 +238,28 @@ export default function OffersPage() {
   const [offers,  setOffers]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter,    setFilter]   = useState("all");
-  const [showGames, setShowGames]= useState(false);
-  const [gameTab,   setGameTab]  = useState("spin");
-  const [wonPrize,  setWonPrize] = useState(null);
-  const [siteConfig, setSiteConfig] = useState(null);
-  const [spinOpen,   setSpinOpen]   = useState(false);
+  const [wonPrize,    setWonPrize]    = useState(null);
+  const [siteConfig,  setSiteConfig]  = useState(null);
+  const [spinOpen,    setSpinOpen]    = useState(false);
+  const [scratchOpen, setScratchOpen] = useState(false);
+  const [scratchUsedCount, setScratchUsedCount] = useState(0);
   const setSpinDiscount = useCartStore(s => s.setSpinDiscount);
+  const { user } = useAuth();
 
   useEffect(() => {
     axiosClient.get("/branches/config/")
       .then(r => setSiteConfig(r.data.config))
       .catch(() => {});
   }, []);
+
+  /* Sync scratch used count whenever user or siteConfig changes */
+  useEffect(() => {
+    if (!siteConfig?.scratch_enabled) return;
+    const uid  = user?.id || "guest";
+    const code = siteConfig.scratch_coupon_code || "KNFC15";
+    setScratchUsedCount(getScratchUsed(uid, code));
+  }, [user?.id, siteConfig?.scratch_coupon_code, siteConfig?.scratch_enabled]);
+
   const headerRef = useRef(null);
 
   useEffect(() => {
@@ -251,17 +279,24 @@ export default function OffersPage() {
   if (pageLoading) return <KNCLoader visible label="Loading offers…"/>;
 
   const now = Date.now();
-  const filtered = offers.filter(o => {
+  /* Filter out offers already fully claimed by this user */
+  const visibleOffers = offers.filter(o => o.user_can_redeem !== false);
+  const filtered = visibleOffers.filter(o => {
     if (filter === "active")  return !o.end_at || new Date(o.end_at) > now;
     if (filter === "urgent")  return o.end_at && (new Date(o.end_at) - now) < 3600000 && new Date(o.end_at) > now;
     return true;
   });
 
   const FILTERS = [
-    { key:"all",    label:"All offers",    count:offers.length },
-    { key:"active", label:"Active",        count:offers.filter(o => !o.end_at || new Date(o.end_at) > now).length },
-    { key:"urgent", label:"Ending soon", count:offers.filter(o => { if(!o.end_at) return false; const d=(new Date(o.end_at)-now); return d < 3600000 && d > 0; }).length },
+    { key:"all",    label:"All offers",    count:visibleOffers.length },
+    { key:"active", label:"Active",        count:visibleOffers.filter(o => !o.end_at || new Date(o.end_at) > now).length },
+    { key:"urgent", label:"Ending soon",   count:visibleOffers.filter(o => { if(!o.end_at) return false; const d=(new Date(o.end_at)-now); return d < 3600000 && d > 0; }).length },
   ];
+
+  const scratchCode     = siteConfig?.scratch_coupon_code || "KNFC15";
+  const scratchDisc     = (siteConfig?.scratch_discount_pct || 15) + "% OFF";
+  const scratchMaxUses  = siteConfig?.scratch_max_uses || 1;
+  const scratchExhausted = scratchUsedCount >= scratchMaxUses;
 
   return (
     <AppLayout>
@@ -280,6 +315,123 @@ export default function OffersPage() {
         </p>
       </div>
 
+      {/* ── Scratch Card Hero — shown prominently at top ─────────────────── */}
+      {siteConfig?.scratch_enabled && (
+        <div style={{
+          marginBottom: "var(--s8)",
+          borderRadius: "var(--r5)",
+          overflow: "hidden",
+          background: "linear-gradient(135deg,#E8521A 0%,#C03A10 50%,#8A1E00 100%)",
+          boxShadow: "0 8px 32px rgba(232,82,26,.35)",
+          position: "relative",
+        }}>
+          {/* Decorative circles */}
+          <div style={{ position:"absolute", top:"-60px", right:"-60px", width:"220px", height:"220px", borderRadius:"50%", background:"rgba(255,255,255,.06)", pointerEvents:"none" }}/>
+          <div style={{ position:"absolute", bottom:"-40px", left:"-40px", width:"160px", height:"160px", borderRadius:"50%", background:"rgba(0,0,0,.08)", pointerEvents:"none" }}/>
+
+          <div style={{
+            position: "relative",
+            padding: "var(--s6) var(--s7)",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: "var(--s5)", flexWrap: "wrap",
+          }}>
+            <div>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:"var(--s2)" }}>
+                <span style={{ fontSize:"1.6rem", lineHeight:1 }}>🎟</span>
+                <span style={{ fontSize:".6875rem", fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"rgba(255,255,255,.7)" }}>
+                  Instant Reward
+                </span>
+              </div>
+              <div style={{ fontFamily:"var(--ff-d)", fontSize:"clamp(1.35rem,4vw,1.85rem)", fontWeight:900, color:"#fff", letterSpacing:"-.02em", lineHeight:1.1, marginBottom:"var(--s2)" }}>
+                {scratchExhausted ? "You've used your scratch card!" : "Scratch & Win up to"} <span style={{ color:"#FFD700" }}>{scratchExhausted ? "" : scratchDisc}</span>
+              </div>
+              {scratchExhausted ? (
+                <p style={{ fontSize:".875rem", color:"rgba(255,255,255,.65)", lineHeight:1.55 }}>
+                  You've already scratched your card
+                  {scratchMaxUses > 1 ? ` (${scratchUsedCount}/${scratchMaxUses} uses)` : ""}. Check back later for a new offer!
+                </p>
+              ) : (
+                <p style={{ fontSize:".875rem", color:"rgba(255,255,255,.7)", lineHeight:1.55 }}>
+                  Scratch the silver card to reveal your secret coupon code!
+                  {scratchMaxUses > 1 && scratchUsedCount > 0 && (
+                    <span style={{ marginLeft:6, opacity:.8 }}>({scratchUsedCount}/{scratchMaxUses} used)</span>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {scratchExhausted ? (
+              <div style={{
+                padding: "14px 26px", borderRadius: "var(--rf)",
+                background: "rgba(255,255,255,.15)",
+                border: "2px solid rgba(255,255,255,.3)",
+                color: "rgba(255,255,255,.7)",
+                fontWeight: 800, fontSize: ".9375rem",
+                display: "flex", alignItems: "center", gap: 8,
+                flexShrink: 0,
+              }}>
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg>
+                Already Claimed
+              </div>
+            ) : (
+              <button
+                onClick={() => setScratchOpen(true)}
+                style={{
+                  padding: "16px 34px", borderRadius: "var(--rf)",
+                  border: "none",
+                  background: "rgba(255,255,255,.95)",
+                  color: "#E8521A",
+                  fontWeight: 900, fontSize: "1rem", cursor: "pointer",
+                  fontFamily: "var(--ff-b)", letterSpacing: ".02em",
+                  display: "flex", alignItems: "center", gap: 10,
+                  boxShadow: "0 6px 24px rgba(0,0,0,.25)",
+                  transition: "transform .2s, box-shadow .2s",
+                  flexShrink: 0,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform="scale(1.04)"; e.currentTarget.style.boxShadow="0 10px 32px rgba(0,0,0,.32)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform="scale(1)"; e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,.25)"; }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 10v4M10 12h4"/>
+                </svg>
+                Scratch Your Card
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Spin Wheel row (if enabled) ──────────────────────────────────── */}
+      {siteConfig?.spin_enabled && (
+        <div style={{
+          marginBottom: "var(--s6)",
+          padding: "var(--s4) var(--s5)",
+          borderRadius: "var(--r4)",
+          background: "linear-gradient(135deg,rgba(232,82,26,.07),rgba(232,82,26,.03))",
+          border: "1px solid rgba(232,82,26,.2)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s4)", flexWrap: "wrap",
+        }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:".9375rem", color:"var(--t1)", display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:"1.2rem" }}>🎡</span> Spin the Wheel
+            </div>
+            <div style={{ fontSize:".8125rem", color:"var(--t2)", marginTop:2 }}>Spin for a chance to win an instant discount!</div>
+          </div>
+          <button onClick={() => setSpinOpen(true)} style={{
+            padding:"10px 22px", borderRadius:"var(--rf)",
+            border:"none",
+            background:"linear-gradient(135deg,#ff8c5a 0%,#E8521A 100%)",
+            color:"#fff", fontWeight:800, fontSize:".9375rem",
+            cursor:"pointer", fontFamily:"var(--ff-b)",
+            boxShadow:"0 4px 16px rgba(232,82,26,.45)",
+            flexShrink:0, transition:"transform .2s",
+          }}
+            onMouseEnter={e=>e.currentTarget.style.transform="scale(1.04)"}
+            onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+            Launch Spin Wheel
+          </button>
+        </div>
+      )}
+
       {/* Filter pills */}
       <div style={{ display:"flex", gap:"var(--s2)", marginBottom:"var(--s6)", flexWrap:"wrap" }}>
         {FILTERS.map(f => (
@@ -291,66 +443,7 @@ export default function OffersPage() {
         ))}
       </div>
 
-      {/* Lucky Games — only shown when spin or scratch is enabled in SiteConfig */}
-      {(siteConfig?.spin_enabled || siteConfig?.scratch_enabled) && (
-      <div style={{ marginBottom:"var(--s8)", background:"linear-gradient(135deg,rgba(232,82,26,.06),rgba(37,99,235,.04))", border:"1px solid var(--bd)", borderRadius:"var(--r5)", overflow:"hidden" }}>
-        {/* Section header */}
-        <div style={{ padding:"var(--s4) var(--s5)", borderBottom:"1px solid var(--bd)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div>
-            <div style={{ fontWeight:800, fontSize:"1.0625rem", color:"var(--t1)" }}>Lucky Games</div>
-            <div style={{ fontSize:".8125rem", color:"var(--t2)", marginTop:"2px" }}>Spin the wheel or scratch a card for an instant discount!</div>
-          </div>
-          <button onClick={() => setShowGames(g => !g)}
-            style={{ padding:"7px 14px", borderRadius:"var(--r2)", border:"1px solid var(--bd)", background:"var(--bg2)", color:"var(--t2)", fontSize:".8125rem", fontWeight:600, cursor:"pointer", fontFamily:"var(--ff-b)" }}>
-            {showGames ? "Hide" : "Play now"}
-          </button>
-        </div>
-
-        {showGames && (
-          <div style={{ padding:"var(--s6) var(--s5)" }}>
-            {/* Game tab switcher */}
-            <div style={{ display:"flex", gap:"var(--s2)", marginBottom:"var(--s6)", justifyContent:"center" }}>
-              {[
-                siteConfig?.spin_enabled    && ["spin",    "Spin Wheel"],
-                siteConfig?.scratch_enabled && ["scratch", "Scratch Card"],
-              ].filter(Boolean).map(([k,l]) => (
-                <button key={k} onClick={() => setGameTab(k)}
-                  style={{ padding:"9px 20px", borderRadius:"var(--rf)", border:`1.5px solid ${gameTab===k?"var(--brand)":"var(--bd)"}`, background:gameTab===k?"var(--brand-tint)":"var(--bg2)", color:gameTab===k?"var(--brand)":"var(--t2)", fontWeight:gameTab===k?700:500, fontSize:".875rem", cursor:"pointer", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)" }}>
-                  {l}
-                </button>
-              ))}
-            </div>
-
-            {/* Game area */}
-            <div style={{ display:"flex", justifyContent:"center" }}>
-              {gameTab === "spin" && siteConfig?.spin_enabled ? (
-                <button onClick={() => setSpinOpen(true)} style={{
-                  padding:"20px 52px", borderRadius:40, border:"none",
-                  background:"linear-gradient(135deg,#ff8c5a,#E8521A)",
-                  color:"#fff", fontWeight:900, fontSize:"1.125rem",
-                  cursor:"pointer", fontFamily:"system-ui,sans-serif",
-                  boxShadow:"0 8px 28px rgba(232,82,26,.5)",
-                  letterSpacing:".04em",
-                  display:"flex", alignItems:"center", gap:12,
-                  transition:"transform .2s, box-shadow .2s",
-                }}>
-                  🎡 Launch Spin Wheel
-                </button>
-              ) : gameTab === "scratch" && siteConfig?.scratch_enabled ? (
-                <ScratchCoupon
-                  code={siteConfig.scratch_coupon_code || "KNFC15"}
-                  discount={(siteConfig.scratch_discount_pct || 15) + "% OFF"}
-                  onRevealed={code => {
-                    import("../../components/common/NotificationSystem").then(m => m.notify("Coupon revealed! Use code " + code, "success"));
-                  }}/>
-              ) : null}
-            </div>
-          </div>
-        )}
-      </div>
-      )}
-
-      {/* Grid */}
+      {/* Offer grid */}
       {loading ? (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:"var(--s5)" }}>
           {[1,2,3].map(i => <div key={i} className="skel" style={{ height:"320px", borderRadius:"var(--r5)" }}/>)}
@@ -374,7 +467,8 @@ export default function OffersPage() {
           {filtered.map((offer, i) => <OfferCard key={offer.id} offer={offer} index={i}/>)}
         </div>
       )}
-      {/* Fullscreen SpinWheel overlay */}
+
+      {/* Spin Wheel overlay */}
       {siteConfig?.spin_enabled && (
         <SpinWheel
           open={spinOpen}
@@ -387,6 +481,24 @@ export default function OffersPage() {
               setWonPrize(prize.label);
               import("../../components/common/NotificationSystem").then(m => m.notify("You won: " + prize.label + "!", "success"));
             }
+          }}
+        />
+      )}
+
+      {/* Scratch Card overlay */}
+      {siteConfig?.scratch_enabled && !scratchExhausted && (
+        <ScratchCoupon
+          open={scratchOpen}
+          onClose={() => setScratchOpen(false)}
+          code={scratchCode}
+          discount={scratchDisc}
+          onRevealed={code => {
+            const uid = user?.id || "guest";
+            incScratchUsed(uid, code);
+            setScratchUsedCount(c => c + 1);
+            import("../../components/common/NotificationSystem").then(m =>
+              m.notify("Coupon revealed! Use code " + code + " at checkout.", "success")
+            );
           }}
         />
       )}

@@ -8,14 +8,9 @@ const determineBaseUrl = () => {
   if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
   if (typeof window !== "undefined") {
     const hostname = window.location.hostname;
-    // If accessing via knfcs.com domain
-    if (hostname.endsWith("knfcs.com")) {
-      return "https://api.knfcs.com/api/v1";
-    }
-    // If accessing via local IP (e.g. 192.168.x.x)
-    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+    if (hostname.endsWith("knfcs.com")) return "https://api.knfcs.com/api/v1";
+    if (hostname !== "localhost" && hostname !== "127.0.0.1")
       return `http://${hostname}:1000/api/v1`;
-    }
   }
   return "http://localhost:1000/api/v1";
 };
