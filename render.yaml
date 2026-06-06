@@ -1,0 +1,150 @@
+# Render Blueprint — KNFC Backend
+# Deploys: Django (Daphne ASGI) + PostgreSQL + Redis + Celery Worker
+#
+# First deploy:
+#   1. Push this file to GitHub
+#   2. Render Dashboard → New → Blueprint → connect repo
+#   3. Fill in the secret env vars flagged with sync: false
+#   4. Click Apply
+
+databases:
+  - name: knfc-db
+    databaseName: knfc
+    user: knfc
+    plan: free          # upgrade to starter ($7/mo) for persistent storage
+
+services:
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  - type: redis
+    name: knfc-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+  # ── Django ASGI Web Service ───────────────────────────────────────────────────
+  - type: web
+    name: knfc-backend
+    runtime: python
+    plan: starter       # free tier sleeps after 15 min — bad for a POS; use starter
+    buildCommand: "./build.sh"
+    startCommand: "daphne -b 0.0.0.0 -p $PORT config.asgi:application"
+    healthCheckPath: /api/v1/branches/
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+
+      - key: SECRET_KEY
+        generateValue: true
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: knfc-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: knfc-redis
+          property: connectionString
+
+      - key: BACKEND_URL
+        value: https://knfc-backend.onrender.com   # update after first deploy
+
+      - key: ALLOWED_HOSTS
+        value: knfc-backend.onrender.com,api.knfcs.com,knfcs.com,www.knfcs.com
+
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://knfcs.com,https://www.knfcs.com
+
+      - key: DB_SSL_REQUIRE
+        value: "True"
+
+      - key: WHATSAPP_SERVICE_URL
+        value: https://wa.knfcs.com
+
+      - key: WHATSAPP_INTERNAL_KEY
+        sync: false   # set manually in Render dashboard
+
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+
+      - key: EMAIL_PORT
+        value: "587"
+
+      - key: EMAIL_HOST_USER
+        sync: false   # set manually — your Gmail address
+
+      - key: EMAIL_HOST_PASSWORD
+        sync: false   # set manually — Gmail App Password
+
+      - key: DEFAULT_FROM_EMAIL
+        sync: false   # set manually — same as EMAIL_HOST_USER
+
+      - key: SUPPORT_EMAIL_USER
+        sync: false   # set manually
+
+      - key: SUPPORT_EMAIL_PASSWORD
+        sync: false   # set manually
+
+      - key: OTP_BYPASS
+        value: "False"
+
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+  # ── Celery Worker ─────────────────────────────────────────────────────────────
+  - type: worker
+    name: knfc-celery
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A config worker -l info --concurrency=2"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SECRET_KEY
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: knfc-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: knfc-redis
+          property: connectionString
+
+      - key: WHATSAPP_SERVICE_URL
+        value: https://wa.knfcs.com
+
+      - key: WHATSAPP_INTERNAL_KEY
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: WHATSAPP_INTERNAL_KEY
+
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+
+      - key: EMAIL_PORT
+        value: "587"
+
+      - key: EMAIL_HOST_USER
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: EMAIL_HOST_USER
+
+      - key: EMAIL_HOST_PASSWORD
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: EMAIL_HOST_PASSWORD
+
+      - key: PYTHON_VERSION
+        value: "3.11.0"

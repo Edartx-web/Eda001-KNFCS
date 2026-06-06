@@ -18,6 +18,7 @@ Required environment variables (.env):
   DB_SSL_REQUIRE        — set to True only if your PostgreSQL server has SSL (default: False)
   SENTRY_DSN            — optional, for error monitoring
 """
+import dj_database_url
 from .base import *
 
 # Optional: Sentry error monitoring (pip install sentry-sdk to enable)
@@ -37,6 +38,7 @@ _allowed_extra = config(
 )
 ALLOWED_HOSTS = list({
     "knfcs.com", "www.knfcs.com", "api.knfcs.com", "wa.knfcs.com",
+    ".onrender.com",   # Render deployment URLs (*.onrender.com)
     "localhost", "127.0.0.1",
     *_allowed_extra,
 })
@@ -59,22 +61,31 @@ CSRF_COOKIE_SECURE             = True
 X_FRAME_OPTIONS                = "DENY"
 
 # ── Database ──────────────────────────────────────────────────────────────────
-# DB_SSL_REQUIRE=True only if your PostgreSQL is configured with SSL certificates.
-# Leave as False (default) for a local PostgreSQL with no SSL.
+# Render provides DATABASE_URL; fallback to individual vars for self-hosted.
 _db_ssl = config("DB_SSL_REQUIRE", default=False, cast=bool)
+_database_url = config("DATABASE_URL", default="")
 
-DATABASES = {
-    "default": {
-        "ENGINE":      "django.db.backends.postgresql",
-        "NAME":        config("DB_NAME"),
-        "USER":        config("DB_USER"),
-        "PASSWORD":    config("DB_PASSWORD"),
-        "HOST":        config("DB_HOST"),
-        "PORT":        config("DB_PORT", default="5432"),
-        "CONN_MAX_AGE": 60,
-        **({"OPTIONS": {"sslmode": "require"}} if _db_ssl else {}),
+if _database_url:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            _database_url,
+            conn_max_age=60,
+            ssl_require=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE":      "django.db.backends.postgresql",
+            "NAME":        config("DB_NAME"),
+            "USER":        config("DB_USER"),
+            "PASSWORD":    config("DB_PASSWORD"),
+            "HOST":        config("DB_HOST"),
+            "PORT":        config("DB_PORT", default="5432"),
+            "CONN_MAX_AGE": 60,
+            **({"OPTIONS": {"sslmode": "require"}} if _db_ssl else {}),
+        }
+    }
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Production URLs:
