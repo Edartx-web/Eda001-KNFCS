@@ -70,8 +70,8 @@ whatsapp-service/sessions/
 whatsapp-service/auth_info_*/
 whatsapp-service/*.log
 
-# ── Large binary assets (use external storage / Git LFS) ──────────
-frontend/src/components/videoclips/*.mp4
+# ── Large binary assets — tracked via Git LFS (see .gitattributes) ──
+# frontend/src/components/videoclips/*.mp4  ← now handled by LFS
 frontend/src/components/videoclips/*.webm
 frontend/public/assets/video/
 
