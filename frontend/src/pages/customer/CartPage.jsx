@@ -22,6 +22,7 @@ import useBranch from "../../hooks/useBranch";
 import BranchSelector from "../../components/common/BranchSelector";
 import { formatPrice, formatUnit } from "../../utils/format";
 import useCartStore from "../../store/cartStore";
+import usePageProtection from "../../hooks/usePageProtection";
 /* ─── CouponInput — type a code, get an offer applied ────────────────── */
 
 function CouponInput({ onApply }) {
@@ -382,6 +383,8 @@ function EmptyCart({ navigate }) {
 
 /* ─── Main page ─────────────────────────────────────────────────────── */
 export default function CartPage() {
+  usePageProtection();   // block copy/screenshot/print on checkout page
+
   const navigate       = useNavigate();
   const { loading: pageLoading } = usePageLoader(700);
 

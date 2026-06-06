@@ -3,6 +3,7 @@ from rest_framework             import status
 from rest_framework.views       import APIView
 from rest_framework.response    import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.core.cache          import cache
 
 from apps.branches.models      import Branch, BranchTable
 from apps.branches.serializers import BranchSerializer, BranchCreateSerializer, BranchTableSerializer
@@ -286,6 +287,13 @@ class BranchOperatingHoursView(APIView):
     def get(self, request, pk):
         # Customers can read hours (to show open/closed status on cart)
         # Admins can also read. No auth required for GET.
+        cache_key = f"branches:hours:{pk}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            resp = ok(cached)
+            resp["Cache-Control"] = "public, max-age=60, stale-while-revalidate=10"
+            return resp
+
         try:
             branch = Branch.objects.get(pk=pk)
         except Branch.DoesNotExist:
@@ -301,12 +309,12 @@ class BranchOperatingHoursView(APIView):
             "pickup_upi_only":   branch.pickup_upi_only,
             "upi_id":            branch.upi_id or "",
         }
-        # Include payment QR URL if UPI ID is set
         if branch.upi_id:
-            payload["payment_qr_url"] = (
-                f"/api/v1/branches/{branch.id}/payment-qr/"
-            )
-        return ok(payload)
+            payload["payment_qr_url"] = f"/api/v1/branches/{branch.id}/payment-qr/"
+        cache.set(cache_key, payload, 60)
+        resp = ok(payload)
+        resp["Cache-Control"] = "public, max-age=60, stale-while-revalidate=10"
+        return resp
 
     def patch(self, request, pk):
         branch = self._get(pk, request)
@@ -325,6 +333,7 @@ class BranchOperatingHoursView(APIView):
 
         branch.operating_hours = hours
         branch.save(update_fields=["operating_hours"])
+        cache.delete(f"branches:hours:{pk}")
 
         return ok({
             "operating_hours": hours,

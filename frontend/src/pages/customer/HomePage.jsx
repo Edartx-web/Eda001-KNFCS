@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback, memo } from "react";
+import useSEO from "../../hooks/useSEO";
 import { Link, useNavigate }           from "react-router-dom";
 import { gsap }                        from "gsap";
 import AppLayout                       from "../../components/layout/AppLayout";
@@ -15,7 +16,7 @@ import { useAuth }                     from "../../context/AuthContext";
 import useBranch                       from "../../hooks/useBranch";
 import useCartStore                    from "../../store/cartStore";
 import { getOffers }                   from "../../api/orders";
-import { getCategories, getFeatured, getFavourites, getItems } from "../../api/menu";
+import { getCategories, getFeatured, getFavourites, getHomeSections } from "../../api/menu";
 import GoogleReviewBanner from "../../components/common/GoogleReviewBanner";
 import BranchSelector     from "../../components/common/BranchSelector";
 import { formatPrice, formatUnit }     from "../../utils/format";
@@ -74,9 +75,11 @@ function HeroCarousel({ offers }) {
 
   const goTo = useCallback(i => {
     if (!trackRef.current) return;
-    gsap.to(trackRef.current, { x:`-${i*100}%`, duration:.5, ease:"power2.inOut" });
+    // x percentage is relative to the track's own width (= total × container).
+    // Moving one slide = (100/total)% of the track = exactly 1 container width.
+    gsap.to(trackRef.current, { x:`-${i * (100 / total)}%`, duration:.5, ease:"power2.inOut" });
     setCur(i);
-  }, []);
+  }, [total]);
 
   useEffect(() => {
     if (paused || total <= 1) return;
@@ -95,9 +98,7 @@ function HeroCarousel({ offers }) {
     <div style={{
       position:"relative", width:"100%", height:"100%", overflow:"hidden",
       isolation:"isolate",
-      background: curHasMedia
-        ? `linear-gradient(135deg,${curOffer?.gradient_from||"#1A0500"},${curOffer?.gradient_to||"#3D1200"})`
-        : "linear-gradient(145deg,#5A0E00 0%,#A02000 40%,#D64010 70%,#E8521A 100%)",
+      background:"linear-gradient(145deg,#5A0E00 0%,#A02000 40%,#D64010 70%,#E8521A 100%)",
       transition:"background .45s ease",
     }}
       onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
@@ -108,16 +109,14 @@ function HeroCarousel({ offers }) {
         touchX.current = null;
       }}>
 
-      {/* No-media vivid glow — behind the track */}
-      {!curHasMedia && <>
-        <div style={{ position:"absolute", inset:0, pointerEvents:"none",
-          background:"radial-gradient(ellipse 85% 80% at 72% 40%, rgba(255,115,30,.95) 0%, rgba(232,82,26,.55) 42%, transparent 68%)" }}/>
-        <div style={{ position:"absolute", inset:0, pointerEvents:"none",
-          background:"radial-gradient(ellipse 60% 70% at 18% 62%, rgba(245,166,35,.6) 0%, transparent 70%)" }}/>
-      </>}
+      {/* Vivid orange glow — always visible, dims under media */}
+      <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:0,
+        background:"radial-gradient(ellipse 85% 80% at 72% 40%, rgba(255,115,30,.95) 0%, rgba(232,82,26,.55) 42%, transparent 68%)" }}/>
+      <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:0,
+        background:"radial-gradient(ellipse 60% 70% at 18% 62%, rgba(245,166,35,.6) 0%, transparent 70%)" }}/>
 
       {/* Animated slide track */}
-      <div ref={trackRef} style={{ display:"flex", height:"100%", width:`${total*100}%`, willChange:"transform" }}>
+      <div ref={trackRef} style={{ display:"flex", height:"100%", width:`${total*100}%`, willChange:"transform", position:"relative", zIndex:1 }}>
         {offers.map((o, i) => (
           <HeroSlide key={o.id} offer={o} active={i===cur} paused={paused}
             onPause={()=>setPaused(v=>!v)} width={`${100/total}%`}/>
@@ -158,12 +157,13 @@ function _mediaAbs(path) {
 }
 
 function HeroSlide({ offer, active, paused, onPause, width }) {
-  const videoRef   = useRef(null);
-  const [imgError, setImgError] = useState(false);
+  const videoRef    = useRef(null);
+  const [imgError,  setImgError]  = useState(false);
+  const [vidError,  setVidError]  = useState(false);
 
   const videoSrc  = offer.video_url  || _mediaAbs(offer.video);
   const posterSrc = offer.thumbnail_url || _mediaAbs(offer.video_thumbnail) || "";
-  const hasVideo  = !!videoSrc;
+  const hasVideo  = !!videoSrc && !vidError;
   const rawImg    = offer.image_url || _mediaAbs(offer.image);
   const imageUrl  = (!imgError && rawImg) ? rawImg : "";
 
@@ -180,15 +180,16 @@ function HeroSlide({ offer, active, paused, onPause, width }) {
     <div style={{ width, flexShrink:0, height:"100%", position:"relative", cursor: hasVideo ? "pointer" : "default" }}
       onClick={hasVideo ? onPause : undefined}>
 
-      {/* Video — highest priority */}
-      {hasVideo && (
-        <video ref={videoRef} src={videoSrc} poster={posterSrc}
+      {/* Video — highest priority; falls back to image on error */}
+      {!!videoSrc && !vidError && (
+        <video ref={videoRef} src={videoSrc} poster={posterSrc || imageUrl}
           muted loop playsInline
+          onError={() => setVidError(true)}
           style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}/>
       )}
 
-      {/* Image — only when no video */}
-      {!hasVideo && imageUrl && (
+      {/* Image — shows when no video, OR when video failed to load */}
+      {(!videoSrc || vidError) && imageUrl && (
         <img loading="eager" src={imageUrl} alt={offer.name}
           onError={() => setImgError(true)}
           style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}/>
@@ -303,19 +304,8 @@ function OfferStripCard({ offer: o }) {
       {/* Gradient overlay */}
       <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.18) 60%,transparent 100%)" }}/>
 
-      {/* Video badge */}
-      {hasVideo && (
-        <div style={{ position:"absolute", top:"var(--s3)", right:"var(--s3)", display:"flex", alignItems:"center", gap:4, padding:"3px 8px", background:"rgba(0,0,0,.6)", backdropFilter:"blur(6px)", borderRadius:"var(--rf)", border:"1px solid rgba(255,255,255,.15)" }}>
-          <Ic.Play/>
-          <span style={{ fontSize:".6rem", fontWeight:800, color:"#fff", letterSpacing:".06em", textTransform:"uppercase" }}>Video</span>
-        </div>
-      )}
-
       {/* Content */}
-      <div style={{ position:"relative", padding:"var(--s4)", height:"100%", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
-        <div style={{ width:"34px", height:"34px", borderRadius:"var(--r2)", background:"rgba(232,82,26,.18)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--brand)" }}>
-          <Ic.Fire/>
-        </div>
+      <div style={{ position:"relative", padding:"var(--s4)", height:"100%", display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
         <div>
           <span style={{ fontSize:".625rem", fontWeight:800, background:"var(--gold)", color:"#000", padding:"2px 8px", borderRadius:"var(--rf)", letterSpacing:".06em" }}>{disc}</span>
           <div style={{ fontFamily:"var(--ff-d)", fontSize:"1rem", fontWeight:800, color:"#fff", marginTop:"var(--s2)", lineHeight:1.2 }}>{o.name}</div>
@@ -634,6 +624,11 @@ function HomeSkeleton() {
    MAIN PAGE
 ══════════════════════════════════════════════════════════════════════ */
 export default function HomePage() {
+  useSEO({
+    title: "Order Fried Chicken Online",
+    description: "KNFC Fried Chicken — fresh, crispy chicken delivered hot. Order online for delivery, takeaway or dine-in. Best fried chicken in India.",
+  });
+
   const { user }       = useAuth();
   const { branchName, branchId, authLoading, selectBranch } = useBranch();
   const cartCount      = useCartStore(s => s.items.reduce((a,i)=>a+i.quantity,0));
@@ -658,40 +653,35 @@ export default function HomePage() {
     setLoading(true);
     (async () => {
       try {
-        const [oR,cR,fR] = await Promise.all([
+        const {default:ax} = await import("../../api/axiosClient");
+        // One batch: offers + categories + featured + home sections + hours + config
+        const [oR, cR, fR, secR, hoursR] = await Promise.all([
           getOffers().catch(()=>({data:{offers:[]}})),
           getCategories().catch(()=>({data:{categories:[]}})),
           getFeatured().catch(()=>({data:{featured:[],order_again:[]}})),
+          getHomeSections().catch(()=>({data:{sections:{}}})),
+          ax.get(`/branches/${branchId}/hours/`).catch(()=>null),
         ]);
         setOffers(oR.data.offers||[]);
         setCategories(cR.data.categories||[]);
         setFeatured(fR.data.featured||[]);
         setOrderAgain(fR.data.order_again||[]);
+        setSectionItems(secR.data.sections||{});
+        if (hoursR?.data?.success) {
+          setShopOpen(hoursR.data.is_open_now??true);
+          setNextOpenAt(hoursR.data.next_open_at||null);
+        } else {
+          setShopOpen(true);
+        }
         if (user) {
           const fav = await getFavourites().catch(()=>({data:{favourites:[]}}));
           setFavourites(fav.data.favourites||[]);
         }
         try { const s=localStorage.getItem("active_order"); if(s){const parsed=JSON.parse(s); if(!parsed._uid||parsed._uid===user?.id) setActiveOrder(parsed);} } catch {}
-        const flags = ["is_hotdeals","is_buckets","is_combo","is_chicken","is_snacks","is_cold_drinks"];
-        const sec = {};
-        await Promise.all(flags.map(async f => {
-          try { const r=await getItems({[f]:"true",page_size:10}); if((r.data.items||[]).length>0) sec[f]=r.data.items; } catch {}
-        }));
-        setSectionItems(sec);
-        try { const {default:ax}=await import("../../api/axiosClient"); const cfg=await ax.get("/branches/config/"); setSiteConfig(cfg.data); } catch {}
+        try { const cfg=await ax.get("/branches/config/"); setSiteConfig(cfg.data); } catch {}
       } finally { setLoading(false); }
     })();
   }, [user, branchId]);
-
-  useEffect(() => {
-    const bid = localStorage.getItem("branch_id");
-    if (!bid) return;
-    import("../../api/axiosClient").then(({default:ax}) => {
-      ax.get(`/branches/${bid}/hours/`)
-        .then(r => { if(r.data.success){setShopOpen(r.data.is_open_now??true);setNextOpenAt(r.data.next_open_at||null);} })
-        .catch(()=>setShopOpen(true));
-    });
-  }, []);
 
   useEffect(() => {
     if (loading||!pageRef.current) return;

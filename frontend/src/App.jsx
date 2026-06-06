@@ -281,8 +281,37 @@ const PA = ({ roles, C }) => (
 );
 
 /* ══════════════════════════════════════════════════════════════════════
-   APP
+   GLOBAL ZOOM BLOCK
+   Blocks Ctrl+/-, Ctrl+0, Ctrl+scroll on all desktop browsers.
+   Touch pinch-zoom is blocked via CSS touch-action + viewport meta.
 ══════════════════════════════════════════════════════════════════════ */
+function ZoomBlocker() {
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        // +  =  -  0  all trigger browser zoom
+        if (["+", "=", "-", "_", "0"].includes(e.key)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+    const onWheel = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    // passive:false required to call preventDefault on wheel
+    window.addEventListener("keydown",  onKey,   { capture: true });
+    window.addEventListener("wheel",    onWheel, { passive: false, capture: true });
+    return () => {
+      window.removeEventListener("keydown",  onKey,   { capture: true });
+      window.removeEventListener("wheel",    onWheel, { capture: true });
+    };
+  }, []);
+  return null;
+}
+
 /* ── Root overlays rendered outside page transitions ─────────────────── */
 function RootOverlays() {
   const { user }   = useAuth();
@@ -304,6 +333,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ZoomBlocker />
         <NotificationProvider />
         <Routes>
 

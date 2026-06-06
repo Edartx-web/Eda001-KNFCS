@@ -8,6 +8,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "../../components/layout/AppLayout";
 import axiosClient from "../../api/axiosClient";
 import { formatPrice } from "../../utils/format";
+import usePageProtection from "../../hooks/usePageProtection";
 
 const TIMEOUT_SECONDS = 300;
 
@@ -195,6 +196,8 @@ function AnimatedCountdown({ secsLeft, total }) {
 
 /* ══ Main page ══════════════════════════════════════════════════════════ */
 export default function AwaitingPaymentPage() {
+  usePageProtection();   // block copy/screenshot/print on payment page
+
   const { orderId } = useParams();
   const navigate    = useNavigate();
 

@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Q
+from django.core.cache import cache
 
 from apps.menu.models import MenuCategory, MenuItem, ItemReview
 from apps.favourites.models import Favourite
@@ -37,6 +38,12 @@ def ok(data, code=status.HTTP_200_OK):
 def err(msg, code=status.HTTP_400_BAD_REQUEST):
     return Response({"success": False, "error": msg}, status=code)
 
+def cached_ok(data, cache_key, ttl=60):
+    """Return ok() response with Cache-Control header for Cloudflare edge caching."""
+    resp = ok(data)
+    resp["Cache-Control"] = f"public, max-age={ttl}, stale-while-revalidate=10"
+    return resp
+
 
 class CategoryListView(APIView):
     """GET /api/v1/menu/categories/ — all active categories for the branch."""
@@ -47,14 +54,20 @@ class CategoryListView(APIView):
         if not branch_id:
             return err("branch_id is required.")
 
+        cache_key = f"menu:categories:{branch_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached_ok({"categories": cached}, cache_key)
+
         from django.db.models import Q
         categories = MenuCategory.objects.filter(
             Q(branch_id=branch_id) | Q(all_branches=True),
             is_active=True,
         ).prefetch_related("items")
 
-        serializer = MenuCategoryListSerializer(categories, many=True, context={"request": request})
-        return ok({"categories": serializer.data})
+        data = MenuCategoryListSerializer(categories, many=True, context={"request": request}).data
+        cache.set(cache_key, data, 120)
+        return cached_ok({"categories": data}, cache_key, ttl=120)
 
 
 class CategoryDetailView(APIView):
@@ -146,6 +159,50 @@ class MenuItemListView(APIView):
             "items":       serializer.data,
             "total_count": qs.count(),
         })
+
+
+class HomeSectionsView(APIView):
+    """
+    GET /api/v1/menu/home-sections/
+    Returns all 6 home-page flag sections in a single request so the customer
+    home page doesn't fire 6 parallel /items/ calls (which triggers rate limits).
+    Response: { sections: { is_hotdeals: [...], is_buckets: [...], ... } }
+    """
+    permission_classes = [AllowAny]
+    SECTION_FLAGS = ["is_hotdeals", "is_buckets", "is_combo", "is_chicken", "is_snacks", "is_cold_drinks"]
+    PAGE_SIZE = 10
+
+    def get(self, request):
+        branch_id = request.query_params.get("branch_id") or get_request_branch_id(request)
+        if not branch_id:
+            return err("branch_id is required.")
+
+        base_qs = MenuItem.objects.filter(
+            Q(branch_id=branch_id) | Q(all_branches=True),
+            is_available=True,
+        ).select_related("category").prefetch_related("offers", "stock_records")
+
+        # Deduplicate branch-specific vs all_branches items (same as MenuItemListView)
+        branch_item_names = list(
+            MenuItem.objects.filter(branch_id=branch_id, all_branches=False)
+            .values_list("name", flat=True)
+        )
+        if branch_item_names:
+            base_qs = base_qs.exclude(all_branches=True, name__in=branch_item_names)
+
+        cache_key = f"menu:home_sections:{branch_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached_ok({"sections": cached}, cache_key)
+
+        sections = {}
+        for flag in self.SECTION_FLAGS:
+            items = list(base_qs.filter(**{flag: True}).order_by("display_order")[: self.PAGE_SIZE])
+            if items:
+                sections[flag] = MenuItemListSerializer(items, many=True, context={"request": request}).data
+
+        cache.set(cache_key, sections, 60)
+        return cached_ok({"sections": sections}, cache_key)
 
 
 class MenuItemDetailView(APIView):

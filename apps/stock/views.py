@@ -924,6 +924,106 @@ class StockFullResetView(APIView):
         })
 
 
+class StockBulkSetView(APIView):
+    """
+    POST /api/v1/stock/bulk-set/
+    { quantity: int, branch_id?: UUID }
+
+    Instantly set ALL menu items in the branch to the given quantity
+    as today's opening stock. Overwrites any existing record for today.
+    Creates one audit log entry per item.
+    Admin or above only.
+    """
+    permission_classes = [IsAdminOrAbove]
+
+    def post(self, request):
+        from apps.menu.models import MenuItem
+
+        branch_id = request.data.get("branch_id") or get_request_branch_id(request)
+        try:
+            quantity = int(request.data.get("quantity", 0))
+        except (TypeError, ValueError):
+            return err("quantity must be a positive integer.")
+
+        if quantity <= 0:
+            return err("quantity must be greater than 0.")
+        if quantity > 9999:
+            return err("quantity cannot exceed 9999.")
+
+        today = timezone.localdate()
+
+        from apps.stock.models import StockDailyLock
+        if StockDailyLock.objects.filter(branch_id=branch_id, date=today).exists():
+            return err("Today's stock is locked. Unlock it before bulk-setting.")
+
+        items = MenuItem.objects.filter(branch_id=branch_id, is_available=True)
+        if not items.exists():
+            return err("No available menu items found for this branch.")
+
+        updated = created_count = 0
+
+        for item in items:
+            record, created = StockRecord.objects.get_or_create(
+                branch_id=branch_id,
+                menu_item=item,
+                date=today,
+                defaults={
+                    "yesterday_remaining": 0,
+                    "new_stock_added":     quantity,
+                    "today_stock":         quantity,
+                    "used_stock":          0,
+                    "remaining_stock":     quantity,
+                },
+            )
+
+            qty_before = record.remaining_stock if not created else 0
+
+            if not created:
+                # Overwrite today's stock entirely (opening set)
+                record.yesterday_remaining = 0
+                record.new_stock_added     = quantity
+                record.today_stock         = quantity
+                # Keep used_stock as-is so we don't erase actual usage today
+                record.remaining_stock     = max(0, quantity - record.used_stock)
+                record.save(update_fields=[
+                    "yesterday_remaining", "new_stock_added",
+                    "today_stock", "remaining_stock", "last_updated",
+                ])
+
+            qty_after = record.remaining_stock
+
+            StockLog.objects.create(
+                branch_id=branch_id,
+                menu_item=item,
+                stock_record=record,
+                change_type=ChangeType.OPENING_SET,
+                qty_before=qty_before,
+                qty_changed=qty_after - qty_before,
+                qty_after=qty_after,
+                changed_by=request.user,
+                role_at_time=request.user.role,
+                reason=f"Bulk stock set to {quantity} by {request.user.name}",
+            )
+
+            # Restore availability if item was out of stock
+            if not item.is_available and qty_after > 0:
+                item.is_available = True
+                item.save(update_fields=["is_available"])
+
+            if created:
+                created_count += 1
+            else:
+                updated += 1
+
+        return ok({
+            "message":  f"Set {quantity} units for {created_count + updated} item(s).",
+            "quantity": quantity,
+            "items_set": created_count + updated,
+            "created":  created_count,
+            "updated":  updated,
+        })
+
+
 class SuperAdminActivityLogView(APIView):
     """
     GET /api/v1/stock/admin-log/

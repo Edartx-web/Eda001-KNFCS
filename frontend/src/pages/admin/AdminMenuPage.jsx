@@ -317,6 +317,8 @@ function ItemForm({ initial, categories, onSave, onClose, saving }) {
     is_new:          initial?.is_new ?? true,
     is_bestseller:   initial?.is_bestseller ?? false,
     is_hotdeals:     initial?.is_hotdeals    ?? false,
+    is_buckets:      initial?.is_buckets     ?? false,
+    is_combo:        initial?.is_combo       ?? false,
     is_chicken:      initial?.is_chicken     ?? false,
     is_snacks:       initial?.is_snacks      ?? false,
     is_cold_drinks:  initial?.is_cold_drinks ?? false,
@@ -604,6 +606,8 @@ function ItemForm({ initial, categories, onSave, onClose, saving }) {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--s3)" }}>
           {[
             ["is_hotdeals",    "Hot Deals",     "var(--err)"],
+            ["is_buckets",     "Buckets",       "#d97706"],
+            ["is_combo",       "Combos",        "var(--ok)"],
             ["is_chicken",     "Chicken Items", "var(--brand)"],
             ["is_snacks",      "Snacks",        "var(--warn)"],
             ["is_cold_drinks", "Cold Drinks",   "var(--info)"],

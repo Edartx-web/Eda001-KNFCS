@@ -1,16 +1,143 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-IN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <meta name="theme-color" content="#E8521A" />
-    <meta name="description" content="KNFC Fried Chicken — Fresh, Crispy, Made with love" />
-    <link rel="icon" type="image/x-icon" href="%PUBLIC_URL%/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/favicon-16x16.png" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
-    <link rel="manifest" href="%PUBLIC_URL%/site.webmanifest" />
-    <title>KNFC — Fried Chicken</title>
+
+    <!-- ── Viewport: lock zoom on all browsers ───────────────────────── -->
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, minimum-scale=1.0,
+                   maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <!-- ── Primary SEO ───────────────────────────────────────────────── -->
+    <title>KNFC Fried Chicken — Fresh, Crispy &amp; Delivered Hot</title>
+    <meta name="description"
+          content="KNFC Fried Chicken — India's crispiest fried chicken. Order online for delivery, takeaway or dine-in. Fresh chicken, bold flavours, hot &amp; fast. Order now!" />
+    <meta name="keywords"
+          content="KNFC, KNFC Fried Chicken, fried chicken, crispy chicken, chicken order online, chicken delivery, best fried chicken India, KFC alternative, fried chicken near me" />
+    <meta name="author"        content="KNFC Fried Chicken" />
+    <meta name="robots"        content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="googlebot"     content="index, follow" />
+    <link rel="canonical"      href="https://knfcs.com/" />
+
+    <!-- ── Geographic / Local SEO ────────────────────────────────────── -->
+    <meta name="geo.region"    content="IN" />
+    <meta name="geo.placename" content="India" />
+    <meta name="language"      content="en-IN" />
+    <meta name="rating"        content="general" />
+    <meta name="revisit-after" content="3 days" />
+
+    <!-- ── Open Graph (Facebook / WhatsApp / LinkedIn) ───────────────── -->
+    <meta property="og:type"         content="restaurant" />
+    <meta property="og:site_name"    content="KNFC Fried Chicken" />
+    <meta property="og:title"        content="KNFC Fried Chicken — Fresh, Crispy &amp; Delivered Hot" />
+    <meta property="og:description"  content="India's crispiest fried chicken. Order online for delivery, takeaway or dine-in. Fresh chicken, bold flavours, hot &amp; fast." />
+    <meta property="og:url"          content="https://knfcs.com/" />
+    <meta property="og:image"        content="https://knfcs.com/og-image.jpg" />
+    <meta property="og:image:width"  content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"    content="KNFC Fried Chicken — crispy golden chicken" />
+    <meta property="og:locale"       content="en_IN" />
+
+    <!-- ── Twitter / X Card ──────────────────────────────────────────── -->
+    <meta name="twitter:card"        content="summary_large_image" />
+    <meta name="twitter:site"        content="@KNFCChicken" />
+    <meta name="twitter:title"       content="KNFC Fried Chicken — Fresh, Crispy &amp; Delivered Hot" />
+    <meta name="twitter:description" content="India's crispiest fried chicken. Order online for delivery, takeaway or dine-in. Fresh chicken, bold flavours, hot &amp; fast." />
+    <meta name="twitter:image"       content="https://knfcs.com/og-image.jpg" />
+
+    <!-- ── Apple / iOS ───────────────────────────────────────────────── -->
+    <meta name="apple-mobile-web-app-capable"          content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title"            content="KNFC" />
+    <link rel="apple-touch-icon"    href="%PUBLIC_URL%/apple-touch-icon.png" />
+
+    <!-- ── Microsoft / Windows ───────────────────────────────────────── -->
+    <meta name="msapplication-TileColor"   content="#E8521A" />
+    <meta name="msapplication-TileImage"   content="%PUBLIC_URL%/android-chrome-192x192.png" />
+    <meta name="msapplication-config"      content="%PUBLIC_URL%/browserconfig.xml" />
+
+    <!-- ── Theme & Brand colour ──────────────────────────────────────── -->
+    <meta name="theme-color"               content="#E8521A" />
+
+    <!-- ── Favicons ──────────────────────────────────────────────────── -->
+    <link rel="icon"       type="image/x-icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="icon"       type="image/png" sizes="32x32" href="%PUBLIC_URL%/favicon-32x32.png" />
+    <link rel="icon"       type="image/png" sizes="16x16" href="%PUBLIC_URL%/favicon-16x16.png" />
+    <link rel="manifest"   href="%PUBLIC_URL%/site.webmanifest" />
+
+    <!-- ── Preconnect for performance (helps Core Web Vitals → ranking) ─ -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://api.knfcs.com" />
+
+    <!-- ── JSON-LD: Restaurant + LocalBusiness structured data ───────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": ["Restaurant", "LocalBusiness", "FoodEstablishment"],
+          "@id": "https://knfcs.com/#restaurant",
+          "name": "KNFC Fried Chicken",
+          "alternateName": "KNFC",
+          "description": "India's crispiest fried chicken. Fresh, bold flavours. Order online for delivery, takeaway or dine-in.",
+          "url": "https://knfcs.com/",
+          "logo": "https://knfcs.com/android-chrome-512x512.png",
+          "image": "https://knfcs.com/og-image.jpg",
+          "telephone": "",
+          "email": "CustomerSupportKNFC@gmail.com",
+          "servesCuisine": ["Fried Chicken", "Fast Food", "American", "Indian Fast Food"],
+          "priceRange": "₹₹",
+          "currenciesAccepted": "INR",
+          "paymentAccepted": ["Cash", "UPI", "Credit Card", "Debit Card"],
+          "hasMenu": "https://knfcs.com/menu",
+          "menu": "https://knfcs.com/menu",
+          "acceptsReservations": false,
+          "openingHoursSpecification": [
+            {
+              "@type": "OpeningHoursSpecification",
+              "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+              "opens": "09:00",
+              "closes": "22:00"
+            }
+          ],
+          "sameAs": [],
+          "potentialAction": {
+            "@type": "OrderAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://knfcs.com/menu",
+              "actionPlatform": [
+                "https://schema.org/DesktopWebPlatform",
+                "https://schema.org/MobileWebPlatform"
+              ]
+            },
+            "deliveryMethod": ["http://purl.org/goodrelations/v1#DeliveryModePickUp"],
+            "result": {
+              "@type": "Order",
+              "orderStatus": "https://schema.org/OrderDelivered"
+            }
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://knfcs.com/#website",
+          "url": "https://knfcs.com/",
+          "name": "KNFC Fried Chicken",
+          "description": "India's crispiest fried chicken — order online",
+          "publisher": { "@id": "https://knfcs.com/#restaurant" },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://knfcs.com/menu/all?search={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        }
+      ]
+    }
+    </script>
+
+    <!-- ── Google Search Console verification (replace token) ────────── -->
+    <!-- <meta name="google-site-verification" content="REPLACE_WITH_YOUR_TOKEN" /> -->
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

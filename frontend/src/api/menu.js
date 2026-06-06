@@ -16,6 +16,7 @@ export const getItemDetail     = (slug) => axiosClient.get(`/menu/items/${slug}/
 export const getFeatured       = () => axiosClient.get(`/menu/featured/?branch_id=${BID()}`);
 export const searchItems       = (q) => axiosClient.get(`/menu/search/?branch_id=${BID()}&q=${q}`);
 export const getFavourites     = () => axiosClient.get("/menu/favourites/");
+export const getHomeSections   = () => axiosClient.get(`/menu/home-sections/?branch_id=${BID()}`);
 export const toggleFavourite   = (id) => axiosClient.post("/menu/favourites/toggle/", { menu_item_id: id });
 
 export const submitReview = (menuItemId, rating, comment = '', photoFile = null, orderId = null) => {

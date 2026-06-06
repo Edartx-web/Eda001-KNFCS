@@ -8,6 +8,7 @@
  * - Staggered GSAP entrance
  */
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import useSEO from "../../hooks/useSEO";
 import { useNavigate, Link } from "react-router-dom";
 import { gsap } from "gsap";
 import AppLayout from "../../components/layout/AppLayout";
@@ -232,6 +233,11 @@ function incScratchUsed(userId, code) {
 }
 
 export default function OffersPage() {
+  useSEO({
+    title: "Today's Offers & Deals",
+    description: "KNFC exclusive deals — limited-time discounts on fried chicken, buckets, combos and more. Grab the best offers before they expire!",
+  });
+
   const { branchName, branchId, hasBranch } = useBranch();
   const navigate = useNavigate();
   const { loading: pageLoading } = usePageLoader(800);

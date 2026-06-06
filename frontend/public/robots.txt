@@ -1,0 +1,33 @@
+User-agent: *
+Allow: /
+
+# Block internal/admin areas from indexing
+Disallow: /admin/
+Disallow: /superadmin/
+Disallow: /staff/
+Disallow: /login/
+Disallow: /change-password
+Disallow: /order/
+Disallow: /cart
+Disallow: /account
+Disallow: /spin
+
+# Allow key public pages explicitly
+Allow: /menu
+Allow: /menu/
+Allow: /offers
+Allow: /about
+Allow: /contact
+Allow: /faq
+Allow: /careers
+Allow: /privacy
+Allow: /terms
+Allow: /cookies
+Allow: /blog
+Allow: /press
+
+# Sitemap location
+Sitemap: https://knfcs.com/sitemap.xml
+
+# Crawl-delay for polite crawling
+Crawl-delay: 2

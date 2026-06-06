@@ -8,6 +8,7 @@ from apps.stock.views import (
     StockLockView, StockActivityView,
     StockHistoryView,
     StockBulkCarryoverView, StockFullResetView,
+    StockBulkSetView,
     SuperAdminActivityLogView,
 )
 
@@ -24,6 +25,7 @@ urlpatterns = [
     path("activity/",          StockActivityView.as_view(),          name="stock-activity"),
     path("history/",           StockHistoryView.as_view(),           name="stock-history"),
     path("bulk-carryover/",    StockBulkCarryoverView.as_view(),     name="stock-bulk-carryover"),
+    path("bulk-set/",          StockBulkSetView.as_view(),           name="stock-bulk-set"),
     path("reset/",             StockFullResetView.as_view(),         name="stock-reset"),
     path("admin-log/",         SuperAdminActivityLogView.as_view(),  name="stock-admin-log"),
 ]

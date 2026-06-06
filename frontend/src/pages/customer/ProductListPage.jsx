@@ -11,6 +11,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback, memo } from "react";
+import useSEO from "../../hooks/useSEO";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { gsap } from "gsap";
 import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
@@ -279,6 +280,11 @@ export default function ProductListPage() {
   const [searchParams] = useSearchParams();
   const sectionFilter  = searchParams.get("filter"); // e.g. "is_hotdeals"
   const isAllMode      = !slug; // no slug = /menu/all
+
+  useSEO({
+    title: isAllMode ? "Full Menu — Fried Chicken, Buckets & Combos" : undefined,
+    description: "Browse KNFC's full menu — crispy fried chicken, buckets, combos, snacks and cold drinks. Fresh, hot and delivered fast.",
+  });
 
   const gridRef    = useRef(null);
   const headerRef  = useRef(null);

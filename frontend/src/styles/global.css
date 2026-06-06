@@ -140,10 +140,18 @@
 *,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
 
 html {
-  scroll-behavior        : smooth;
-  -webkit-text-size-adjust: 100%;
-  touch-action           : manipulation;  /* block double-tap zoom */
-  overflow-x             : hidden;
+  scroll-behavior          : smooth;
+  /* ── Zoom lock — all browsers ──────────────────────────────────────────
+     Chrome/Edge : viewport user-scalable=no + touch-action
+     Safari iOS  : viewport user-scalable=no + touch-action
+     Firefox     : -moz-text-size-adjust: none + touch-action
+     All desktop : Ctrl+scroll / Ctrl+± blocked via JS in App.jsx
+  ─────────────────────────────────────────────────────────────────────── */
+  -webkit-text-size-adjust : none;   /* Safari — prevent auto font-scale */
+  -moz-text-size-adjust    : none;   /* Firefox */
+  text-size-adjust         : none;   /* Standard */
+  touch-action             : pan-x pan-y;  /* allow scroll, block pinch-zoom */
+  overflow-x               : hidden;
 }
 body {
   font-family   : var(--ff-b);
@@ -154,13 +162,13 @@ body {
   -webkit-font-smoothing  : antialiased;
   -moz-osx-font-smoothing : grayscale;
   transition    : background var(--d3) var(--ease), color var(--d3) var(--ease);
-  touch-action  : manipulation;
+  touch-action  : pan-x pan-y;
   overflow-x    : hidden;
 }
-/* Prevent tap-highlight flash on interactive elements */
+/* Prevent tap-highlight flash and double-tap zoom on interactive elements */
 a, button, [role="button"], input, select, textarea, label {
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  touch-action: manipulation;  /* manipulation = pan + tap, no pinch */
 }
 img,video { display:block; max-width:100% }
 button { font-family:var(--ff-b); cursor:pointer; border:none; background:none }

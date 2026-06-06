@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
 from django.db.models import F, Q
+from django.core.cache import cache
 
 from .models import (
     DailyOffer, OfferType, OfferItem, OfferRedemption,
@@ -111,23 +112,29 @@ class ActiveOffersView(APIView):
             return err("branch_id is required.")
 
         now = timezone.now()
-        # Exclude RE_ENGAGEMENT and SCRATCH_CARD (those have dedicated widgets / WhatsApp delivery)
-        offers = DailyOffer.objects.filter(
-            Q(branch_id=branch_id) | Q(all_branches=True),
-            is_active=True,
-            start_at__lte=now,
-        ).filter(
-            Q(end_at__isnull=True) | Q(end_at__gte=now)
-        ).exclude(
-            offer_type__in=[OfferType.RE_ENGAGEMENT, OfferType.SCRATCH_CARD]
-        ).distinct().order_by("carousel_order", "-created_at")
+        cache_key = f"offers:active:{branch_id}"
+        cached_data = cache.get(cache_key)
 
-        offers_list = list(offers)
-        DailyOffer.objects.filter(
-            id__in=[o.id for o in offers_list]
-        ).update(view_count=F("view_count") + 1)
+        if cached_data is None:
+            offers = DailyOffer.objects.filter(
+                Q(branch_id=branch_id) | Q(all_branches=True),
+                is_active=True,
+                start_at__lte=now,
+            ).filter(
+                Q(end_at__isnull=True) | Q(end_at__gte=now)
+            ).exclude(
+                offer_type__in=[OfferType.RE_ENGAGEMENT, OfferType.SCRATCH_CARD]
+            ).distinct().order_by("carousel_order", "-created_at")
 
-        # Mark welcome offer if user has never ordered
+            offers_list = list(offers)
+            DailyOffer.objects.filter(
+                id__in=[o.id for o in offers_list]
+            ).update(view_count=F("view_count") + 1)
+
+            cached_data = DailyOfferSerializer(offers_list, many=True, context={"request": request}).data
+            cache.set(cache_key, cached_data, 60)
+
+        # customer_has_ordered is user-specific — never cached
         customer_has_ordered = False
         if request.user.is_authenticated:
             from apps.orders.models import Order
@@ -136,11 +143,10 @@ class ActiveOffersView(APIView):
                 status__in=["confirmed", "preparing", "ready", "completed"]
             ).exists()
 
-        data = DailyOfferSerializer(offers_list, many=True, context={"request": request}).data
-        return ok({
-            "offers": data,
-            "customer_has_ordered": customer_has_ordered,
-        })
+        resp = ok({"offers": cached_data, "customer_has_ordered": customer_has_ordered})
+        if not request.user.is_authenticated:
+            resp["Cache-Control"] = "public, max-age=60, stale-while-revalidate=10"
+        return resp
 
 
 class OfferDetailView(APIView):

@@ -51,6 +51,11 @@ export default function AdminStockPage() {
   const [resetReason,         setResetReason]         = useState("");
   const [resetting,           setResetting]           = useState(false);
 
+  // Bulk set all items to N quantity
+  const [bulkQty,             setBulkQty]             = useState(20);
+  const [showBulkSetModal,    setShowBulkSetModal]    = useState(false);
+  const [bulkSetting,         setBulkSetting]         = useState(false);
+
   useEffect(() => {
     if (!isSuperAdmin) return;
     import("../../api/auth").then(({ getBranches }) => {
@@ -127,6 +132,23 @@ export default function AdminStockPage() {
     setShowCarryoverModal(false);
   };
 
+  const handleBulkSet = async () => {
+    const qty = parseInt(bulkQty, 10);
+    if (!qty || qty <= 0) { alert("Enter a valid quantity."); return; }
+    setBulkSetting(true);
+    try {
+      const res = await axiosClient.post("/stock/bulk-set/", {
+        quantity: qty,
+        branch_id: effectiveBranchId,
+      });
+      setShowBulkSetModal(false);
+      await loadStock();
+      alert(res.data.message || `Set ${qty} units for all items.`);
+    } catch (e) {
+      alert(e.response?.data?.error || "Bulk set failed.");
+    } finally { setBulkSetting(false); }
+  };
+
   const handleReset = async () => {
     if (!isSuperAdmin && !resetReason.trim()) {
       alert("Please enter a reason for the reset.");
@@ -192,6 +214,13 @@ export default function AdminStockPage() {
               style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 14px", borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".875rem", fontWeight:600, color:"var(--t2)" }}>
               <IcRefresh /> Refresh
             </button>
+            {isAdmin && !isLocked && (
+              <button onClick={() => setShowBulkSetModal(true)}
+                style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:"var(--r3)", border:"1.5px solid rgba(29,158,117,.35)", background:"rgba(29,158,117,.06)", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".875rem", fontWeight:700, color:"var(--ok)" }}>
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                Set All Stock
+              </button>
+            )}
             {isAdmin && !isLocked && (
               <button onClick={() => setShowResetModal(true)}
                 style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:"var(--r3)", border:"1.5px solid rgba(226,75,74,.25)", background:"rgba(226,75,74,.04)", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".875rem", fontWeight:700, color:"var(--err)" }}>
@@ -422,6 +451,65 @@ export default function AdminStockPage() {
                 {resetting ? "Resetting…" : "Reset all to zero"}
               </button>
               <button onClick={() => { setShowResetModal(false); setResetReason(""); }} className="btn btn-s btn-lg">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Set All Stock Modal ──────────────────────────────────── */}
+      {showBulkSetModal && (
+        <div onClick={() => setShowBulkSetModal(false)}
+          style={{ position:"fixed", inset:0, zIndex:400, background:"rgba(0,0,0,.6)", backdropFilter:"blur(8px)", display:"flex", alignItems:"center", justifyContent:"center", padding:"var(--s4)" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width:"100%", maxWidth:420, background:"var(--bgc)", borderRadius:"var(--r5)", padding:"var(--s6)", boxShadow:"var(--sh-xl)", border:"1px solid var(--bd)" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", marginBottom:"var(--s5)" }}>
+              <div style={{ width:46, height:46, borderRadius:"var(--r3)", background:"rgba(29,158,117,.1)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="var(--ok)" strokeWidth="2" strokeLinecap="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              </div>
+              <div>
+                <h3 style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:900, margin:0 }}>Set All Stock</h3>
+                <p style={{ fontSize:".875rem", color:"var(--t3)", marginTop:3, lineHeight:1.5 }}>
+                  Set every item in this branch to the same opening quantity instantly.
+                </p>
+              </div>
+            </div>
+
+            <label style={{ fontSize:".875rem", fontWeight:700, display:"block", marginBottom:"var(--s2)", color:"var(--t1)" }}>
+              Quantity for all items <span style={{ color:"var(--err)" }}>*</span>
+            </label>
+            <div style={{ display:"flex", alignItems:"center", gap:"var(--s2)", marginBottom:"var(--s4)" }}>
+              <button onClick={() => setBulkQty(q => Math.max(1, Number(q)-1))}
+                style={{ width:40, height:40, borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontSize:"20px", fontWeight:700, color:"var(--t1)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>−</button>
+              <input type="number" min="1" max="9999" value={bulkQty}
+                onChange={e => setBulkQty(Math.max(1, Math.min(9999, parseInt(e.target.value)||1)))}
+                style={{ flex:1, textAlign:"center", padding:"10px", borderRadius:"var(--r3)", border:"2px solid var(--ok)", background:"var(--bgc)", color:"var(--t1)", fontSize:"1.5rem", fontWeight:900, fontFamily:"var(--ff-d)", outline:"none", letterSpacing:"-.02em" }}/>
+              <button onClick={() => setBulkQty(q => Math.min(9999, Number(q)+1))}
+                style={{ width:40, height:40, borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontSize:"20px", fontWeight:700, color:"var(--t1)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>+</button>
+            </div>
+
+            {/* Quick preset buttons */}
+            <div style={{ display:"flex", gap:"var(--s2)", flexWrap:"wrap", marginBottom:"var(--s4)" }}>
+              {[10, 15, 20, 25, 30, 50].map(n => (
+                <button key={n} onClick={() => setBulkQty(n)}
+                  style={{ padding:"6px 14px", borderRadius:"var(--rf)", border:`1.5px solid ${bulkQty===n?"var(--ok)":"var(--bd)"}`, background:bulkQty===n?"rgba(29,158,117,.1)":"var(--bg2)", cursor:"pointer", fontSize:".875rem", fontWeight:700, color:bulkQty===n?"var(--ok)":"var(--t2)", fontFamily:"var(--ff-b)", transition:"all var(--d1) var(--ease)" }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ padding:"var(--s3) var(--s4)", background:"rgba(29,158,117,.05)", border:"1px solid rgba(29,158,117,.2)", borderRadius:"var(--r3)", marginBottom:"var(--s5)", fontSize:".8125rem", color:"var(--t2)", lineHeight:1.6 }}>
+              Will set <strong style={{ color:"var(--ok)" }}>{bulkQty}</strong> units for{" "}
+              <strong style={{ color:"var(--t1)" }}>{stock.length}</strong> item{stock.length!==1?"s":""}.
+              Any stock already used today is kept — remaining = {bulkQty} − used.
+            </div>
+
+            <div style={{ display:"flex", gap:"var(--s2)" }}>
+              <button onClick={handleBulkSet} disabled={bulkSetting}
+                style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:"var(--s2)", padding:"12px 20px", borderRadius:"var(--r3)", background:"var(--ok)", border:"none", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".9375rem", fontWeight:700, color:"#fff", opacity:bulkSetting?.6:1 }}>
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                {bulkSetting ? "Setting stock…" : `Set all to ${bulkQty}`}
+              </button>
+              <button onClick={() => setShowBulkSetModal(false)} className="btn btn-s btn-lg">Cancel</button>
             </div>
           </div>
         </div>

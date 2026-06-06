@@ -13,6 +13,7 @@ urlpatterns = [
     path("items/",                   views.MenuItemListView.as_view(),     name="item-list"),
     path("items/<slug:slug>/",       views.MenuItemDetailView.as_view(),   name="item-detail"),
     path("featured/",                views.FeaturedItemsView.as_view(),    name="featured"),
+    path("home-sections/",           views.HomeSectionsView.as_view(),     name="home-sections"),
     path("search/",                  views.SearchView.as_view(),           name="search"),
     path("reviews/",                 views.SubmitReviewView.as_view(),     name="submit-review"),
     path("favourites/",              FavouriteListView.as_view(),          name="favourites"),

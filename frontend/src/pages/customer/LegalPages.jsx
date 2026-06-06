@@ -4,6 +4,8 @@ import { reopenCookieBanner } from "../../components/common/CookieBanner";
 import AppLayout from "../../components/layout/AppLayout";
 import axiosClient from "../../api/axiosClient";
 import { useAuth } from "../../context/AuthContext";
+import usePageProtection from "../../hooks/usePageProtection";
+import useSEO from "../../hooks/useSEO";
 
 const CONTACT_EMAIL_DEFAULT = "CustomerSupportKNFC@gmail.com";
 
@@ -73,6 +75,7 @@ const UPDATED = "1 January 2025";
    PRIVACY POLICY
 ══════════════════════════════════════════════════════════════════════ */
 export function PrivacyPage() {
+  usePageProtection({ blockCopy: true, blockContextMenu: true, blockPrint: false });
   return (
     <LegalShell title="Privacy Policy" subtitle={`Last updated: ${UPDATED}`}>
       <Section title="1. Information We Collect">
@@ -260,6 +263,7 @@ function AboutReviewCard({ review }) {
    ABOUT US
 ══════════════════════════════════════════════════════════════════════ */
 export function AboutPage() {
+  useSEO({ title: "About Us", description: "KNFC Fried Chicken — our story, values and mission. Serving India's crispiest chicken since day one." });
   const navigate = useNavigate();
   const cfg      = useSiteConfig();
   const [marqHover,  setMarqHover]  = useState(false);
@@ -556,6 +560,7 @@ export function AboutPage() {
    CAREERS PAGE
 ══════════════════════════════════════════════════════════════════════ */
 export function CareersPage() {
+  useSEO({ title: "Careers — Join the KNFC Team", description: "Work at KNFC Fried Chicken. We're hiring kitchen staff, shift managers, delivery riders and more across all our branches." });
   const cfg = useSiteConfig();
   const staticOpenings = [
     { role:"Shift Manager",     location:"All Branches",    type:"Full-time", desc:"Lead daily operations, manage staff schedules, and ensure customer satisfaction.", apply_email:"careers@knfc.in" },
@@ -748,6 +753,7 @@ function FaqItem({ q, a }) {
 }
 
 export function FAQPage() {
+  useSEO({ title: "FAQ — Frequently Asked Questions", description: "Answers to common questions about KNFC Fried Chicken — orders, delivery, payment, loyalty points and more." });
   const [activeCategory, setActiveCategory] = useState("All");
   const categories = ["All", ...FAQ_DATA.map(g => g.category)];
   const visible = activeCategory === "All"
@@ -803,6 +809,7 @@ export function FAQPage() {
    CONTACT PAGE
 ══════════════════════════════════════════════════════════════════════ */
 export function ContactPage() {
+  useSEO({ title: "Contact Us", description: "Get in touch with KNFC Fried Chicken — customer support, feedback, and general enquiries." });
   const { user }             = useAuth();
   const cfg                  = useSiteConfig();
   const contactEmail         = cfg.contact_email  || CONTACT_EMAIL_DEFAULT;
