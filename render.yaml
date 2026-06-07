@@ -1,5 +1,6 @@
 # Render Blueprint — KNFC Backend
-# Deploys: Django (Daphne ASGI) + PostgreSQL + Redis + Celery Worker
+# Database: Supabase (external, free forever)
+# Redis:    Upstash  (external, free forever)
 #
 # First deploy:
 #   1. Push this file to GitHub
@@ -7,24 +8,12 @@
 #   3. Fill in the secret env vars flagged with sync: false
 #   4. Click Apply
 
-databases:
-  - name: knfc-db
-    databaseName: knfc
-    user: knfc
-    plan: free          # upgrade to starter ($7/mo) for persistent storage
-
 services:
-  # ── Redis ────────────────────────────────────────────────────────────────────
-  - type: redis
-    name: knfc-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
-
   # ── Django ASGI Web Service ───────────────────────────────────────────────────
   - type: web
     name: knfc-backend
     runtime: python
-    plan: starter       # free tier sleeps after 15 min — bad for a POS; use starter
+    plan: free
     buildCommand: "./build.sh"
     startCommand: "daphne -b 0.0.0.0 -p $PORT config.asgi:application"
     healthCheckPath: /api/v1/branches/
@@ -35,19 +24,19 @@ services:
       - key: SECRET_KEY
         generateValue: true
 
+      # Supabase PostgreSQL — set manually in Render dashboard
       - key: DATABASE_URL
-        fromDatabase:
-          name: knfc-db
-          property: connectionString
+        sync: false
 
+      # Upstash Redis — set manually in Render dashboard
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: knfc-redis
-          property: connectionString
+        sync: false
+
+      - key: DB_SSL_REQUIRE
+        value: "True"
 
       - key: BACKEND_URL
-        value: https://knfc-backend.onrender.com   # update after first deploy
+        value: https://knfc-backend.onrender.com
 
       - key: ALLOWED_HOSTS
         value: knfc-backend.onrender.com,api.knfcs.com,knfcs.com,www.knfcs.com
@@ -55,19 +44,16 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         value: https://knfcs.com,https://www.knfcs.com
 
-      - key: DB_SSL_REQUIRE
-        value: "True"
+      - key: FRONTEND_URL
+        value: https://knfcs.com
 
       - key: WHATSAPP_SERVICE_URL
         value: https://wa.knfcs.com
 
       - key: WHATSAPP_INTERNAL_KEY
-        sync: false   # set manually in Render dashboard
+        sync: false
 
-      - key: FRONTEND_URL
-        value: https://knfcs.com
-
-      # ── Primary SMTP — Staff/Admin OTP, Password Reset ──────────────────────
+      # ── Primary SMTP ────────────────────────────────────────────────────────
       - key: EMAIL_HOST
         value: smtp.gmail.com
 
@@ -78,15 +64,15 @@ services:
         value: "True"
 
       - key: EMAIL_HOST_USER
-        sync: false   # knfchead01@gmail.com
+        sync: false
 
       - key: EMAIL_HOST_PASSWORD
-        sync: false   # Gmail App Password for knfchead01
+        sync: false
 
       - key: DEFAULT_FROM_EMAIL
-        sync: false   # KNFC Fried Chicken <knfchead01@gmail.com>
+        sync: false
 
-      # ── Support SMTP — Customer Support Replies ─────────────────────────────
+      # ── Support SMTP ────────────────────────────────────────────────────────
       - key: SUPPORT_EMAIL_HOST
         value: smtp.gmail.com
 
@@ -97,13 +83,13 @@ services:
         value: "True"
 
       - key: SUPPORT_EMAIL_USER
-        sync: false   # customersupportknfc@gmail.com
+        sync: false
 
       - key: SUPPORT_EMAIL_PASSWORD
-        sync: false   # Gmail App Password for customersupportknfc
+        sync: false
 
       - key: SUPPORT_FROM_EMAIL
-        sync: false   # KNFC Support <customersupportknfc@gmail.com>
+        sync: false
 
       - key: OTP_BYPASS
         value: "False"
@@ -129,15 +115,19 @@ services:
           envVarKey: SECRET_KEY
 
       - key: DATABASE_URL
-        fromDatabase:
-          name: knfc-db
-          property: connectionString
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: DATABASE_URL
 
       - key: REDIS_URL
         fromService:
-          type: redis
-          name: knfc-redis
-          property: connectionString
+          type: web
+          name: knfc-backend
+          envVarKey: REDIS_URL
+
+      - key: DB_SSL_REQUIRE
+        value: "True"
 
       - key: WHATSAPP_SERVICE_URL
         value: https://wa.knfcs.com
