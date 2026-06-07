@@ -1,0 +1,17 @@
+[Unit]
+Description=KNFC Celery Worker
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/knfc
+EnvironmentFile=/home/ubuntu/knfc/.env
+ExecStart=/home/ubuntu/knfc/venv/bin/celery -A config worker -l info --concurrency=2
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

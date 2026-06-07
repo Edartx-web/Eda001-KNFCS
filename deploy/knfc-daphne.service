@@ -1,0 +1,17 @@
+[Unit]
+Description=KNFC Django Daphne ASGI Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/knfc
+EnvironmentFile=/home/ubuntu/knfc/.env
+ExecStart=/home/ubuntu/knfc/venv/bin/daphne -b 127.0.0.1 -p 8000 config.asgi:application
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
