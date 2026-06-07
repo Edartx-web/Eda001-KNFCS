@@ -64,26 +64,46 @@ services:
       - key: WHATSAPP_INTERNAL_KEY
         sync: false   # set manually in Render dashboard
 
+      - key: FRONTEND_URL
+        value: https://knfcs.com
+
+      # ── Primary SMTP — Staff/Admin OTP, Password Reset ──────────────────────
       - key: EMAIL_HOST
         value: smtp.gmail.com
 
       - key: EMAIL_PORT
         value: "587"
 
+      - key: EMAIL_USE_TLS
+        value: "True"
+
       - key: EMAIL_HOST_USER
-        sync: false   # set manually — your Gmail address
+        sync: false   # knfchead01@gmail.com
 
       - key: EMAIL_HOST_PASSWORD
-        sync: false   # set manually — Gmail App Password
+        sync: false   # Gmail App Password for knfchead01
 
       - key: DEFAULT_FROM_EMAIL
-        sync: false   # set manually — same as EMAIL_HOST_USER
+        sync: false   # KNFC Fried Chicken <knfchead01@gmail.com>
+
+      # ── Support SMTP — Customer Support Replies ─────────────────────────────
+      - key: SUPPORT_EMAIL_HOST
+        value: smtp.gmail.com
+
+      - key: SUPPORT_EMAIL_PORT
+        value: "587"
+
+      - key: SUPPORT_EMAIL_USE_TLS
+        value: "True"
 
       - key: SUPPORT_EMAIL_USER
-        sync: false   # set manually
+        sync: false   # customersupportknfc@gmail.com
 
       - key: SUPPORT_EMAIL_PASSWORD
-        sync: false   # set manually
+        sync: false   # Gmail App Password for customersupportknfc
+
+      - key: SUPPORT_FROM_EMAIL
+        sync: false   # KNFC Support <customersupportknfc@gmail.com>
 
       - key: OTP_BYPASS
         value: "False"
@@ -134,6 +154,9 @@ services:
       - key: EMAIL_PORT
         value: "587"
 
+      - key: EMAIL_USE_TLS
+        value: "True"
+
       - key: EMAIL_HOST_USER
         fromService:
           type: web
@@ -145,6 +168,39 @@ services:
           type: web
           name: knfc-backend
           envVarKey: EMAIL_HOST_PASSWORD
+
+      - key: DEFAULT_FROM_EMAIL
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: DEFAULT_FROM_EMAIL
+
+      - key: SUPPORT_EMAIL_HOST
+        value: smtp.gmail.com
+
+      - key: SUPPORT_EMAIL_PORT
+        value: "587"
+
+      - key: SUPPORT_EMAIL_USE_TLS
+        value: "True"
+
+      - key: SUPPORT_EMAIL_USER
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SUPPORT_EMAIL_USER
+
+      - key: SUPPORT_EMAIL_PASSWORD
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SUPPORT_EMAIL_PASSWORD
+
+      - key: SUPPORT_FROM_EMAIL
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SUPPORT_FROM_EMAIL
 
       - key: PYTHON_VERSION
         value: "3.11.0"
