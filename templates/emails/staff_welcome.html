@@ -1,4 +1,5 @@
 {% extends "emails/_base.html" %}
+{% block preheader %}Your KNFC staff account at {{ branch|default:"KNFC" }} is ready — your User ID and temporary password are inside.{% endblock %}
 {% block body %}
 <h1>Welcome to KNFC, {{ name }}!</h1>
 <p>Your staff account has been created. Here are your login credentials to access the KNFC Staff Portal.</p>

@@ -1,4 +1,5 @@
 {% extends "emails/_base.html" %}
+{% block preheader %}Order #{{ token_number }} confirmed at {{ branch_name }}. Show your token at the counter.{% endblock %}
 {% block body %}
 <h1>Order Confirmed!</h1>
 <p>Hi {{ customer_name }},</p>

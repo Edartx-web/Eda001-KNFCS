@@ -55,9 +55,10 @@ def send_support_email(to: str, subject: str, html_body: str, text_body: str = "
         )
         msg.attach_alternative(html_body, "text/html")
         msg.extra_headers = {
-            "X-Mailer":       "KNFC-Support-Mailer/1.0",
-            "Precedence":     "transactional",
-            "Auto-Submitted": "auto-generated",
+            "X-Mailer":   "KNFC-Support-Mailer/1.0",
+            "Precedence": "transactional",
+            "Importance": "High",
+            "X-Priority": "1",
         }
         msg.send(fail_silently=False)
         logger.info("Support email sent → %s [%s]", to, subject)

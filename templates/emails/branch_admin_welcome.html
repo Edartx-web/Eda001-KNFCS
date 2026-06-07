@@ -1,4 +1,5 @@
 {% extends "emails/_base.html" %}
+{% block preheader %}Your KNFC Branch Admin account for {{ branch }} is ready — credentials and login link inside.{% endblock %}
 {% block body %}
 <h1>Branch Admin Account Created</h1>
 <p>Hi {{ name }},</p>

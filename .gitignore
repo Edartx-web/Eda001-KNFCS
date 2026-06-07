@@ -146,3 +146,4 @@ whatsapp-service/.env.local
 favicon_io_extracted/
 *_extracted/
 DEPLOYMENT.md
+.vercel

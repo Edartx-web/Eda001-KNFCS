@@ -70,15 +70,19 @@ def _send(subject: str, template: str, ctx: dict, to: str | list[str]) -> None:
         from_email   = from_addr,
         to           = recipients,
         headers      = {
-            "Reply-To":        support or from_addr,
-            "X-Mailer":        "KNFC Mailer 2.0",
+            "Reply-To":              support or from_addr,
+            "X-Mailer":              "KNFC Mailer 2.0",
+            # Signals transactional (not bulk) → Gmail/Yahoo inbox, not Promotions
+            "Importance":            "High",
+            "X-Priority":            "1",
+            "Precedence":            "transactional",
             # Google / Yahoo 2024 bulk-sender requirement
-            "List-Unsubscribe": f"<{unsub_url}>",
+            "List-Unsubscribe":      f"<{unsub_url}>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         },
     )
     msg.attach_alternative(html_body, "text/html")
-    msg.send(fail_silently=True)
+    msg.send(fail_silently=False)
 
 
 # ── Public helpers ────────────────────────────────────────────────────────────
