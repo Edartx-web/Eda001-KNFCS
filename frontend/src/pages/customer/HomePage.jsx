@@ -413,7 +413,7 @@ function CatChip({ cat, onClick }) {
         {cat.image && !imgErr
           ? <img loading="lazy" src={cat.image} alt={cat.name}
               onError={() => setImgErr(true)}
-              style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",padding:"4px" }}/>
+              style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center" }}/>
           : <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="17" r="4"/><line x1="11.5" y1="13.5" x2="19" y2="6"/><circle cx="20" cy="5" r="1.5"/></svg>
             </div>
