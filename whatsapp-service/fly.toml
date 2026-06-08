@@ -1,0 +1,21 @@
+[app]
+name = "knfc-whatsapp"
+primary_region = "sin"   # Singapore — closest to India
+
+[build]
+dockerfile = "Dockerfile"
+
+[http_service]
+internal_port = 3001
+force_https   = true
+auto_stop_machines  = false
+auto_start_machines = true
+
+[[vm]]
+memory = "256mb"
+cpu_kind = "shared"
+cpus = 1
+
+[mounts]
+source      = "whatsapp_sessions"
+destination = "/app/sessions"
