@@ -2452,6 +2452,8 @@ function SettingsNum({ k, min, max, step=1, suffix="" }) {
 /* ── Home Section Images Panel ────────────────────────────────────── */
 const SECTION_DEFS = [
   { key:"is_hotdeals",    label:"Hot Deals",     emoji:"🔥" },
+  { key:"is_buckets",     label:"Buckets",       emoji:"🪣" },
+  { key:"is_combo",       label:"Combos",        emoji:"🍱" },
   { key:"is_chicken",     label:"Chicken Items", emoji:"🍗" },
   { key:"is_snacks",      label:"Snacks",        emoji:"🍟" },
   { key:"is_cold_drinks", label:"Cold Drinks",   emoji:"🥤" },
