@@ -509,10 +509,14 @@ const ProductCard = memo(function ProductCard({ item, rank }) {
           </div>
         )}
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:"auto",paddingTop:"var(--s1)" }}>
-          <div>
-            <span className="price" style={{ fontSize:"1rem",letterSpacing:"-.01em" }}>{formatPrice(showPrice)}</span>
-            {hasDisc && <span style={{ fontSize:".8125rem",color:"var(--t2)",textDecoration:"line-through",marginLeft:"5px" }}>{formatPrice(item.price)}</span>}
-            {formatUnit(item.unit_quantity,item.measurement_unit) && <span style={{ fontSize:".6875rem",color:"var(--t2)",marginLeft:"5px",fontWeight:500 }}>/ {formatUnit(item.unit_quantity,item.measurement_unit)}</span>}
+          <div style={{ display:"flex",flexDirection:"column",gap:"3px" }}>
+            <div style={{ display:"flex",alignItems:"center",gap:"5px" }}>
+              <span className="price" style={{ fontSize:"1rem",letterSpacing:"-.01em" }}>{formatPrice(showPrice)}</span>
+              {hasDisc && <span style={{ fontSize:".8125rem",color:"var(--t4)",textDecoration:"line-through" }}>{formatPrice(item.price)}</span>}
+            </div>
+            {formatUnit(item.unit_quantity,item.measurement_unit) && (
+              <span style={{ fontSize:".75rem",color:"var(--t2)",fontWeight:600 }}>{formatUnit(item.unit_quantity,item.measurement_unit)}</span>
+            )}
           </div>
           {!isOOS && (inCart
             ? <div style={{ display:"flex",alignItems:"center",gap:"3px" }} onClick={e=>e.stopPropagation()}>

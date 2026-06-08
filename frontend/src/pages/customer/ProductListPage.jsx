@@ -143,11 +143,13 @@ const GridCard = memo(function GridCard({ item, navigate }) {
           <span style={{ fontSize:".75rem", color:"var(--t3)" }}>{item.prep_time_display || "8–15 min"}</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:"auto", paddingTop:"var(--s1)" }}>
-          <div>
-            <span className="price" style={{ fontSize:".9375rem" }}>{formatPrice(price)}</span>
-            {hasDisc && <span style={{ fontSize:".75rem", color:"var(--t4)", textDecoration:"line-through", marginLeft:"5px" }}>{formatPrice(item.price)}</span>}
+          <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"5px" }}>
+              <span className="price" style={{ fontSize:".9375rem" }}>{formatPrice(price)}</span>
+              {hasDisc && <span style={{ fontSize:".75rem", color:"var(--t4)", textDecoration:"line-through" }}>{formatPrice(item.price)}</span>}
+            </div>
             {formatUnit(item.unit_quantity, item.measurement_unit) && (
-              <span style={{ display:"inline-flex", alignItems:"center", marginLeft:"5px", padding:"1px 6px", borderRadius:"var(--rf)", background:"var(--bg3)", border:"1px solid var(--bd)", fontSize:".625rem", color:"var(--t3)", fontWeight:600, letterSpacing:".02em", flexShrink:0 }}>
+              <span style={{ fontSize:".75rem", color:"var(--t2)", fontWeight:600 }}>
                 {formatUnit(item.unit_quantity, item.measurement_unit)}
               </span>
             )}
@@ -235,11 +237,13 @@ const ListCard = memo(function ListCard({ item, navigate }) {
           </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div>
-            <span className="price" style={{ fontSize:"1.0625rem" }}>{formatPrice(price)}</span>
-            {hasDisc && <span style={{ fontSize:".8125rem", color:"var(--t4)", textDecoration:"line-through", marginLeft:"6px" }}>{formatPrice(item.price)}</span>}
+          <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+              <span className="price" style={{ fontSize:"1.0625rem" }}>{formatPrice(price)}</span>
+              {hasDisc && <span style={{ fontSize:".8125rem", color:"var(--t4)", textDecoration:"line-through" }}>{formatPrice(item.price)}</span>}
+            </div>
             {formatUnit(item.unit_quantity, item.measurement_unit) && (
-              <span style={{ display:"inline-flex", alignItems:"center", marginLeft:"5px", padding:"1px 6px", borderRadius:"var(--rf)", background:"var(--bg3)", border:"1px solid var(--bd)", fontSize:".625rem", color:"var(--t3)", fontWeight:600, letterSpacing:".02em", flexShrink:0 }}>
+              <span style={{ fontSize:".8125rem", color:"var(--t2)", fontWeight:600 }}>
                 {formatUnit(item.unit_quantity, item.measurement_unit)}
               </span>
             )}
