@@ -44,7 +44,7 @@ class DailyOfferSerializer(serializers.ModelSerializer):
             "referral_min_friend_order", "referral_reward_on_signup",
             # RE_ENGAGEMENT
             "inactive_days", "reengagement_message",
-            "auto_broadcast", "all_branches",
+            "auto_broadcast", "all_branches", "selected_branches",
             "view_count", "redemption_count",
             "created_at", "updated_at",
             "offer_items", "is_valid_now", "user_can_redeem",
@@ -107,7 +107,7 @@ class DailyOfferWriteSerializer(serializers.ModelSerializer):
             "referral_reward_type", "referral_reward_value",
             "referral_min_friend_order", "referral_reward_on_signup",
             "inactive_days", "reengagement_message",
-            "auto_broadcast", "all_branches",
+            "auto_broadcast", "all_branches", "selected_branches",
         ]
 
 

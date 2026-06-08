@@ -168,6 +168,12 @@ class DailyOffer(models.Model):
         default=False,
         help_text="Show to customers of ALL branches (SuperAdmin global offer)"
     )
+    selected_branches = models.ManyToManyField(
+        "branches.Branch",
+        blank=True,
+        related_name="selected_offers",
+        help_text="Apply to these specific branches (leave empty = FK branch only)",
+    )
     auto_broadcast = models.BooleanField(
         default=False,
         help_text="Auto-broadcast to branch customers when this offer is activated"

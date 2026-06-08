@@ -87,7 +87,16 @@ function Drawer({ open, onClose, title, children }) {
 }
 
 /* ── Offer form (create / edit) ─────────────────────────────────────── */
-function OfferForm({ initial, branches, onSave, onClose, saving }) {
+function OfferForm({ initial, branches, isSuperAdmin, onSave, onClose, saving }) {
+  // branch_scope: "this" | "selected" | "all"
+  const initScope = initial?.all_branches
+    ? "all"
+    : (initial?.selected_branches?.length > 0 ? "selected" : "this");
+  const [branchScope,        setBranchScope]        = useState(initScope);
+  const [selectedBranchIds,  setSelectedBranchIds]  = useState(
+    initial?.selected_branches?.map(b => (typeof b === "object" ? b.id : b)) || []
+  );
+
   const [form, setForm] = useState({
     branch_id:               initial?.branch || "",
     name:                    initial?.name || "",
@@ -140,21 +149,24 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
   const COMBO_TYPES = ["combo", "free_item", "bogo"];
   const isCombo = COMBO_TYPES.includes(form.offer_type);
 
-  // Load menu items whenever a branch is selected (used for both combo and applies_to pickers)
+  // Effective branch for loading menu items/categories
+  const effectiveBranchId = branchScope === "this" ? form.branch_id
+    : branchScope === "selected" ? (selectedBranchIds[0] || "")
+    : (branches[0]?.id || "");
+
   useEffect(() => {
-    if (!form.branch_id) return;
-    axiosClient.get("/menu/items/", { params: { branch_id: form.branch_id, available: "" } })
+    if (!effectiveBranchId) return;
+    axiosClient.get("/menu/items/", { params: { branch_id: effectiveBranchId, available: "" } })
       .then(r => setMenuItems(r.data.items || []))
       .catch(() => {});
-  }, [form.branch_id]);
+  }, [effectiveBranchId]);
 
-  // Load categories when branch changes
   useEffect(() => {
-    if (!form.branch_id) return;
-    axiosClient.get(`/menu/categories/?branch_id=${form.branch_id}`)
+    if (!effectiveBranchId) return;
+    axiosClient.get(`/menu/categories/?branch_id=${effectiveBranchId}`)
       .then(r => setCategories(r.data.categories || []))
       .catch(() => {});
-  }, [form.branch_id]);
+  }, [effectiveBranchId]);
 
   const set = (k, v) => { setForm(f => ({...f,[k]:v})); setErrors(e => ({...e,[k]:""})); };
 
@@ -175,9 +187,10 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
   const handleSubmit = e => {
     e.preventDefault();
     const errs = {};
-    if (!form.branch_id)   errs.branch_id  = "Select a branch";
-    if (!form.name.trim()) errs.name        = "Name is required";
-    if (!form.offer_type)  errs.offer_type  = "Select offer type";
+    if (branchScope === "this" && !form.branch_id) errs.branch_scope = "Select a branch";
+    if (branchScope === "selected" && selectedBranchIds.length === 0) errs.branch_scope = "Select at least one branch";
+    if (!form.name.trim()) errs.name       = "Name is required";
+    if (!form.offer_type)  errs.offer_type = "Select offer type";
     if (!form.lifetime && !form.end_at) errs.end_at = "End date is required (or enable Lifetime)";
     if (isCombo && comboItems.length === 0) errs.combo = "Add at least one item to the combo";
     if (Object.keys(errs).length) { setErrors(errs); return; }
@@ -186,19 +199,34 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
     const BOOL_FIELDS = ["is_active", "auto_broadcast", "first_order_only", "require_coupon", "referral_reward_on_signup"];
     const { lifetime, ...formFields } = form;
     Object.entries(formFields).forEach(([k, v]) => {
-      if (k === "end_at" && lifetime) return; // lifetime = no end_at
+      if (k === "branch_id") return; // handled below per scope
+      if (k === "end_at" && lifetime) return;
       if (BOOL_FIELDS.includes(k)) { fd.set(k, v ? "true" : "false"); return; }
       if (v !== "" && v !== null && v !== undefined) fd.append(k, v);
     });
+
+    // Branch scope packing
+    if (branchScope === "all") {
+      fd.set("all_branches", "true");
+      fd.set("branch_id", branches[0]?.id || "");
+      fd.append("selected_branch_ids", JSON.stringify([]));
+    } else if (branchScope === "selected") {
+      fd.set("all_branches", "false");
+      fd.set("branch_id", selectedBranchIds[0] || "");
+      fd.append("selected_branch_ids", JSON.stringify(selectedBranchIds));
+    } else {
+      fd.set("all_branches", "false");
+      fd.set("branch_id", form.branch_id);
+      fd.append("selected_branch_ids", JSON.stringify([]));
+    }
+
     if (image) fd.append("image", image);
     if (video) fd.append("video", video);
-    // Combo items as JSON — backend _save_offer_extras parses it
     if (isCombo && comboItems.length > 0) {
       fd.append("offer_items", JSON.stringify(
         comboItems.map(ci => ({ menu_item_id: ci.menu_item_id, quantity: Number(ci.quantity) || 1, notes: ci.notes || "" }))
       ));
     }
-    // Specific items (applies_to) as JSON — always send so backend can clear it
     fd.append("applies_to_ids", JSON.stringify(appliesTo.map(i => i.id)));
     onSave(fd);
   };
@@ -226,17 +254,60 @@ function OfferForm({ initial, branches, onSave, onClose, saving }) {
     <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:0 }}>
 
       {/* ── Basic Info ───────────────────────────── */}
-      {/* Branch */}
-      <FL req>Branch</FL>
-      <div className={`input-wrap${errors.branch_id?" err":""}`} style={{ marginBottom:"var(--s4)" }}>
-        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <select value={form.branch_id} onChange={e => set("branch_id", e.target.value)}
-          style={{ flex:1, border:"none", background:"transparent", color:form.branch_id?"var(--t1)":"var(--t4)", fontSize:".9375rem", outline:"none", padding:"0 var(--s2)", fontFamily:"var(--ff-b)", cursor:"pointer" }}>
-          <option value="">Select branch…</option>
-          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
+      {/* Branch Scope */}
+      <FL req>Branch Scope</FL>
+      <div style={{ display:"flex", gap:"var(--s2)", marginBottom:"var(--s3)", flexWrap:"wrap" }}>
+        {[
+          ["this",     "This Branch Only"],
+          ["selected", "Selected Branches"],
+          ...(isSuperAdmin ? [["all", "All Branches"]] : []),
+        ].map(([val, lbl]) => (
+          <button key={val} type="button"
+            onClick={() => setBranchScope(val)}
+            style={{ padding:"8px 14px", borderRadius:"var(--r3)", fontSize:".8125rem", fontWeight:600, fontFamily:"var(--ff-b)", cursor:"pointer", transition:"all var(--d1) var(--ease)", border:`1.5px solid ${branchScope===val?"var(--brand)":"var(--bd)"}`, background:branchScope===val?"var(--brand-tint)":"var(--bg2)", color:branchScope===val?"var(--brand)":"var(--t2)" }}>
+            {lbl}
+          </button>
+        ))}
       </div>
-      {errors.branch_id && <p style={{ color:"var(--err)", fontSize:".75rem", marginTop:"-12px", marginBottom:"var(--s3)" }}>{errors.branch_id}</p>}
+
+      {/* This Branch — single dropdown */}
+      {branchScope === "this" && (
+        <div className={`input-wrap${errors.branch_scope?" err":""}`} style={{ marginBottom:"var(--s4)" }}>
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--t3)" strokeWidth="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <select value={form.branch_id} onChange={e => set("branch_id", e.target.value)}
+            style={{ flex:1, border:"none", background:"transparent", color:form.branch_id?"var(--t1)":"var(--t4)", fontSize:".9375rem", outline:"none", padding:"0 var(--s2)", fontFamily:"var(--ff-b)", cursor:"pointer" }}>
+            <option value="">Select branch…</option>
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* Selected Branches — checkboxes */}
+      {branchScope === "selected" && (
+        <div style={{ border:"1px solid var(--bd)", borderRadius:"var(--r3)", padding:"var(--s3)", marginBottom:"var(--s4)", display:"flex", flexDirection:"column", gap:"var(--s2)" }}>
+          {branches.map(b => {
+            const checked = selectedBranchIds.includes(b.id);
+            return (
+              <label key={b.id} style={{ display:"flex", alignItems:"center", gap:"var(--s2)", cursor:"pointer", fontSize:".9rem", color:"var(--t1)" }}>
+                <input type="checkbox" checked={checked}
+                  onChange={() => setSelectedBranchIds(ids => checked ? ids.filter(id => id !== b.id) : [...ids, b.id])}
+                  style={{ width:"16px", height:"16px", accentColor:"var(--brand)", cursor:"pointer" }} />
+                {b.name}
+              </label>
+            );
+          })}
+          {branches.length === 0 && <span style={{ color:"var(--t4)", fontSize:".85rem" }}>No branches found</span>}
+        </div>
+      )}
+
+      {/* All Branches — info chip */}
+      {branchScope === "all" && (
+        <div style={{ background:"var(--brand-tint)", border:"1px solid var(--brand)", borderRadius:"var(--r3)", padding:"var(--s3) var(--s4)", marginBottom:"var(--s4)", fontSize:".875rem", color:"var(--brand)", fontWeight:600 }}>
+          This offer will be visible to customers of ALL branches.
+        </div>
+      )}
+
+      {errors.branch_scope && <p style={{ color:"var(--err)", fontSize:".75rem", marginTop:"-10px", marginBottom:"var(--s3)" }}>{errors.branch_scope}</p>}
 
       {/* Name */}
       <FL req>Offer name</FL>
@@ -1492,6 +1563,7 @@ export default function AdminOffersPage() {
             <OfferForm
               initial={drawer==="create" ? null : drawer}
               branches={branches}
+              isSuperAdmin={isSuperAdmin}
               onSave={handleSave}
               onClose={() => setDrawer(null)}
               saving={saving}

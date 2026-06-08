@@ -68,6 +68,14 @@ def _save_offer_extras(offer, request):
         except Exception as e:
             logger.error(f"applies_to parse error for offer {offer.id}: {e}")
 
+    raw_sel = request.data.get("selected_branch_ids")
+    if raw_sel is not None:
+        try:
+            branch_ids = json.loads(raw_sel) if raw_sel else []
+            offer.selected_branches.set(branch_ids)
+        except Exception as e:
+            logger.error(f"selected_branches parse error for offer {offer.id}: {e}")
+
 
 def _maybe_auto_broadcast(offer, request):
     """Queue a broadcast if the offer has auto_broadcast=True and is now active."""
@@ -118,7 +126,7 @@ class ActiveOffersView(APIView):
 
         if cached_data is None:
             offers = DailyOffer.objects.filter(
-                Q(branch_id=branch_id) | Q(all_branches=True),
+                Q(branch_id=branch_id) | Q(all_branches=True) | Q(selected_branches=branch_id),
                 is_active=True,
                 start_at__lte=now,
             ).filter(
@@ -419,7 +427,7 @@ class WelcomeOfferView(APIView):
 
         now = timezone.now()
         offers = DailyOffer.objects.filter(
-            Q(branch_id=branch_id) | Q(all_branches=True),
+            Q(branch_id=branch_id) | Q(all_branches=True) | Q(selected_branches=branch_id),
             offer_type=OfferType.WELCOME,
             is_active=True,
             start_at__lte=now,
