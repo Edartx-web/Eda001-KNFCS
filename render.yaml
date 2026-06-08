@@ -48,7 +48,7 @@ services:
         value: https://knfcs.com
 
       - key: WHATSAPP_SERVICE_URL
-        value: https://wa.knfcs.com
+        value: https://knfc-whatsapp.onrender.com
 
       - key: WHATSAPP_INTERNAL_KEY
         sync: false
@@ -113,6 +113,56 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
 
+  # ── WhatsApp Baileys Service (Node.js) ───────────────────────────────────────
+  - type: web
+    name: knfc-whatsapp
+    runtime: node
+    plan: free
+    rootDir: whatsapp-service
+    buildCommand: "npm install --omit=dev && node patch.mjs"
+    startCommand: "node index.js"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: INTERNAL_KEY
+        sync: false   # Same value as WHATSAPP_INTERNAL_KEY in knfc-backend
+
+      # Supabase S3 — session persistence (reuse same bucket as Django media)
+      - key: SUPABASE_S3_URL
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SUPABASE_S3_URL
+
+      - key: SUPABASE_S3_ACCESS_KEY
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SUPABASE_S3_ACCESS_KEY
+
+      - key: SUPABASE_S3_SECRET_KEY
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SUPABASE_S3_SECRET_KEY
+
+      - key: SUPABASE_BUCKET
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SUPABASE_BUCKET
+
+      - key: SUPABASE_S3_REGION
+        fromService:
+          type: web
+          name: knfc-backend
+          envVarKey: SUPABASE_S3_REGION
+
+      - key: NODE_VERSION
+        value: "20.11.0"
+
   # ── Celery Worker ─────────────────────────────────────────────────────────────
   - type: worker
     name: knfc-celery
@@ -146,7 +196,7 @@ services:
         value: "True"
 
       - key: WHATSAPP_SERVICE_URL
-        value: https://wa.knfcs.com
+        value: https://knfc-whatsapp.onrender.com
 
       - key: WHATSAPP_INTERNAL_KEY
         fromService:
