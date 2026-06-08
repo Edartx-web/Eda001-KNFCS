@@ -788,12 +788,12 @@ class UploadMediaView(APIView):
         ext  = os.path.splitext(f.name)[-1].lower()
         name = f"uploads/{uuid.uuid4().hex}{ext}"
         path = default_storage.save(name, ContentFile(f.read()))
-        media_relative = settings.MEDIA_URL + path  # e.g. /media/uploads/abc.jpg
-        backend_url    = getattr(settings, "BACKEND_URL", "").rstrip("/")
-        if backend_url:
-            url = f"{backend_url}{media_relative}"
+        raw = default_storage.url(path)
+        if raw.startswith("http"):
+            url = raw
         else:
-            url = request.build_absolute_uri(media_relative)
+            backend_url = getattr(settings, "BACKEND_URL", "").rstrip("/")
+            url = f"{backend_url}{raw}" if backend_url else request.build_absolute_uri(raw)
         return Response({"success": True, "url": url, "path": path})
 
 

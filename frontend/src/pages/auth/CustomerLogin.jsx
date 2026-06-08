@@ -7,7 +7,6 @@ import ThemeToggle from "../../components/common/ThemeToggle";
 import axiosClient from "../../api/axiosClient";
 import "../../styles/global.css";
 import "../../styles/authpage/customerlogin.css";
-import knfcHeroVideo from "../../components/videoclips/KNFC-hero.mp4";
 
 /* ─── API ─────────────────────────────────────────────────────── */
 const API = axiosClient
@@ -485,13 +484,15 @@ export default function CustomerLogin() {
                 style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
                 onLoad={() => setVideoEnded(true)}
                 onError={() => setVideoEnded(true)} />
-            ) : (
+            ) : loginVideoUrl ? (
               <video ref={videoRef} autoPlay muted playsInline
                 onEnded={() => setVideoEnded(true)} onTimeUpdate={handleTimeUpdate}
                 onError={() => setVideoEnded(true)}
                 className="hero-vid" style={{ width:"100%", height:"100%", objectFit:"cover" }}>
-                <source src={loginVideoUrl || knfcHeroVideo} type="video/mp4"/>
+                <source src={loginVideoUrl} type="video/mp4"/>
               </video>
+            ) : (
+              <div style={{ width:"100%", height:"100%", background:"linear-gradient(135deg,#080200 0%,#3D0F00 55%,#1A0500 100%)" }}/>
             )}
             <div className="video-overlay"/>
           </div>
