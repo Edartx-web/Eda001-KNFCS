@@ -8,6 +8,7 @@ urlpatterns = [
     path("config/",             views.SiteConfigView.as_view(),           name="site-config"),
     path("spin/",               views.SpinView.as_view(),                 name="spin"),
     path("upload-media/",       views.UploadMediaView.as_view(),          name="upload-media"),
+    path("presigned-upload/",   views.PresignedUploadView.as_view(),      name="presigned-upload"),
     path("<uuid:pk>/",          views.BranchDetailView.as_view(),         name="branch-detail"),
     path("<uuid:pk>/hours/",    views.BranchOperatingHoursView.as_view(), name="branch-hours"),
     path("<uuid:pk>/qr/",          views.BranchQRCodeView.as_view(),        name="branch-qr"),

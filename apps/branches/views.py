@@ -787,8 +787,10 @@ class UploadMediaView(APIView):
             return err("No file provided.")
 
         try:
+            import re as _re
+            orig = _re.sub(r'[^a-zA-Z0-9_-]', '_', os.path.splitext(f.name)[0])[:40]
             ext  = os.path.splitext(f.name)[-1].lower()
-            name = f"uploads/{uuid.uuid4().hex}{ext}"
+            name = f"uploads/{orig}_{uuid.uuid4().hex[:8]}{ext}"
             path = default_storage.save(name, f)
             raw = default_storage.url(path)
             if raw.startswith("http"):
@@ -800,6 +802,51 @@ class UploadMediaView(APIView):
         except Exception as exc:
             log.exception("UploadMediaView failed")
             return Response({"success": False, "error": f"Upload error: {exc}"}, status=500)
+
+
+class PresignedUploadView(APIView):
+    """
+    POST /api/v1/branches/presigned-upload/
+    Returns a presigned S3 PUT URL so the browser can upload directly to
+    Supabase without routing large files through the Render server.
+    SuperAdmin only.
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdminOnly]
+
+    def post(self, request):
+        import os, uuid, re, logging
+        from django.conf import settings
+        log = logging.getLogger(__name__)
+
+        filename     = request.data.get("filename", "upload.bin")
+        content_type = request.data.get("content_type", "application/octet-stream")
+
+        orig = re.sub(r'[^a-zA-Z0-9_-]', '_', os.path.splitext(filename)[0])[:40]
+        ext  = os.path.splitext(filename)[-1].lower() or ".bin"
+        key  = f"uploads/{orig}_{uuid.uuid4().hex[:8]}{ext}"
+
+        try:
+            import boto3
+            from botocore.config import Config
+            s3 = boto3.client(
+                "s3",
+                endpoint_url      = settings.AWS_S3_ENDPOINT_URL,
+                aws_access_key_id = settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key = settings.AWS_SECRET_ACCESS_KEY,
+                region_name       = settings.AWS_S3_REGION_NAME,
+                config            = Config(signature_version="s3v4"),
+            )
+            presigned_url = s3.generate_presigned_url(
+                "put_object",
+                Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": key, "ContentType": content_type},
+                ExpiresIn=3600,
+            )
+            custom_domain = settings.AWS_S3_CUSTOM_DOMAIN
+            public_url = f"https://{custom_domain}/{key}"
+            return Response({"presigned_url": presigned_url, "public_url": public_url, "key": key})
+        except Exception as exc:
+            log.exception("PresignedUploadView failed")
+            return Response({"error": str(exc)}, status=500)
 
 
 class BranchTableListView(APIView):

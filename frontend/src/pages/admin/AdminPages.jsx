@@ -13,6 +13,7 @@ import { useAuth } from "../../context/AuthContext";
 import Header from "../../components/layout/Header";
 import axiosClient from "../../api/axiosClient";
 import { formatPrice, formatTime } from "../../utils/format";
+import { uploadMedia } from "../../utils/uploadMedia";
 import { adminGetItems } from "../../api/menu";
 import {
   IcSun, IcRefresh,
@@ -2469,11 +2470,10 @@ function VideoUploadField({ value, onChange }) {
     if (!file.type.startsWith("video/")) { setErr("Please select a video file (MP4, MOV, etc.)"); return; }
     setUploading(true); setErr("");
     try {
-      const fd = new FormData(); fd.append("file", file);
-      const r = await axiosClient.post("/branches/upload-media/", fd, { headers:{ "Content-Type":"multipart/form-data" } });
-      if (r.data.url) onChange(r.data.url);
+      const url = await uploadMedia(file);
+      onChange(url);
     } catch (e) {
-      setErr(e.response?.data?.error || "Upload failed.");
+      setErr(e.message || "Upload failed.");
     } finally { setUploading(false); }
   };
 
@@ -2539,9 +2539,8 @@ function LoginSlidesEditor({ slides, onChange }) {
     if (!file) return;
     setUploading(u => ({ ...u, [i]: true }));
     try {
-      const fd = new FormData(); fd.append("file", file);
-      const r = await axiosClient.post("/branches/upload-media/", fd, { headers:{ "Content-Type":"multipart/form-data" } });
-      if (r.data.url) update(i, "img", r.data.url);
+      const url = await uploadMedia(file);
+      update(i, "img", url);
     } catch {}
     finally { setUploading(u => ({ ...u, [i]: false })); }
   };
@@ -2688,12 +2687,9 @@ function HomeSectionImagesPanel({ form, set }) {
 
     setUploading(u => ({ ...u, [key]: true }));
     try {
-      const fd = new FormData(); fd.append("file", file);
-      const r = await axiosClient.post("/branches/upload-media/", fd, { headers:{ "Content-Type":"multipart/form-data" } });
-      if (r.data.url) {
-        update(key, "image_url", r.data.url);
-        setPreviews(p => ({ ...p, [key]: null })); // clear local preview; use server URL
-      }
+      const url = await uploadMedia(file);
+      update(key, "image_url", url);
+      setPreviews(p => ({ ...p, [key]: null }));
     } catch {}
     finally { setUploading(u => ({ ...u, [key]: false })); }
   };
@@ -2781,14 +2777,11 @@ function HomeAdsPanel({ form, set }) {
     if (!file) return;
     setUploading(true); setUploadErr("");
     try {
-      const fd = new FormData(); fd.append("file", file);
-      const r = await axiosClient.post("/branches/upload-media/", fd, { headers:{ "Content-Type":"multipart/form-data" } });
-      if (r.data.url) {
-        setNewAd(n => ({ ...n, image_url: r.data.url }));
-        setImgPreview(r.data.url);
-      }
+      const url = await uploadMedia(file);
+      setNewAd(n => ({ ...n, image_url: url }));
+      setImgPreview(url);
     } catch (e) {
-      setUploadErr(e.response?.data?.error || "Upload failed.");
+      setUploadErr(e.message || "Upload failed.");
     } finally { setUploading(false); }
   };
 
