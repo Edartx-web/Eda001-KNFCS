@@ -15,7 +15,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "daphne -b 0.0.0.0 -p $PORT config.asgi:application"
+    startCommand: "gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --workers 1 --threads 4 --bind 0.0.0.0:$PORT --timeout 120"
     healthCheckPath: /api/v1/branches/
     envVars:
       - key: DJANGO_SETTINGS_MODULE
