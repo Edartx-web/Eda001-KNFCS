@@ -998,7 +998,7 @@ function ItemsTab({ items, categories, loading, onRefresh, activeBranchId }) {
           <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
           <div style={{ minWidth:"720px" }}>
           {/* Table header */}
-          <div style={{ display:"grid", gridTemplateColumns:"40px 1fr 100px 80px 80px 80px 90px 80px", gap:"var(--s3)", padding:"var(--s3) var(--s4)", background:"var(--bg2)", borderBottom:"1px solid var(--bd)" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"40px 1fr 100px 110px 80px 80px 90px 80px", gap:"var(--s3)", padding:"var(--s3) var(--s4)", background:"var(--bg2)", borderBottom:"1px solid var(--bd)" }}>
             {["","Name","Category","Price","Dietary","Stock","Availability","Actions"].map((h,i) => (
               <div key={i} style={{ fontSize:".6875rem", fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:"var(--t4)", textAlign:i>1?"center":"left" }}>
                 {h}
@@ -1007,7 +1007,7 @@ function ItemsTab({ items, categories, loading, onRefresh, activeBranchId }) {
           </div>
 
           {filtered.map((item, idx) => (
-            <div key={item.id} className="item-row" style={{ display:"grid", gridTemplateColumns:"40px 1fr 100px 80px 80px 80px 90px 80px", gap:"var(--s3)", padding:"var(--s3) var(--s4)", borderBottom:idx<filtered.length-1?"1px solid var(--bd)":"none", alignItems:"center", transition:"background var(--d1) var(--ease)" }}
+            <div key={item.id} className="item-row" style={{ display:"grid", gridTemplateColumns:"40px 1fr 100px 110px 80px 80px 90px 80px", gap:"var(--s3)", padding:"var(--s3) var(--s4)", borderBottom:idx<filtered.length-1?"1px solid var(--bd)":"none", alignItems:"center", transition:"background var(--d1) var(--ease)" }}
               onMouseEnter={e => e.currentTarget.style.background="var(--bg2)"}
               onMouseLeave={e => e.currentTarget.style.background="transparent"}
             >
@@ -1047,18 +1047,18 @@ function ItemsTab({ items, categories, loading, onRefresh, activeBranchId }) {
               </div>
 
               {/* Price */}
-              <div style={{ textAlign:"center" }}>
+              <div style={{ textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:"2px" }}>
                 {item.discount > 0 ? (
                   <>
-                    <div style={{ fontFamily:"var(--ff-d)", fontWeight:800, color:"var(--brand)", fontSize:".9375rem", lineHeight:1.1 }}>
+                    <span style={{ fontFamily:"var(--ff-d)", fontWeight:800, color:"var(--brand)", fontSize:".9375rem", lineHeight:1 }}>
                       {formatPrice(item.discounted_price || item.price)}
-                    </div>
-                    <div style={{ fontSize:".6875rem", textDecoration:"line-through", color:"var(--t4)", lineHeight:1.2 }}>
+                    </span>
+                    <span style={{ fontSize:".6875rem", textDecoration:"line-through", color:"var(--t4)", lineHeight:1 }}>
                       {formatPrice(item.price)}
-                    </div>
-                    <div style={{ fontSize:".5625rem", fontWeight:800, color:"var(--ok)", letterSpacing:".04em" }}>
+                    </span>
+                    <span style={{ fontSize:".625rem", fontWeight:800, color:"var(--ok)", letterSpacing:".04em", background:"color-mix(in srgb,var(--ok) 12%,transparent)", padding:"1px 5px", borderRadius:"4px" }}>
                       {item.discount}% OFF
-                    </div>
+                    </span>
                   </>
                 ) : (
                   <span style={{ fontFamily:"var(--ff-d)", fontWeight:700, color:"var(--brand)", fontSize:".9375rem" }}>
