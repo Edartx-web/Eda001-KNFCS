@@ -453,6 +453,8 @@ body.nav-open .mob-tabbar { display:none !important }
   display:grid; gap:var(--s3);
   grid-template-columns:repeat(2,minmax(0,1fr));
 }
+/* very small phones: single column so cards are usable */
+@media(max-width:359px) { .product-grid { grid-template-columns:repeat(1,minmax(0,1fr)) } }
 @media(min-width:480px) { .product-grid { gap:var(--s4) } }
 @media(min-width:640px) { .product-grid { grid-template-columns:repeat(3,minmax(0,1fr)) } }
 @media(min-width:900px) { .product-grid { grid-template-columns:repeat(4,minmax(0,1fr)) } }
@@ -464,6 +466,8 @@ body.nav-open .mob-tabbar { display:none !important }
   gap:var(--s3);
   grid-template-columns:repeat(2,minmax(0,1fr));
 }
+/* very small phones: single column */
+@media(max-width:359px) { .home-section-row { grid-template-columns:repeat(1,minmax(0,1fr)) } }
 @media(min-width:480px) { .home-section-row { gap:var(--s4) } }
 @media(min-width:640px) { .home-section-row { grid-template-columns:repeat(3,minmax(0,1fr)) } }
 @media(min-width:900px)  { .home-section-row { grid-template-columns:repeat(4,minmax(0,1fr)) } }
@@ -485,8 +489,9 @@ body.nav-open .mob-tabbar { display:none !important }
     scroll-snap-type:x mandatory;
     -webkit-overflow-scrolling:touch;
   }
+  /* peek-style: 68% width shows ~1.5 cards, indicating scroll */
   .mob-hscroll-row > * {
-    flex:0 0 44%;
+    flex:0 0 68%;
     scroll-snap-align:start;
     min-width:0;
   }
@@ -528,11 +533,13 @@ body.nav-open .mob-tabbar { display:none !important }
 /* ─── Category square cards ──────────────────────────────────────────────── */
 .cat-scroll-row {
   display:grid;
-  gap:var(--s2);
-  /* 4 columns on all mobile — keeps rows even (4+4 = 8 categories) */
-  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:var(--s3);
+  /* 3 columns on mobile — each chip ~109px on 375px phone (was 80px at 4-col) */
+  grid-template-columns:repeat(3,minmax(0,1fr));
 }
-@media(min-width:640px)  { .cat-scroll-row { gap:var(--s3) } }
+/* very small phones: 2 columns so chips never feel cramped */
+@media(max-width:359px) { .cat-scroll-row { grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s2) } }
+@media(min-width:640px)  { .cat-scroll-row { gap:var(--s3); grid-template-columns:repeat(4,minmax(0,1fr)) } }
 @media(min-width:1024px) { .cat-scroll-row { grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:var(--s4) } }
 
 /* Each chip is a square card — image fills the whole square, name overlaid at bottom */
@@ -543,7 +550,6 @@ body.nav-open .mob-tabbar { display:none !important }
   border-radius:var(--r4);
   overflow:hidden;
   position:relative;
-  /* ensure name sits inside chip, not outside */
   display:flex;
   flex-direction:column;
 }
@@ -553,7 +559,7 @@ body.nav-open .mob-tabbar { display:none !important }
 }
 .cat-chip-img {
   width:100%;
-  aspect-ratio:4/3;   /* slightly wider than square — shows more of landscape food images */
+  aspect-ratio:1/1;   /* square on mobile — more visual impact per chip */
   position:relative;
   display:flex; align-items:center; justify-content:center;
   overflow:hidden;
@@ -561,16 +567,18 @@ body.nav-open .mob-tabbar { display:none !important }
   border:1.5px solid var(--bd);
   transition:border-color .22s var(--ease);
 }
+/* wider ratio on desktop where chips are large enough */
+@media(min-width:640px) { .cat-chip-img { aspect-ratio:4/3 } }
 .cat-chip:hover .cat-chip-img { border-color:var(--brand) }
 
 /* Name overlaid at bottom of the square */
 .cat-chip-name {
   position:absolute;
   bottom:0; left:0; right:0;
-  padding:18px 6px 7px;
-  background:linear-gradient(to top, rgba(0,0,0,.72) 0%, transparent 100%);
+  padding:20px 8px 8px;
+  background:linear-gradient(to top, rgba(0,0,0,.78) 0%, transparent 100%);
   font-family:var(--ff-b);
-  font-size:.6875rem;
+  font-size:.75rem;   /* was .6875rem — more readable at 3-col mobile size */
   font-weight:700;
   color:#fff;
   text-align:center;
@@ -581,7 +589,7 @@ body.nav-open .mob-tabbar { display:none !important }
 }
 
 @media(min-width:640px) {
-  .cat-chip-name { font-size:.75rem }
+  .cat-chip-name { font-size:.8125rem }
 }
 
 .cat-grid {

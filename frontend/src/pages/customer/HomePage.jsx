@@ -407,7 +407,7 @@ function CategoryGrid({ categories }) {
   const navigate = useNavigate();
   if (!categories.length) return null;
 
-  // Always show all categories in a 4-column grid so rows are always even (4+4 = 8)
+  // 3-col on mobile (2-col on tiny), 4-col on tablet+ — chips are readable at any size
   return (
     <section style={{ marginBottom:"var(--s8)" }}>
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"var(--s4)" }}>
