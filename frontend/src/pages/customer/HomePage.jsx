@@ -15,6 +15,7 @@ import AppLayout                       from "../../components/layout/AppLayout";
 import { useAuth }                     from "../../context/AuthContext";
 import useBranch                       from "../../hooks/useBranch";
 import useCartStore                    from "../../store/cartStore";
+import axiosClient                      from "../../api/axiosClient";
 import { getOffers }                   from "../../api/orders";
 import { getCategories, getFeatured, getFavourites, getHomeSections } from "../../api/menu";
 import GoogleReviewBanner from "../../components/common/GoogleReviewBanner";
@@ -657,35 +658,51 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!branchId) return;
+
+    // Session-cache helpers — keep non-user data for 90 s so back-navigation is instant
+    const CACHE_TTL = 90_000;
+    const sc_get = (k) => { try { const r=sessionStorage.getItem(k); if(!r) return null; const {ts,d}=JSON.parse(r); return Date.now()-ts<CACHE_TTL?d:null; } catch { return null; } };
+    const sc_set = (k,d) => { try { sessionStorage.setItem(k, JSON.stringify({ts:Date.now(),d})); } catch {} };
+
     setLoading(true);
     (async () => {
       try {
-        const {default:ax} = await import("../../api/axiosClient");
-        // One batch: offers + categories + featured + home sections + hours + config
-        const [oR, cR, fR, secR, hoursR] = await Promise.all([
-          getOffers().catch(()=>({data:{offers:[]}})),
-          getCategories().catch(()=>({data:{categories:[]}})),
-          getFeatured().catch(()=>({data:{featured:[],order_again:[]}})),
-          getHomeSections().catch(()=>({data:{sections:{}}})),
-          ax.get(`/branches/${branchId}/hours/`).catch(()=>null),
+        const cacheKey = `hp:${branchId}`;
+        const cached   = sc_get(cacheKey);
+
+        // Fire ALL 7 requests in parallel — no sequential awaits
+        const [oR, cR, fR, secR, hoursR, cfgR, favR] = await Promise.all([
+          cached ? Promise.resolve({data:{offers:cached.offers}})   : getOffers().catch(()=>({data:{offers:[]}})),
+          cached ? Promise.resolve({data:{categories:cached.cats}}) : getCategories().catch(()=>({data:{categories:[]}})),
+          cached ? Promise.resolve({data:{featured:cached.feat,order_again:cached.oa}}) : getFeatured().catch(()=>({data:{featured:[],order_again:[]}})),
+          cached ? Promise.resolve({data:{sections:cached.sec}})    : getHomeSections().catch(()=>({data:{sections:{}}})),
+          axiosClient.get(`/branches/${branchId}/hours/`).catch(()=>null),
+          axiosClient.get("/branches/config/").catch(()=>null),
+          user ? getFavourites().catch(()=>({data:{favourites:[]}})) : Promise.resolve({data:{favourites:[]}}),
         ]);
-        setOffers(oR.data.offers||[]);
-        setCategories(cR.data.categories||[]);
-        setFeatured(fR.data.featured||[]);
-        setOrderAgain(fR.data.order_again||[]);
-        setSectionItems(secR.data.sections||{});
+
+        const offers = oR.data.offers||[];
+        const cats   = cR.data.categories||[];
+        const feat   = fR.data.featured||[];
+        const oa     = fR.data.order_again||[];
+        const sec    = secR.data.sections||{};
+
+        setOffers(offers);
+        setCategories(cats);
+        setFeatured(feat);
+        setOrderAgain(oa);
+        setSectionItems(sec);
+        if (!cached) sc_set(cacheKey, {offers,cats,feat,oa,sec});
+
         if (hoursR?.data?.success) {
           setShopOpen(hoursR.data.is_open_now??true);
           setNextOpenAt(hoursR.data.next_open_at||null);
-        } else {
-          setShopOpen(true);
-        }
-        if (user) {
-          const fav = await getFavourites().catch(()=>({data:{favourites:[]}}));
-          setFavourites(fav.data.favourites||[]);
-        }
+        } else { setShopOpen(true); }
+
+        if (cfgR?.data) setSiteConfig(cfgR.data);
+        if (user) setFavourites(favR.data.favourites||[]);
+
         try { const s=localStorage.getItem("active_order"); if(s){const parsed=JSON.parse(s); if(!parsed._uid||parsed._uid===user?.id) setActiveOrder(parsed);} } catch {}
-        try { const cfg=await ax.get("/branches/config/"); setSiteConfig(cfg.data); } catch {}
       } finally { setLoading(false); }
     })();
   }, [user, branchId]);
