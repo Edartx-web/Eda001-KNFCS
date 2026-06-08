@@ -540,7 +540,15 @@ export default function CartPage() {
         navigate(`/order/confirm/${order.id}`, { replace: true });
       }
     } catch (e) {
-      setError(e.response?.data?.error || "Could not place order. Please try again.");
+      const d = e.response?.data;
+      // Backend returns {errors: {non_field_errors:[...]} or {field:[...]}} or {error:"..."}
+      let msg = d?.error;
+      if (!msg && d?.errors) {
+        const errs = d.errors;
+        const flat = errs.non_field_errors || errs.items || Object.values(errs).flat();
+        msg = Array.isArray(flat) ? flat[0] : (typeof flat === "string" ? flat : null);
+      }
+      setError(msg || "Could not place order. Please try again.");
     } finally { setLoading(false); }
   };
 

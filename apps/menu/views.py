@@ -44,6 +44,21 @@ def cached_ok(data, cache_key, ttl=60):
     resp["Cache-Control"] = f"public, max-age={ttl}, stale-while-revalidate=10"
     return resp
 
+def _bust_menu_cache(branch_id):
+    """Clear all menu caches for a branch after admin creates/updates/deletes items."""
+    patterns = [
+        f"menu:items:{branch_id}:",
+        f"menu:categories:{branch_id}",
+        f"menu:home_sections:{branch_id}",
+        f"menu:featured:{branch_id}",
+    ]
+    for p in patterns:
+        cache.delete(p)
+    # Also bust wildcard item cache keys (different sort/category combos)
+    for sort in ("popular", "price_asc", "price_desc", "new"):
+        cache.delete(f"menu:items:{branch_id}::{sort}:true:")
+        cache.delete(f"menu:items:{branch_id}::{sort}:true:false")
+
 
 class CategoryListView(APIView):
     """GET /api/v1/menu/categories/ — all active categories for the branch."""
@@ -665,6 +680,7 @@ class AdminMenuItemListCreateView(APIView):
         for f in request.FILES.getlist("gallery_add"):
             MenuItemImage.objects.create(menu_item=item, image=f)
 
+        _bust_menu_cache(branch_id)
         return ok(
             {"item": MenuItemDetailSerializer(item, context={"request": request}).data, "message": "Item created."},
             code=status.HTTP_201_CREATED,
@@ -764,6 +780,7 @@ class AdminMenuItemDetailView(APIView):
             MenuItemImage.objects.create(menu_item=item, image=f)
 
         item.refresh_from_db()
+        _bust_menu_cache(item.branch_id)
         return ok({"item": MenuItemDetailSerializer(item, context={"request": request}).data, "message": "Updated."})
 
     def delete(self, request, item_id):
@@ -771,7 +788,9 @@ class AdminMenuItemDetailView(APIView):
         if not item:
             return err("Item not found.", status.HTTP_404_NOT_FOUND)
         name = item.name
+        branch_id = item.branch_id
         item.delete()
+        _bust_menu_cache(branch_id)
         return ok({"message": f"'{name}' deleted."})
 
 
@@ -790,6 +809,7 @@ class AdminToggleAvailabilityView(APIView):
 
         item.is_available = not item.is_available
         item.save(update_fields=["is_available"])
+        _bust_menu_cache(item.branch_id)
         state = "available" if item.is_available else "unavailable"
         return ok({"is_available": item.is_available, "message": f"{item.name} is now {state}."})
 
