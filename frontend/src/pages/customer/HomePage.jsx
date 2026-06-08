@@ -433,7 +433,9 @@ function CategoryGrid({ categories }) {
   const navigate = useNavigate();
   if (!categories.length) return null;
 
-  // 3-col on mobile (2-col on tiny), 4-col on tablet+ — chips are readable at any size
+  // Always show even count so the grid rows are always full (no orphaned chip)
+  const visible = categories.length % 2 !== 0 ? categories.slice(0, -1) : categories;
+
   return (
     <section style={{ marginBottom:"var(--s8)" }}>
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"var(--s4)" }}>
@@ -441,7 +443,7 @@ function CategoryGrid({ categories }) {
         <Link to="/menu/all" style={{ fontSize:".875rem",fontWeight:700,color:"var(--brand)",display:"flex",alignItems:"center",gap:"4px" }}>See all <Ic.Arrow/></Link>
       </div>
       <div className="cat-scroll-row">
-        {categories.map(cat => (
+        {visible.map(cat => (
           <CatChip key={cat.id} cat={cat} onClick={() => navigate(`/menu/category/${cat.slug}`)} />
         ))}
       </div>

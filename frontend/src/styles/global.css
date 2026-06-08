@@ -540,7 +540,7 @@ body.nav-open .mob-tabbar { display:none !important }
 /* very small phones: 2 columns so chips never feel cramped */
 @media(max-width:359px) { .cat-scroll-row { grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s2) } }
 @media(min-width:640px)  { .cat-scroll-row { gap:var(--s3); grid-template-columns:repeat(4,minmax(0,1fr)) } }
-@media(min-width:1024px) { .cat-scroll-row { grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:var(--s4) } }
+@media(min-width:1024px) { .cat-scroll-row { grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:var(--s4) } }
 
 /* Each chip is a square card — image fills the whole square, name overlaid at bottom */
 .cat-chip {
@@ -567,8 +567,9 @@ body.nav-open .mob-tabbar { display:none !important }
   border:1.5px solid var(--bd);
   transition:border-color .22s var(--ease);
 }
-/* wider ratio on desktop where chips are large enough */
-@media(min-width:640px) { .cat-chip-img { aspect-ratio:4/3 } }
+/* wider ratio on tablet, full rectangle on large screen */
+@media(min-width:640px)  { .cat-chip-img { aspect-ratio:4/3 } }
+@media(min-width:1024px) { .cat-chip-img { aspect-ratio:16/9 } }
 .cat-chip:hover .cat-chip-img { border-color:var(--brand) }
 
 /* Name overlaid at bottom of the square */
