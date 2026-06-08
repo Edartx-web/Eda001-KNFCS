@@ -789,7 +789,7 @@ class UploadMediaView(APIView):
         try:
             ext  = os.path.splitext(f.name)[-1].lower()
             name = f"uploads/{uuid.uuid4().hex}{ext}"
-            path = default_storage.save(name, ContentFile(f.read()))
+            path = default_storage.save(name, f)
             raw = default_storage.url(path)
             if raw.startswith("http"):
                 url = raw

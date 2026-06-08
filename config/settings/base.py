@@ -108,6 +108,10 @@ MEDIA_ROOT   = BASE_DIR / "media"
 BACKEND_URL  = config("BACKEND_URL", default="http://localhost:1000")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Write uploads >1 MB to a temp file instead of holding in RAM
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1 * 1024 * 1024   # 1 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024   # 5 MB max form body
+
 # ── DRF ──────────────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
