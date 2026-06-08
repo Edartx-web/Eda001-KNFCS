@@ -15,7 +15,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "hypercorn config.asgi:application --bind 0.0.0.0:$PORT --workers 1 --keep-alive 5"
+    startCommand: "python -m hypercorn config.asgi:application --bind 0.0.0.0:$PORT --workers 1 --keep-alive 5"
     healthCheckPath: /api/v1/branches/
     envVars:
       - key: DJANGO_SETTINGS_MODULE
