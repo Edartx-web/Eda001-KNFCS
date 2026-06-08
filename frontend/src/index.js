@@ -7,7 +7,7 @@ import "./index.css";
 // (Render free tier sleeps after 15 min of inactivity)
 const PING_URL = (() => {
   const h = window.location.hostname;
-  if (h.endsWith("knfcs.com") || h.endsWith("onrender.com")) return "https://knfc-backend.onrender.com/api/v1/branches/";
+  if (h.endsWith("knfcs.com") || h.endsWith("onrender.com")) return "https://eda001-knfcs.onrender.com/api/v1/branches/";
   return null;
 })();
 if (PING_URL) {
