@@ -107,14 +107,27 @@ class MenuItemListView(APIView):
         if not branch_id:
             return err("branch_id is required.")
 
+        # Build a cache key from all params that affect the result
+        category  = request.query_params.get("category", "")
+        sort      = request.query_params.get("sort", "popular")
+        available = request.query_params.get("available", "true")
+        search    = request.query_params.get("search", "").strip()
+        flags     = ":".join(
+            f for f in ("is_hotdeals","is_chicken","is_snacks","is_cold_drinks","is_buckets","is_combo")
+            if request.query_params.get(f, "").lower() == "true"
+        )
+        cache_key = f"menu:items:{branch_id}:{category}:{sort}:{available}:{flags}"
+
+        if not search:  # don't cache search — too many variants
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return cached_ok({"items": cached, "total_count": len(cached)}, cache_key, ttl=60)
+
         qs = MenuItem.objects.filter(
             Q(branch_id=branch_id) | Q(all_branches=True),
         ).select_related("category").prefetch_related("offers", "stock_records")
 
-        # Deduplicate: if a branch has its own version of an item (same name,
-        # all_branches=False), prefer it over the global all_branches=True copy.
-        # This prevents the global item from appearing alongside the branch item
-        # and ensures stock lookups find the right StockRecord.
+        # Deduplicate: prefer branch-specific items over all_branches copies
         branch_item_names = list(
             MenuItem.objects.filter(branch_id=branch_id, all_branches=False)
             .values_list("name", flat=True)
@@ -122,21 +135,16 @@ class MenuItemListView(APIView):
         if branch_item_names:
             qs = qs.exclude(all_branches=True, name__in=branch_item_names)
 
-        # Filters
-        category = request.query_params.get("category")
         if category:
             qs = qs.filter(category__slug=category)
 
-        # Home-page section flags
         for flag in ("is_hotdeals", "is_chicken", "is_snacks", "is_cold_drinks", "is_buckets", "is_combo"):
             if request.query_params.get(flag, "").lower() == "true":
                 qs = qs.filter(**{flag: True})
 
-        available = request.query_params.get("available", "true")
         if available.lower() == "true":
             qs = qs.filter(is_available=True)
 
-        search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(
                 Q(name__icontains=search) |
@@ -144,8 +152,6 @@ class MenuItemListView(APIView):
                 Q(category__name__icontains=search)
             )
 
-        # Sort
-        sort = request.query_params.get("sort", "popular")
         sort_map = {
             "popular":   "-avg_rating",
             "price_asc":  "price",
@@ -154,11 +160,10 @@ class MenuItemListView(APIView):
         }
         qs = qs.order_by(sort_map.get(sort, "display_order"))
 
-        serializer = MenuItemListSerializer(qs, many=True, context={"request": request})
-        return ok({
-            "items":       serializer.data,
-            "total_count": qs.count(),
-        })
+        data = MenuItemListSerializer(qs, many=True, context={"request": request}).data
+        if not search:
+            cache.set(cache_key, data, 60)
+        return cached_ok({"items": data, "total_count": len(data)}, cache_key, ttl=60)
 
 
 class HomeSectionsView(APIView):
@@ -235,35 +240,49 @@ class FeaturedItemsView(APIView):
         if not branch_id:
             return err("branch_id is required.")
 
-        featured = MenuItem.objects.filter(
-            Q(branch_id=branch_id) | Q(all_branches=True),
-            is_featured=True,
-            is_available=True,
-        ).order_by("display_order")[:8]
+        feat_cache_key = f"menu:featured:{branch_id}"
+        feat_cached = cache.get(feat_cache_key)
 
-        # Order again — items from customer's last 3 orders
-        order_again = []
+        if feat_cached is None:
+            featured = list(MenuItem.objects.filter(
+                Q(branch_id=branch_id) | Q(all_branches=True),
+                is_featured=True,
+                is_available=True,
+            ).select_related("category").prefetch_related("offers", "stock_records")
+             .order_by("display_order")[:8])
+            feat_cached = MenuItemListSerializer(featured, many=True, context={"request": request}).data
+            cache.set(feat_cache_key, feat_cached, 90)
+
+        # Order again — items from customer's last 3 completed orders
+        order_again_data = []
         if request.user.is_authenticated:
             from apps.orders.models import Order, OrderStatus
             last_orders = Order.objects.filter(
                 branch_id=branch_id,
                 customer=request.user,
                 status=OrderStatus.COMPLETED,
+            ).prefetch_related(
+                "items__menu_item__category",
+                "items__menu_item__offers",
+                "items__menu_item__stock_records",
             ).order_by("-created_at")[:3]
 
             seen_ids = set()
+            order_again = []
             for order in last_orders:
                 for oi in order.items.all():
-                    if oi.menu_item_id not in seen_ids and oi.menu_item.is_available:
-                        order_again.append(oi.menu_item)
-                        seen_ids.add(oi.menu_item_id)
+                    mi = oi.menu_item
+                    if mi.id not in seen_ids and mi.is_available:
+                        order_again.append(mi)
+                        seen_ids.add(mi.id)
                         if len(order_again) >= 6:
                             break
+            order_again_data = MenuItemListSerializer(order_again, many=True, context={"request": request}).data
 
-        return ok({
-            "featured":    MenuItemListSerializer(featured, many=True, context={"request": request}).data,
-            "order_again": MenuItemListSerializer(order_again, many=True, context={"request": request}).data,
-        })
+        return cached_ok({
+            "featured":    feat_cached,
+            "order_again": order_again_data,
+        }, feat_cache_key, ttl=90)
 
 
 class SearchView(APIView):

@@ -53,6 +53,45 @@ function FoodFallback({ slug = "", size = 52 }) {
   );
 }
 
+/* ─── Skeleton loader ────────────────────────────────────────────────── */
+const shimmer = {
+  background: "linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%)",
+  backgroundSize: "200% 100%",
+  animation: "shimmer 1.4s infinite",
+};
+function SkeletonCard() {
+  return (
+    <div style={{ background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden" }}>
+      <div style={{ aspectRatio:"4/3", ...shimmer }} />
+      <div style={{ padding:"var(--s3)", display:"flex", flexDirection:"column", gap:"8px" }}>
+        <div style={{ height:"14px", borderRadius:"6px", width:"75%", ...shimmer }} />
+        <div style={{ height:"11px", borderRadius:"6px", width:"45%", ...shimmer }} />
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:"4px" }}>
+          <div style={{ height:"16px", borderRadius:"6px", width:"36%", ...shimmer }} />
+          <div style={{ width:"34px", height:"34px", borderRadius:"var(--r3)", ...shimmer }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+function ProductListSkeleton() {
+  return (
+    <AppLayout>
+      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+      {/* Hero skeleton */}
+      <div style={{ height:"clamp(160px,28vw,280px)", borderRadius:"var(--r5)", marginBottom:"var(--s5)", ...shimmer }} />
+      {/* Filter bar skeleton */}
+      <div style={{ display:"flex", gap:"var(--s2)", marginBottom:"var(--s5)" }}>
+        {[80,60,70,90].map((w,i) => <div key={i} style={{ height:"36px", width:`${w}px`, borderRadius:"var(--rf)", flexShrink:0, ...shimmer }}/>)}
+      </div>
+      {/* Grid skeleton */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:"var(--s3)" }}>
+        {Array.from({length:8}).map((_,i) => <SkeletonCard key={i}/>)}
+      </div>
+    </AppLayout>
+  );
+}
+
 /* ─── GRID card ─────────────────────────────────────────────────────── */
 const GridCard = memo(function GridCard({ item, navigate }) {
   const addItem   = useCartStore(s => s.addItem);
@@ -365,7 +404,7 @@ export default function ProductListPage() {
     : (cat.name || "Menu");
   const avail = filtered.filter(i => i.is_available).length;
 
-  if (pageLoading) return <KNCLoader visible label="Loading menu…"/>;
+  if (pageLoading) return <ProductListSkeleton />;
 
   const DIET_FILTERS = [
     { key:"all",     label:"All" },
@@ -467,7 +506,7 @@ export default function ProductListPage() {
       {/* ── ITEMS ───────────────────────────────────────────────────── */}
       {loading ? (
         <div className="product-grid">
-          {Array(8).fill(0).map((_, i) => <div key={i} className="skel" style={{ borderRadius:"var(--r4)", aspectRatio:"3/4" }}/>)}
+          {Array.from({length:8}).map((_,i) => <SkeletonCard key={i}/>)}
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign:"center", padding:"var(--s16) var(--s4)", background:"var(--bg2)", borderRadius:"var(--r4)", border:"1px dashed var(--bd)" }}>
