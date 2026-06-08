@@ -867,7 +867,7 @@ export default function HomePage() {
           const secImg = siteConfig?.config?.home_section_images?.[flag] || {};
           // auto-fallback: use first item with an image as the section banner
           const autoImg = !secImg.image_url ? (items.find(i => i.image_url)?.image_url || null) : null;
-          const bannerImg = secImg.image_url || autoImg;
+          const bannerImg = fixMediaUrl(secImg.image_url || autoImg);
           return (
             <section key={flag} className="hp-section" style={{ marginBottom:"var(--s8)" }}>
               {/* Section banner — admin image or auto-fallback from first item's image */}
