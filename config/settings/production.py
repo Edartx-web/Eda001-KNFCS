@@ -145,9 +145,10 @@ if _supabase_s3_url:
     AWS_SECRET_ACCESS_KEY   = config("SUPABASE_S3_SECRET_KEY", default="")
     AWS_STORAGE_BUCKET_NAME = config("SUPABASE_BUCKET", default="knfc-media")
     AWS_S3_REGION_NAME      = config("SUPABASE_S3_REGION", default="ap-southeast-2")
-    AWS_DEFAULT_ACL         = "public-read"
+    AWS_DEFAULT_ACL         = None      # Supabase S3 does not support ACL headers
     AWS_S3_FILE_OVERWRITE   = False
-    AWS_QUERYSTRING_AUTH    = False   # no signed tokens on public files
+    AWS_QUERYSTRING_AUTH    = False     # no signed tokens on public files
+    AWS_S3_SIGNATURE_VERSION = "s3v4"
 
     # Supabase S3 endpoint:  https://ref.storage.supabase.co/storage/v1/s3
     # Supabase public URL:   https://ref.supabase.co/storage/v1/object/public/<bucket>/<key>
