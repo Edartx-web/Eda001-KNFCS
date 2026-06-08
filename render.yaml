@@ -105,7 +105,7 @@ services:
         value: knfc-media
 
       - key: SUPABASE_S3_REGION
-        value: ap-south-1
+        value: ap-southeast-2
 
       - key: OTP_BYPASS
         value: "False"

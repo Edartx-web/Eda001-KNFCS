@@ -143,7 +143,7 @@ if _supabase_s3_url:
     AWS_ACCESS_KEY_ID     = config("SUPABASE_S3_ACCESS_KEY", default="")
     AWS_SECRET_ACCESS_KEY = config("SUPABASE_S3_SECRET_KEY", default="")
     AWS_STORAGE_BUCKET_NAME = config("SUPABASE_BUCKET", default="knfc-media")
-    AWS_S3_REGION_NAME    = config("SUPABASE_S3_REGION", default="ap-south-1")
+    AWS_S3_REGION_NAME    = config("SUPABASE_S3_REGION", default="ap-southeast-2")
     AWS_DEFAULT_ACL       = "public-read"
     AWS_S3_FILE_OVERWRITE = False
     AWS_QUERYSTRING_AUTH  = False   # serve files as plain public URLs, no signed tokens
