@@ -1,6 +1,19 @@
 /**
  * utils/format.js
  */
+
+/**
+ * Fix double-prefix URLs left by an old backend bug where
+ * build_absolute_uri() prepended the Render host to an already-absolute
+ * Supabase URL, producing:
+ *   https://eda001-knfcs.onrender.comhttps://mwzy...supabase.co/...
+ * Strip the render prefix so only the Supabase URL remains.
+ */
+export function fixMediaUrl(url) {
+  if (!url) return url;
+  const m = url.match(/https?:\/\/[^/]+\.onrender\.com(https?:\/\/.+)/);
+  return m ? m[1] : url;
+}
 export const formatPrice = n => {
   const num = Number(n);
   if (!isFinite(num)) return "₹0";   // guards NaN / Infinity from undefined, null, ""

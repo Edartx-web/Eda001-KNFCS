@@ -20,7 +20,7 @@ import { getOffers }                   from "../../api/orders";
 import { getCategories, getFeatured, getFavourites, getHomeSections } from "../../api/menu";
 import GoogleReviewBanner from "../../components/common/GoogleReviewBanner";
 import BranchSelector     from "../../components/common/BranchSelector";
-import { formatPrice, formatUnit }     from "../../utils/format";
+import { formatPrice, formatUnit, fixMediaUrl } from "../../utils/format";
 import { DIETARY_DOT }                 from "../../utils/constants";
 
 /* ── SVG icon set ─────────────────────────────────────────────────────────── */
@@ -349,7 +349,9 @@ function AdsPanel({ siteConfig }) {
   const [cur, setCur] = useState(0);
 
   // home_ads is an array of {id, title, image_url, link, active}
-  const allAds = (siteConfig?.config?.home_ads || []).filter(a => a.active && a.image_url);
+  const allAds = (siteConfig?.config?.home_ads || [])
+    .filter(a => a.active && a.image_url)
+    .map(a => ({ ...a, image_url: fixMediaUrl(a.image_url) }));
 
   // auto-cycle through multiple ads every 5 seconds
   useEffect(() => {

@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import KNCLoader from "../../components/common/KNCLoader";
 import ThemeToggle from "../../components/common/ThemeToggle";
 import axiosClient from "../../api/axiosClient";
+import { fixMediaUrl } from "../../utils/format";
 import "../../styles/global.css";
 import "../../styles/authpage/customerlogin.css";
 
@@ -151,8 +152,8 @@ export default function CustomerLogin() {
   useEffect(() => {
     axiosClient.get("/branches/config/").then(r => {
       const cfg = r.data.config || {};
-      setLoginImageUrl(cfg.login_image_url || null);
-      setLoginVideoUrl(cfg.login_video_url || null);
+      setLoginImageUrl(fixMediaUrl(cfg.login_image_url) || null);
+      setLoginVideoUrl(fixMediaUrl(cfg.login_video_url) || null);
       if (Array.isArray(cfg.login_slides) && cfg.login_slides.length >= 1) {
         const icons = [<DrumstickIcon/>, <BurgerIcon/>, <FriesIcon/>, <DrinkIcon/>, <FlameIcon/>];
         setMobSlides(cfg.login_slides.map((sl, i) => ({
