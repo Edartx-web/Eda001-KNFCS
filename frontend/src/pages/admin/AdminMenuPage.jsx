@@ -1021,23 +1021,23 @@ function ItemsTab({ items, categories, loading, onRefresh, activeBranchId }) {
 
               {/* Name */}
               <div style={{ minWidth:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:"4px", overflow:"hidden" }}>
-                  <span style={{ fontSize:".9375rem", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</span>
+                <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:".9375rem", fontWeight:600, color:"var(--t1)", marginBottom:"3px" }}>
+                  {item.name}
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:"4px", flexWrap:"wrap" }}>
+                  <span style={{ fontSize:".75rem", color:"var(--t3)", whiteSpace:"nowrap" }}>
+                    {item.prep_time_display}
+                    {formatUnit(item.unit_quantity, item.measurement_unit) && ` · ${formatUnit(item.unit_quantity, item.measurement_unit)}`}
+                  </span>
                   {item.all_branches && (
                     <span className="badge badge-brand" style={{ fontSize:".5625rem", flexShrink:0 }}>
                       <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                       All branches
                     </span>
                   )}
-                </div>
-                <div style={{ fontSize:".75rem", color:"var(--t3)", display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
-                  {item.avg_rating > 0 && <><Ic.Star />{Number(item.avg_rating).toFixed(1)} · </>}
-                  {item.prep_time_display}
-                  {formatUnit(item.unit_quantity, item.measurement_unit) && (
-                    <span style={{ color:"var(--t4)", fontWeight:600 }}>· {formatUnit(item.unit_quantity, item.measurement_unit)}</span>
-                  )}
-                  {item.is_featured && <span className="badge badge-gold" style={{ fontSize:".5625rem" }}>Featured</span>}
-                  {item.is_new && <span className="badge badge-ok" style={{ fontSize:".5625rem" }}>New</span>}
+                  {item.is_featured && <span className="badge badge-gold" style={{ fontSize:".5625rem", flexShrink:0 }}>Featured</span>}
+                  {item.is_new && <span className="badge badge-ok" style={{ fontSize:".5625rem", flexShrink:0 }}>New</span>}
+                  {item.avg_rating > 0 && <span style={{ fontSize:".6875rem", color:"var(--t3)", display:"flex", alignItems:"center", gap:"2px", flexShrink:0 }}><Ic.Star />{Number(item.avg_rating).toFixed(1)}</span>}
                 </div>
               </div>
 
