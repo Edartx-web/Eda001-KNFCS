@@ -776,25 +776,30 @@ class UploadMediaView(APIView):
     permission_classes = [IsAuthenticated, IsSuperAdminOnly]
 
     def post(self, request):
-        import os, uuid
+        import os, uuid, logging
         from django.conf import settings
         from django.core.files.storage import default_storage
         from django.core.files.base import ContentFile
+        log = logging.getLogger(__name__)
 
         f = request.FILES.get("file")
         if not f:
             return err("No file provided.")
 
-        ext  = os.path.splitext(f.name)[-1].lower()
-        name = f"uploads/{uuid.uuid4().hex}{ext}"
-        path = default_storage.save(name, ContentFile(f.read()))
-        raw = default_storage.url(path)
-        if raw.startswith("http"):
-            url = raw
-        else:
-            backend_url = getattr(settings, "BACKEND_URL", "").rstrip("/")
-            url = f"{backend_url}{raw}" if backend_url else request.build_absolute_uri(raw)
-        return Response({"success": True, "url": url, "path": path})
+        try:
+            ext  = os.path.splitext(f.name)[-1].lower()
+            name = f"uploads/{uuid.uuid4().hex}{ext}"
+            path = default_storage.save(name, ContentFile(f.read()))
+            raw = default_storage.url(path)
+            if raw.startswith("http"):
+                url = raw
+            else:
+                backend_url = getattr(settings, "BACKEND_URL", "").rstrip("/")
+                url = f"{backend_url}{raw}" if backend_url else request.build_absolute_uri(raw)
+            return Response({"success": True, "url": url, "path": path})
+        except Exception as exc:
+            log.exception("UploadMediaView failed")
+            return Response({"success": False, "error": f"Upload error: {exc}"}, status=500)
 
 
 class BranchTableListView(APIView):
