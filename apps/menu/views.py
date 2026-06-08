@@ -620,6 +620,9 @@ class AdminMenuItemListCreateView(APIView):
             is_cold_drinks=str_to_bool(data.get("is_cold_drinks"), False),
             is_buckets=str_to_bool(data.get("is_buckets"), False),
             is_combo=str_to_bool(data.get("is_combo"), False),
+            discount=int(data.get("discount") or 0),
+            measurement_unit=data.get("measurement_unit") or "pcs",
+            unit_quantity=int(data.get("unit_quantity") or 0) or None,
             display_order=int(data.get("display_order", 0)),
             low_stock_threshold=int(data.get("low_stock_threshold", 10)),
             all_branches=str_to_bool(data.get("all_branches"), False),
@@ -682,6 +685,7 @@ class AdminMenuItemDetailView(APIView):
             "name", "description", "price", "dietary_type", "spice_level",
             "calories", "prep_time_min", "prep_time_max",
             "display_order", "low_stock_threshold",
+            "measurement_unit",
         ]
         bool_fields = ["is_available", "is_featured", "is_new", "is_bestseller", "is_hotdeals", "is_chicken", "is_snacks", "is_cold_drinks", "is_buckets", "is_combo", "all_branches"]
         
@@ -695,6 +699,14 @@ class AdminMenuItemDetailView(APIView):
             if f in request.data:
                 setattr(item, f, str_to_bool(request.data[f]))
                 updated.append(f)
+
+        if "discount" in request.data:
+            item.discount = int(request.data.get("discount") or 0)
+            updated.append("discount")
+        if "unit_quantity" in request.data:
+            val = request.data.get("unit_quantity")
+            item.unit_quantity = int(val) if val else None
+            updated.append("unit_quantity")
 
         if "category_id" in request.data:
             try:
