@@ -81,7 +81,8 @@ def _maybe_auto_broadcast(offer, request):
         image_url = ""
         if offer.image:
             try:
-                image_url = request.build_absolute_uri(offer.image.url)
+                u = offer.image.url
+                image_url = u if u.startswith("http") else request.build_absolute_uri(u)
             except Exception:
                 pass
 

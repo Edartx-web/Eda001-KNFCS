@@ -33,7 +33,10 @@ class BroadcastLogSerializer(serializers.ModelSerializer):
     def get_offer_image_url(self, obj):
         if obj.offer and obj.offer.image:
             request = self.context.get("request")
+            u = obj.offer.image.url
+            if u.startswith("http"):
+                return u
             if request:
-                return request.build_absolute_uri(obj.offer.image.url)
-            return obj.offer.image.url
+                return request.build_absolute_uri(u)
+            return u
         return None

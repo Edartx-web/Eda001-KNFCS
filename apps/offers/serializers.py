@@ -61,25 +61,23 @@ class DailyOfferSerializer(serializers.ModelSerializer):
             return None
         request = self.context.get("request")
         try:
-            return request.build_absolute_uri(obj.image.url) if request else self._abs(obj.image.url)
+            return self._abs(obj.image.url)
         except Exception:
             return None
 
     def get_video_url(self, obj):
         if not obj.video:
             return None
-        request = self.context.get("request")
         try:
-            return request.build_absolute_uri(obj.video.url) if request else self._abs(obj.video.url)
+            return self._abs(obj.video.url)
         except Exception:
             return None
 
     def get_thumbnail_url(self, obj):
         if not obj.video_thumbnail:
             return None
-        request = self.context.get("request")
         try:
-            return request.build_absolute_uri(obj.video_thumbnail.url) if request else self._abs(obj.video_thumbnail.url)
+            return self._abs(obj.video_thumbnail.url)
         except Exception:
             return None
 

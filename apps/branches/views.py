@@ -604,15 +604,17 @@ class SiteConfigView(APIView):
         login_image_url = None
         if cfg.login_image:
             try:
-                login_image_url = request.build_absolute_uri(cfg.login_image.url)
+                u = cfg.login_image.url
+                login_image_url = u if u.startswith("http") else request.build_absolute_uri(u)
             except Exception:
-                login_image_url = cfg.login_image.url
+                login_image_url = None
         about_image_url = None
         if cfg.about_image:
             try:
-                about_image_url = request.build_absolute_uri(cfg.about_image.url)
+                u = cfg.about_image.url
+                about_image_url = u if u.startswith("http") else request.build_absolute_uri(u)
             except Exception:
-                about_image_url = cfg.about_image.url
+                about_image_url = None
 
         return Response({"success": True, "config": {
             "loyalty_enabled":        cfg.loyalty_enabled,
