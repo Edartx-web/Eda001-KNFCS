@@ -16,6 +16,10 @@
  * WebSocket:
  *   Pushes { type:'state', data:{ otp:{...}, broadcast:{...} } } on any change.
  *   Frontend connects here for real-time QR + status updates.
+ *
+ * Session persistence:
+ *   Sessions are synced to Supabase S3 (wa-sessions/<name>/) so they survive
+ *   container restarts on Render free tier — no QR rescan needed after restart.
  */
 
 import baileysPkg from "@innovatorssoft/baileys";
@@ -34,6 +38,13 @@ import pino                from "pino";
 import fs                  from "fs";
 import path                from "path";
 import { fileURLToPath }   from "url";
+import {
+  S3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 
 const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const logger        = pino({ level: process.env.LOG_LEVEL || "info" });
@@ -41,6 +52,91 @@ const logger        = pino({ level: process.env.LOG_LEVEL || "info" });
 const PORT          = parseInt(process.env.PORT          || "3001");
 const INTERNAL_KEY  = process.env.INTERNAL_KEY           || "knfc-wa-internal-key";
 const DJANGO_URL    = process.env.DJANGO_URL             || "http://127.0.0.1:8000";
+
+// ── Supabase S3 session persistence ──────────────────────────────────────────
+// Reuses the same Supabase bucket as Django media storage.
+// Sessions stored under prefix: wa-sessions/<name>/
+
+const s3 = (process.env.SUPABASE_S3_ACCESS_KEY && process.env.SUPABASE_S3_URL)
+  ? new S3Client({
+      endpoint:    process.env.SUPABASE_S3_URL,
+      region:      process.env.SUPABASE_S3_REGION || "ap-southeast-2",
+      credentials: {
+        accessKeyId:     process.env.SUPABASE_S3_ACCESS_KEY,
+        secretAccessKey: process.env.SUPABASE_S3_SECRET_KEY,
+      },
+      forcePathStyle: true,
+    })
+  : null;
+
+const S3_BUCKET = process.env.SUPABASE_BUCKET || "knfc-media";
+const S3_PREFIX = "wa-sessions";
+
+async function s3DownloadSession(name) {
+  if (!s3) return;
+  const dir = path.join(__dirname, "sessions", name);
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    const list = await s3.send(new ListObjectsV2Command({
+      Bucket: S3_BUCKET,
+      Prefix: `${S3_PREFIX}/${name}/`,
+    }));
+    if (!list.Contents?.length) {
+      logger.info(`[${name}] No saved session in Supabase — fresh start`);
+      return;
+    }
+    for (const obj of list.Contents) {
+      const filename = obj.Key.split("/").pop();
+      if (!filename) continue;
+      const res = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: obj.Key }));
+      const chunks = [];
+      for await (const chunk of res.Body) chunks.push(chunk);
+      fs.writeFileSync(path.join(dir, filename), Buffer.concat(chunks));
+    }
+    logger.info(`[${name}] Session restored from Supabase (${list.Contents.length} files)`);
+  } catch (e) {
+    logger.warn(`[${name}] s3DownloadSession failed: ${e.message}`);
+  }
+}
+
+async function s3UploadSession(name) {
+  if (!s3) return;
+  const dir = path.join(__dirname, "sessions", name);
+  if (!fs.existsSync(dir)) return;
+  try {
+    const files = fs.readdirSync(dir).filter(f =>
+      !fs.statSync(path.join(dir, f)).isDirectory()
+    );
+    for (const file of files) {
+      const data = fs.readFileSync(path.join(dir, file));
+      await s3.send(new PutObjectCommand({
+        Bucket:      S3_BUCKET,
+        Key:         `${S3_PREFIX}/${name}/${file}`,
+        Body:        data,
+        ContentType: "application/json",
+      }));
+    }
+    logger.info(`[${name}] Session saved to Supabase (${files.length} files)`);
+  } catch (e) {
+    logger.warn(`[${name}] s3UploadSession failed: ${e.message}`);
+  }
+}
+
+async function s3DeleteSession(name) {
+  if (!s3) return;
+  try {
+    const list = await s3.send(new ListObjectsV2Command({
+      Bucket: S3_BUCKET,
+      Prefix: `${S3_PREFIX}/${name}/`,
+    }));
+    for (const obj of (list.Contents || [])) {
+      await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: obj.Key }));
+    }
+    logger.info(`[${name}] Session cleared from Supabase`);
+  } catch (e) {
+    logger.warn(`[${name}] s3DeleteSession failed: ${e.message}`);
+  }
+}
 
 // ── Express + HTTP + WebSocket server ────────────────────────────────────────
 
@@ -98,6 +194,10 @@ async function alertDjangoDC(sessionName) {
 
 async function startSession(name) {
   const authDir = path.join(__dirname, "sessions", name);
+
+  // Restore session files from Supabase before Baileys reads them
+  await s3DownloadSession(name);
+
   fs.mkdirSync(authDir, { recursive: true });
 
   const { state: authState, saveCreds } = await useMultiFileAuthState(authDir);
@@ -113,7 +213,12 @@ async function startSession(name) {
   });
 
   sessions[name] = sock;
-  sock.ev.on("creds.update", saveCreds);
+
+  // Save locally then sync every credential update to Supabase
+  sock.ev.on("creds.update", async () => {
+    await saveCreds();
+    await s3UploadSession(name);
+  });
 
   sock.ev.on("connection.update", async update => {
     const { connection, lastDisconnect, qr } = update;
@@ -136,6 +241,8 @@ async function startSession(name) {
       } catch {}
       pushState();
       logger.info(`[${name}] Connected — ${state[name].phone}`);
+      // Full sync on connect so Supabase always has the latest credentials
+      await s3UploadSession(name);
     }
 
     if (connection === "close") {
@@ -153,6 +260,7 @@ async function startSession(name) {
 
       if (loggedOut) {
         fs.rmSync(authDir, { recursive: true, force: true });
+        await s3DeleteSession(name);
         logger.info(`[${name}] Session cleared after logout`);
       }
       logger.info(`[${name}] Reconnecting in 5 s…`);
@@ -185,6 +293,7 @@ app.post("/logout/:session", requireKey, async (req, res) => {
 
   const authDir = path.join(__dirname, "sessions", session);
   fs.rmSync(authDir, { recursive: true, force: true });
+  await s3DeleteSession(session);
 
   state[session] = { status: "disconnected", qr: null, phone: null };
   pushState();
@@ -213,8 +322,6 @@ function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
 
   const footer = "KNFC Fried Chicken — knfcs.com";
 
-  // ── Option 1: interactive message with URL + copy-code buttons ───────────────
-  // nativeFlowMessage renders real tappable buttons on WhatsApp Android/iOS 2024+
   const interactive = {
     viewOnceMessage: {
       message: {
@@ -224,8 +331,6 @@ function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
           nativeFlowMessage: {
             buttons: [
               {
-                // Opens the website — user can also read OTP from URL (not embedded here,
-                // but the button title instructs them)
                 name: "cta_url",
                 buttonParamsJson: JSON.stringify({
                   display_text: "Open Website or Copy Code for OTP",
@@ -234,7 +339,6 @@ function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
                 }),
               },
               {
-                // Copy-code button — tapping copies the OTP to clipboard on supported clients
                 name: "cta_copy",
                 buttonParamsJson: JSON.stringify({
                   display_text: `Copy OTP: ${otp}`,
@@ -248,7 +352,6 @@ function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
     },
   };
 
-  // ── Option 2: plain text fallback ────────────────────────────────────────────
   const plainText = {
     text:
       body +
@@ -273,7 +376,6 @@ app.post("/send-otp", requireKey, async (req, res) => {
   const { interactive, plainText } = buildOtpMessage(otp, expiry_minutes, site_url);
 
   try {
-    // Try interactive first; fall back to plain text if Baileys rejects it
     try {
       await sessions.otp.sendMessage(jid, interactive);
     } catch (interactiveErr) {
@@ -299,7 +401,6 @@ app.post("/send-message", requireKey, async (req, res) => {
 
   const jid      = toJid(phone);
   const bodyText = caption || text || "";
-  // Append URL as plain text link — works on all WhatsApp clients (Web, Desktop, Mobile)
   const fullText = button_url
     ? `${bodyText}\n\n👉 ${button_text || "Order Now"}: ${button_url}`
     : bodyText;
@@ -328,6 +429,11 @@ wss.on("connection", ws => {
 
 async function main() {
   logger.info("Starting KNFC WhatsApp service…");
+  if (s3) {
+    logger.info(`Session persistence: Supabase S3 bucket=${S3_BUCKET} prefix=${S3_PREFIX}/`);
+  } else {
+    logger.warn("Session persistence: LOCAL ONLY — set SUPABASE_S3_* env vars to enable Supabase sync");
+  }
   await startSession("otp");
   await startSession("broadcast");
   server.listen(PORT, () =>
