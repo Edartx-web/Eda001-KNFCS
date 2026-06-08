@@ -832,7 +832,7 @@ class AdminReviewListView(APIView):
             "comment":      r.comment,
             "admin_reply":  r.admin_reply,
             "is_visible":   r.is_visible,
-            "photo_url": request.build_absolute_uri(r.photo.url) if r.photo else None,
+            "photo_url": (lambda u: u if u.startswith("http") else request.build_absolute_uri(u))(r.photo.url) if r.photo else None,
             "created_at":   r.created_at.isoformat(),
         } for r in qs[:200]]
 

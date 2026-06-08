@@ -7,6 +7,19 @@ from rest_framework import serializers
 from apps.menu.models import MenuCategory, MenuItem, ItemCustomisation, ItemReview
 
 
+def _abs_url(url, request):
+    """Return an absolute URL. If url is already absolute (Supabase S3), return as-is."""
+    if not url:
+        return None
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    if request:
+        return request.build_absolute_uri(url)
+    from django.conf import settings
+    base = getattr(settings, "BACKEND_URL", "http://localhost:1000").rstrip("/")
+    return f"{base}{url}"
+
+
 class ItemCustomisationSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ItemCustomisation
@@ -36,10 +49,7 @@ class ItemReviewSerializer(serializers.ModelSerializer):
     def get_photo_url(self, obj):
         if not obj.photo:
             return None
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(obj.photo.url)
-        return obj.photo.url
+        return _abs_url(obj.photo.url, self.context.get("request"))
 
 
 class MenuItemListSerializer(serializers.ModelSerializer):
@@ -70,13 +80,7 @@ class MenuItemListSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         if not obj.image:
             return None
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(obj.image.url)
-        # Fallback: prepend API base from settings
-        from django.conf import settings
-        base = getattr(settings, "BACKEND_URL", "http://localhost:1000").rstrip("/")
-        return f"{base}{obj.image.url}" if not obj.image.url.startswith("http") else obj.image.url
+        return _abs_url(obj.image.url, self.context.get("request"))
     offer_label      = serializers.SerializerMethodField()
     stock_status     = serializers.SerializerMethodField()
     stock_remaining  = serializers.SerializerMethodField()
@@ -158,7 +162,7 @@ class MenuItemDetailSerializer(MenuItemListSerializer):
             if img.image:
                 from django.conf import settings as _s
                 _base = getattr(_s, "BACKEND_URL", "http://localhost:1000").rstrip("/")
-                url = request.build_absolute_uri(img.image.url) if request else f"{_base}{img.image.url}"
+                url = _abs_url(img.image.url, request)
                 images.append({"id": str(img.id), "url": url})
         return images
 
@@ -201,12 +205,7 @@ class MenuCategoryListSerializer(serializers.ModelSerializer):
     def get_image(self, obj):
         if not obj.image:
             return None
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(obj.image.url)
-        from django.conf import settings
-        base = getattr(settings, "BACKEND_URL", "http://localhost:1000").rstrip("/")
-        return f"{base}{obj.image.url}" if not obj.image.url.startswith("http") else obj.image.url
+        return _abs_url(obj.image.url, self.context.get("request"))
 
     def get_item_count(self, obj):
         return obj.items.count()
