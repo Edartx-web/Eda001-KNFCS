@@ -108,21 +108,21 @@ class MenuItemListSerializer(serializers.ModelSerializer):
 
     def get_stock_status(self, obj):
         record = self._get_stock_record(obj)
-        return record.status if record else "out"  # no record today → out of stock
+        return record.status if record else "out"
 
     def get_stock_remaining(self, obj):
         record = self._get_stock_record(obj)
         return record.remaining_stock if record else 0
 
     def get_is_on_offer(self, obj):
-        return obj.offers.filter(is_active=True).exists()
+        return any(o.is_active for o in obj.offers.all())
 
     def get_offer_price(self, obj):
-        offer = obj.offers.filter(is_active=True).first()
+        offer = self._active_offer(obj)
         return str(offer.offer_price) if offer and offer.offer_price else None
 
     def get_offer_label(self, obj):
-        offer = obj.offers.filter(is_active=True).first()
+        offer = self._active_offer(obj)
         if not offer:
             return None
         if offer.discount_percentage:
@@ -131,13 +131,19 @@ class MenuItemListSerializer(serializers.ModelSerializer):
             return f"-₹{int(offer.discount_flat)}"
         return "Offer"
 
+    def _active_offer(self, obj):
+        for o in obj.offers.all():
+            if o.is_active:
+                return o
+        return None
+
     def _get_stock_record(self, obj):
         from django.utils import timezone
-        from apps.stock.models import StockRecord
-        try:
-            return obj.stock_records.get(date=timezone.localdate())
-        except Exception:
-            return None
+        today = timezone.localdate()
+        for r in obj.stock_records.all():
+            if r.date == today:
+                return r
+        return None
 
 
 class MenuItemDetailSerializer(MenuItemListSerializer):

@@ -567,9 +567,10 @@ class AdminMenuItemListCreateView(APIView):
         elif avail == "false":
             qs = qs.filter(is_available=False)
 
+        items_data = MenuItemListSerializer(qs, many=True, context={"request": request}).data
         return ok({
-            "items": MenuItemListSerializer(qs, many=True, context={"request": request}).data,
-            "total": qs.count(),
+            "items": items_data,
+            "total": len(items_data),
         })
 
     def post(self, request):
