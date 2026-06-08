@@ -129,6 +129,26 @@ CSRF_TRUSTED_ORIGINS = [
 MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
+# ── Media Storage — Supabase S3-compatible bucket ────────────────────────────
+# Supabase exposes an S3-compatible API so we can use django-storages/boto3.
+# Set these four env vars in the Render dashboard (see .env for reference):
+#   SUPABASE_S3_URL        — https://<ref>.supabase.co/storage/v1/s3
+#   SUPABASE_S3_ACCESS_KEY — from Supabase Dashboard → Storage → S3 Access Keys
+#   SUPABASE_S3_SECRET_KEY — from same page
+#   SUPABASE_BUCKET        — bucket name you created (e.g. "knfc-media")
+_supabase_s3_url = config("SUPABASE_S3_URL", default="")
+if _supabase_s3_url:
+    DEFAULT_FILE_STORAGE  = "storages.backends.s3boto3.S3Boto3Storage"
+    AWS_S3_ENDPOINT_URL   = _supabase_s3_url
+    AWS_ACCESS_KEY_ID     = config("SUPABASE_S3_ACCESS_KEY", default="")
+    AWS_SECRET_ACCESS_KEY = config("SUPABASE_S3_SECRET_KEY", default="")
+    AWS_STORAGE_BUCKET_NAME = config("SUPABASE_BUCKET", default="knfc-media")
+    AWS_S3_REGION_NAME    = config("SUPABASE_S3_REGION", default="ap-south-1")
+    AWS_DEFAULT_ACL       = "public-read"
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_QUERYSTRING_AUTH  = False   # serve files as plain public URLs, no signed tokens
+    MEDIA_URL = f"{_supabase_s3_url.rstrip('/')}/{AWS_STORAGE_BUCKET_NAME}/"
+
 # ── Email ─────────────────────────────────────────────────────────────────────
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 

@@ -403,6 +403,31 @@ function AdsPanel({ siteConfig }) {
 /* ══════════════════════════════════════════════════════════════════════
    CATEGORY SCROLL — horizontal scroll strip (mobile-first, Blinkit-style)
 ══════════════════════════════════════════════════════════════════════ */
+function CatChip({ cat, onClick }) {
+  const [imgErr, setImgErr] = useState(false);
+  return (
+    <div className="cat-chip" onClick={onClick}>
+      <div className="cat-chip-img"
+        style={{ background:`linear-gradient(145deg,${cat.gradient_from||"#1A0800"},${cat.gradient_to||"#2D1200"})` }}>
+        {cat.image && !imgErr
+          ? <img loading="lazy" src={cat.image} alt={cat.name}
+              onError={() => setImgErr(true)}
+              style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center" }}/>
+          : <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="17" r="4"/><line x1="11.5" y1="13.5" x2="19" y2="6"/><circle cx="20" cy="5" r="1.5"/></svg>
+            </div>
+        }
+        {(cat.available_count||cat.item_count||0) > 0 && (
+          <div style={{ position:"absolute",top:"6px",left:"6px",background:"rgba(0,0,0,.55)",backdropFilter:"blur(6px)",borderRadius:"var(--rf)",padding:"2px 6px",fontSize:".5625rem",fontWeight:700,color:"rgba(255,255,255,.9)",lineHeight:1.4 }}>
+            {cat.available_count||cat.item_count}
+          </div>
+        )}
+      </div>
+      <div className="cat-chip-name">{cat.name}</div>
+    </div>
+  );
+}
+
 function CategoryGrid({ categories }) {
   const navigate = useNavigate();
   if (!categories.length) return null;
@@ -414,27 +439,9 @@ function CategoryGrid({ categories }) {
         <h2 style={{ fontFamily:"var(--ff-d)",fontSize:"1.125rem",fontWeight:800,letterSpacing:"-.02em" }}>Categories</h2>
         <Link to="/menu/all" style={{ fontSize:".875rem",fontWeight:700,color:"var(--brand)",display:"flex",alignItems:"center",gap:"4px" }}>See all <Ic.Arrow/></Link>
       </div>
-
       <div className="cat-scroll-row">
         {categories.map(cat => (
-          <div key={cat.id} className="cat-chip" onClick={()=>navigate(`/menu/category/${cat.slug}`)}>
-            <div className="cat-chip-img"
-              style={{ background:`linear-gradient(145deg,${cat.gradient_from||"#1A0800"},${cat.gradient_to||"#2D1200"})` }}>
-              {cat.image
-                ? <img loading="lazy" src={cat.image} alt={cat.name}
-                    style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center" }}/>
-                : <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="17" r="4"/><line x1="11.5" y1="13.5" x2="19" y2="6"/><circle cx="20" cy="5" r="1.5"/></svg>
-                  </div>
-              }
-              {(cat.available_count||cat.item_count||0) > 0 && (
-                <div style={{ position:"absolute",top:"6px",left:"6px",background:"rgba(0,0,0,.55)",backdropFilter:"blur(6px)",borderRadius:"var(--rf)",padding:"2px 6px",fontSize:".5625rem",fontWeight:700,color:"rgba(255,255,255,.9)",lineHeight:1.4 }}>
-                  {cat.available_count||cat.item_count}
-                </div>
-              )}
-            </div>
-            <div className="cat-chip-name">{cat.name}</div>
-          </div>
+          <CatChip key={cat.id} cat={cat} onClick={() => navigate(`/menu/category/${cat.slug}`)} />
         ))}
       </div>
     </section>

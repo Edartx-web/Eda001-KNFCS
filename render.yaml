@@ -91,6 +91,22 @@ services:
       - key: SUPPORT_FROM_EMAIL
         sync: false
 
+      # ── Supabase Storage — media files (images, uploads) ───────────────────
+      - key: SUPABASE_S3_URL
+        sync: false   # https://<ref>.supabase.co/storage/v1/s3
+
+      - key: SUPABASE_S3_ACCESS_KEY
+        sync: false   # Supabase Dashboard → Storage → S3 Access Keys
+
+      - key: SUPABASE_S3_SECRET_KEY
+        sync: false
+
+      - key: SUPABASE_BUCKET
+        value: knfc-media
+
+      - key: SUPABASE_S3_REGION
+        value: ap-south-1
+
       - key: OTP_BYPASS
         value: "False"
 
