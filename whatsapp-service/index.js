@@ -49,7 +49,7 @@ import {
 const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const logger        = pino({ level: process.env.LOG_LEVEL || "info" });
 
-const PORT          = parseInt(process.env.PORT          || "3001");
+const PORT          = parseInt(process.env.PORT) || 3001;
 const INTERNAL_KEY  = process.env.INTERNAL_KEY           || "knfc-wa-internal-key";
 const DJANGO_URL    = process.env.DJANGO_URL             || "http://127.0.0.1:8000";
 
