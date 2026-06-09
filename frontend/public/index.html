@@ -139,7 +139,78 @@
     <!-- ── Google Search Console verification (replace token) ────────── -->
     <!-- <meta name="google-site-verification" content="REPLACE_WITH_YOUR_TOKEN" /> -->
   </head>
+  <style>
+    /* ── Prevent white flash before React CSS loads ── */
+    html, body {
+      background: #0C0807;
+      margin: 0;
+      min-height: 100vh;
+    }
+    /* ── HTML splash — shows before React JS executes ── */
+    #knfc-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: #0C0807;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      transition: opacity 0.45s ease;
+    }
+    #knfc-splash.knfc-splash-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .knfc-sp-logo {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 2.25rem;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: #fff;
+      line-height: 1;
+    }
+    .knfc-sp-logo span { color: #E8521A; }
+    .knfc-sp-sub {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      margin-top: -12px;
+    }
+    .knfc-sp-dots {
+      display: flex;
+      gap: 7px;
+    }
+    .knfc-sp-dots div {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      animation: knfc-sp-pulse 0.9s ease-in-out infinite;
+    }
+    .knfc-sp-dots div:nth-child(1) { background: rgba(255,255,255,0.25); animation-delay: 0s; }
+    .knfc-sp-dots div:nth-child(2) { background: #E8521A; animation-delay: 0.15s; }
+    .knfc-sp-dots div:nth-child(3) { background: #F5C843; animation-delay: 0.3s; }
+    .knfc-sp-dots div:nth-child(4) { background: rgba(255,255,255,0.25); animation-delay: 0.45s; }
+    @keyframes knfc-sp-pulse {
+      0%, 80%, 100% { transform: scale(0.65); opacity: 0.4; }
+      40%            { transform: scale(1);    opacity: 1;   }
+    }
+  </style>
+
   <body>
+    <!-- Splash: visible before React JS executes, dismissed by App on mount -->
+    <div id="knfc-splash" aria-hidden="true">
+      <div class="knfc-sp-logo">KN<span>FC</span></div>
+      <div class="knfc-sp-sub">Fried Chicken</div>
+      <div class="knfc-sp-dots">
+        <div></div><div></div><div></div><div></div>
+      </div>
+    </div>
+
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
   </body>
