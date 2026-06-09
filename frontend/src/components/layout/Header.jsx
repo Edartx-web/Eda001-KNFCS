@@ -44,8 +44,18 @@ const NAV = {
   super_admin:  [], // SuperAdmin uses sidebar navigation inside SuperAdminDashboard
 };
 
+/* ── Logo swap sequence: text → emoji → text → emoji … (5s each) ───────── */
+const LOGO_FRAMES = [
+  { type:"text", label:"KNFC",  sub:"Fried Chicken" },
+  { type:"emoji", label:"🍗",   sub:"Chicken"        },
+  { type:"emoji", label:"🍔",   sub:"Burger"         },
+  { type:"emoji", label:"🥤",   sub:"Drinks"         },
+  { type:"emoji", label:"🌶️",  sub:"Spicy"          },
+  { type:"emoji", label:"🍟",   sub:"Fries"          },
+];
+
 /* ── Icons ──────────────────────────────────────────────────────────────── */
-const LogoIcon = () => <img src="/KNFC-logo.svg" alt="KNFC" width="30" height="30" style={{ objectFit:"contain", borderRadius:"6px" }} />;
+const LogoIcon = () => <img src="/KNFC-logo.svg" alt="KNFC" width="36" height="36" style={{ objectFit:"contain", borderRadius:"8px" }} />;
 const SearchIcon= () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" strokeLinecap="round"/></svg>;
 const CartIcon  = () => <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" strokeLinejoin="round"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>;
 /* Dark/Light mode — pill toggle, no SVG ─── */
@@ -79,6 +89,8 @@ export default function Header() {
   const [shopOpen,      setShopOpen]      = useState(true);
   const [nextOpenAt,    setNextOpenAt]    = useState(null);
   const [searchHistory, setSearchHistory] = useState([]);
+  const [logoFrame,     setLogoFrame]     = useState(0);
+  const [logoVisible,   setLogoVisible]   = useState(true);
   const searchRef  = useRef(null);
   const { logout } = useAuth();
 
@@ -140,6 +152,18 @@ export default function Header() {
     const t = setInterval(fetchHours, 5 * 60 * 1000);
     return () => clearInterval(t);
   }, [hasBranch]);
+
+  /* Logo swap — fade out, change frame, fade in — every 5 seconds */
+  useEffect(() => {
+    const t = setInterval(() => {
+      setLogoVisible(false);
+      setTimeout(() => {
+        setLogoFrame(f => (f + 1) % LOGO_FRAMES.length);
+        setLogoVisible(true);
+      }, 350);
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
 
   /* "/" shortcut */
   useEffect(() => {
@@ -222,17 +246,30 @@ export default function Header() {
           /* desktop padding handled by CSS */
           className="header-inner-row"
         >
-          {/* Logo */}
+          {/* Logo — animated swap every 5 s */}
           <Link to={
             user?.role === "staff"        ? "/staff/queue" :
             user?.role === "branch_admin" ? "/admin/dashboard" :
             user?.role === "super_admin"  ? "/superadmin/dashboard" :
             "/menu"
-          } className="hdr-logo">
+          } className="hdr-logo" style={{ gap:"10px" }}>
             <LogoIcon />
-            <div>
-              <div style={{ fontFamily:"var(--ff-d)", fontSize:"1rem", fontWeight:800, letterSpacing:"-.02em", color:"var(--t1)", lineHeight:1 }}>KNFC</div>
-              <div style={{ fontSize:".5625rem", fontWeight:600, color:"var(--t2)", letterSpacing:".08em", textTransform:"uppercase", lineHeight:1, marginTop:"2px" }}>Fried Chicken</div>
+            <div style={{
+              opacity: logoVisible ? 1 : 0,
+              transform: logoVisible ? "translateY(0)" : "translateY(-4px)",
+              transition: "opacity .3s ease, transform .3s ease",
+            }}>
+              {LOGO_FRAMES[logoFrame].type === "emoji" ? (
+                <>
+                  <div style={{ fontSize:"1.375rem", lineHeight:1 }}>{LOGO_FRAMES[logoFrame].label}</div>
+                  <div style={{ fontSize:".5625rem", fontWeight:600, color:"var(--t2)", letterSpacing:".08em", textTransform:"uppercase", lineHeight:1, marginTop:"2px" }}>{LOGO_FRAMES[logoFrame].sub}</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:800, letterSpacing:"-.02em", color:"var(--t1)", lineHeight:1 }}>KNFC</div>
+                  <div style={{ fontSize:".5625rem", fontWeight:600, color:"var(--t2)", letterSpacing:".08em", textTransform:"uppercase", lineHeight:1, marginTop:"2px" }}>Fried Chicken</div>
+                </>
+              )}
             </div>
           </Link>
 

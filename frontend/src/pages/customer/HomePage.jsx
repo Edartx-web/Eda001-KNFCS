@@ -480,7 +480,7 @@ const ProductCard = memo(function ProductCard({ item, rank }) {
 
   return (
     <div style={{ background:"var(--bgc)",border:"1px solid var(--bd)",borderRadius:"var(--r4)",overflow:"hidden",cursor:isOOS?"default":"pointer",opacity:isOOS?.55:1,display:"flex",flexDirection:"column",position:"relative",transition:"transform var(--d2) var(--ease),box-shadow var(--d2) var(--ease),border-color var(--d2) var(--ease)" }}
-      onClick={()=>!isOOS&&navigate(`/menu/product/${item.slug}`)}
+      onClick={()=>!isOOS&&navigate(`/menu/product/${item.slug}?b=${localStorage.getItem("branch_id")||""}`)}
       onMouseEnter={e=>{if(!isOOS){e.currentTarget.style.transform="translateY(-4px)";e.currentTarget.style.boxShadow="var(--sh-lg)";e.currentTarget.style.borderColor="var(--bd2)";}}}
       onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="var(--bd)";}}>
       {/* Image */}
@@ -586,7 +586,7 @@ function HorizontalItemStrip({ items, title, icon }) {
       </div>
       <div className="scroll-x" style={{ gap:"var(--s3)",paddingBottom:"4px" }}>
         {items.map(item => (
-          <div key={item.id} onClick={()=>navigate(`/menu/product/${item.slug}`)} style={{ flexShrink:0,cursor:"pointer",width:"clamp(120px,30vw,150px)" }}>
+          <div key={item.id} onClick={()=>navigate(`/menu/product/${item.slug}?b=${localStorage.getItem("branch_id")||""}`)} style={{ flexShrink:0,cursor:"pointer",width:"clamp(120px,30vw,150px)" }}>
             <div style={{ aspectRatio:"1",borderRadius:"var(--r3)",marginBottom:"var(--s2)",background:item.image_url?"var(--bg3)":`linear-gradient(135deg,${item.gradient_from||"#1A0800"},${item.gradient_to||"#2D1200"})`,overflow:"hidden",position:"relative",border:"1px solid var(--bd)",transition:"transform var(--d1) var(--ease)" }}
               onMouseEnter={e=>e.currentTarget.style.transform="scale(1.05)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
               {item.image_url

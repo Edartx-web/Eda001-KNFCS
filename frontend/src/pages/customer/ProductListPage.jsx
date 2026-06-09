@@ -125,7 +125,7 @@ const GridCard = memo(function GridCard({ item, navigate }) {
 
   return (
     <article
-      onClick={() => !isOOS && navigate(`/menu/product/${item.slug}`)}
+      onClick={() => !isOOS && navigate(`/menu/product/${item.slug}?b=${localStorage.getItem("branch_id")||""}`)}
       style={{ background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden", cursor:isOOS?"default":"pointer", opacity:isOOS?.5:1, display:"flex", flexDirection:"column", position:"relative", transition:"transform var(--d2) var(--ease), box-shadow var(--d2) var(--ease), border-color var(--d2) var(--ease)" }}
       onMouseEnter={e => { if (!isOOS) { e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.boxShadow="var(--sh-lg)"; e.currentTarget.style.borderColor="var(--bd2)"; } }}
       onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="var(--bd)"; }}>
@@ -230,7 +230,7 @@ const ListCard = memo(function ListCard({ item, navigate }) {
 
   return (
     <article
-      onClick={() => !isOOS && navigate(`/menu/product/${item.slug}`)}
+      onClick={() => !isOOS && navigate(`/menu/product/${item.slug}?b=${localStorage.getItem("branch_id")||""}`)}
       style={{ display:"flex", gap:"0", background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden", cursor:isOOS?"default":"pointer", opacity:isOOS?.5:1, transition:"box-shadow var(--d2) var(--ease), border-color var(--d2) var(--ease)" }}
       onMouseEnter={e => { if (!isOOS) { e.currentTarget.style.boxShadow="var(--sh-md)"; e.currentTarget.style.borderColor="var(--bd2)"; } }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="var(--bd)"; }}>

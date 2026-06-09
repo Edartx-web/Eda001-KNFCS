@@ -12,7 +12,7 @@ const adminBID = (override) => override || BID();
 export const getCategories     = () => axiosClient.get(`/menu/categories/?branch_id=${BID()}`);
 export const getCategoryDetail = (slug) => axiosClient.get(`/menu/categories/${slug}/?branch_id=${BID()}`);
 export const getItems          = (params) => axiosClient.get("/menu/items/", { params: { branch_id: BID(), ...params } });
-export const getItemDetail     = (slug) => axiosClient.get(`/menu/items/${slug}/?branch_id=${BID()}`);
+export const getItemDetail     = (slug, branchId) => axiosClient.get(`/menu/items/${slug}/?branch_id=${branchId || BID()}`);
 export const getFeatured       = () => axiosClient.get(`/menu/featured/?branch_id=${BID()}`);
 export const searchItems       = (q) => axiosClient.get(`/menu/search/?branch_id=${BID()}&q=${q}`);
 export const getFavourites     = () => axiosClient.get("/menu/favourites/");

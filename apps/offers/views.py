@@ -72,7 +72,15 @@ def _save_offer_extras(offer, request):
     if raw_sel is not None:
         try:
             branch_ids = json.loads(raw_sel) if raw_sel else []
-            offer.selected_branches.set(branch_ids)
+            # Validate UUIDs — silently drop invalid ones to avoid DB errors
+            import uuid as _uuid
+            valid_ids = []
+            for bid in branch_ids:
+                try:
+                    valid_ids.append(str(_uuid.UUID(str(bid))))
+                except (ValueError, AttributeError):
+                    logger.warning(f"offer {offer.id}: invalid branch_id skipped: {bid!r}")
+            offer.selected_branches.set(valid_ids)
         except Exception as e:
             logger.error(f"selected_branches parse error for offer {offer.id}: {e}")
 

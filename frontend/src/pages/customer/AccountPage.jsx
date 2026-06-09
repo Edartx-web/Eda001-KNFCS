@@ -292,6 +292,12 @@ const handleCancelOrder = async (order) => {
               </div>
             </div>
           </div>
+          {/* Support / WhatsApp contact */}
+          <a href="/contact"
+            style={{ width:"100%", marginTop:"var(--s3)", padding:"var(--s3)", background:"rgba(37,211,102,.08)", color:"#25D366", border:"1px solid rgba(37,211,102,.25)", borderRadius:"var(--r3)", fontWeight:700, fontSize:".9375rem", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"var(--s2)", fontFamily:"var(--ff-b)", textDecoration:"none", boxSizing:"border-box" }}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+            Support
+          </a>
           <button onClick={() => { logout(); navigate("/login/customer"); }}
             style={{ width:"100%", marginTop:"var(--s3)", padding:"var(--s3)", background:"var(--err-t)", color:"var(--err)", border:"1px solid rgba(226,75,74,.2)", borderRadius:"var(--r3)", fontWeight:700, fontSize:".9375rem", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"var(--s2)", fontFamily:"var(--ff-b)" }}>
             <Ic.Logout/> Sign out

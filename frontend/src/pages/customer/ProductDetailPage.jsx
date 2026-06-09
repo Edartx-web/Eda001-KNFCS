@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { gsap } from "gsap";
 import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
 import AppLayout from "../../components/layout/AppLayout";
@@ -97,8 +97,10 @@ function InfoTile({ label, value, color }) {
 
 /* ─── Main page ─────────────────────────────────────────────────────── */
 export default function ProductDetailPage() {
-  const { slug }   = useParams();
-  const navigate   = useNavigate();
+  const { slug }         = useParams();
+  const navigate         = useNavigate();
+  const [searchParams]   = useSearchParams();
+  const branchIdFromUrl  = searchParams.get("b") || localStorage.getItem("branch_id") || "";
   const addBtnRef  = useRef(null);
   const heroRef    = useRef(null);
   const addAreaRef = useRef(null);
@@ -132,13 +134,13 @@ export default function ProductDetailPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await getItemDetail(slug);
+        const res = await getItemDetail(slug, branchIdFromUrl);
         setItem(res.data.item);
       } catch { setError(true); }
       finally { setLoading(false); }
     };
     load();
-  }, [slug]);
+  }, [slug, branchIdFromUrl]);
 
   useEffect(() => {
     if (loading || !heroRef.current || typeof gsap === "undefined") return;
