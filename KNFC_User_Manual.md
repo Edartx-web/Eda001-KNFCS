@@ -1,6 +1,6 @@
 # KNFC Fried Chicken — User Manual
 
-**Version 2.0 | June 2026**
+**Version 2.1 | June 2026**
 
 ---
 
@@ -14,7 +14,8 @@
 6. [WhatsApp Setup](#6-whatsapp-setup)
 7. [Site Configuration Reference](#7-site-configuration-reference)
 8. [Deployment Reference](#8-deployment-reference)
-9. [Glossary](#9-glossary)
+9. [Cloud Deployment (Render.com)](#9-cloud-deployment-rendercom)
+10. [Glossary](#10-glossary)
 
 ---
 
@@ -95,7 +96,7 @@ The home page is your starting point. It shows:
 
 The full menu is shown across all branches. Items show:
 - Image, name, price, and dietary badge (veg / non-veg / vegan)
-- Measurement unit and quantity (e.g., "250 g", "2 pcs")
+- **Measurement unit chip** — a white frosted-glass pill overlaid at the bottom-right corner of the product image (e.g., "500 g", "2 pcs", "1 L"). This chip is hidden when the item is running low and the **Hurry!** badge takes priority.
 - A stock indicator when you have a branch selected
 
 #### Filters and Sorting
@@ -911,6 +912,12 @@ Export any report as CSV.
 - WhatsApp may disconnect linked sessions after 14 days of phone inactivity on the linked phone.
 - If **Service Down** appears, the Node.js service needs restarting.
 
+### Keep-Alive (Render Free Tier)
+
+The WhatsApp service pings its own `/health` endpoint every 13 minutes to prevent Render's free-tier 15-minute idle spin-down. This keeps the Baileys session continuously connected without interruption.
+
+If a restart still occurs (e.g., after a deploy), the service restores the session from Supabase S3 automatically. The Django OTP sender will retry once after 10 seconds if it receives a 503 during the brief reconnect window — customers will not see an error in most cases.
+
 ### Automatic Notifications via WhatsApp (Broadcast Number)
 
 The broadcast number automatically sends:
@@ -1084,7 +1091,118 @@ Expected output:
 
 ---
 
-## 9. Glossary
+## 9. Cloud Deployment (Render.com)
+
+The production system runs entirely on cloud services — no local machine or Cloudflare Tunnel required for live customers.
+
+### Architecture
+
+| Service | Platform | URL |
+|---------|----------|-----|
+| **React Frontend** | Vercel | https://knfcs.com |
+| **Django Backend API** | Render.com (`knfc-backend`) | https://knfc-backend.onrender.com |
+| **WhatsApp Baileys Service** | Render.com (`knfc-whatsapp`) | https://knfc-whatsapp.onrender.com |
+| **Database** | Supabase PostgreSQL | External — no Render DB cost |
+| **Redis / Cache** | Upstash Redis | External — free tier |
+| **Media Storage** | Supabase S3 (`knfc-media` bucket) | WhatsApp sessions also stored here |
+
+### Deploying a New Version
+
+Both Render services and Vercel deploy automatically when a commit is pushed to the `main` branch on GitHub.
+
+```
+git checkout main
+git merge EDX-KNFC-v2.0
+git push origin main
+```
+
+- **Vercel** rebuilds the React frontend (~60–90 seconds).
+- **Render `knfc-backend`** rebuilds and restarts Django (~2–3 minutes). Runs `./build.sh` then starts Hypercorn ASGI.
+- **Render `knfc-whatsapp`** rebuilds and restarts the Node.js WhatsApp service (~90 seconds). Session is restored from Supabase S3 automatically on boot.
+
+### Environment Variables (Render Dashboard)
+
+All secrets are set in the Render Dashboard under each service's **Environment** tab. The `render.yaml` file in the repo defines which values are auto-generated and which must be set manually (`sync: false`).
+
+**Variables that must be set manually (not in `render.yaml`):**
+
+| Variable | Service | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `knfc-backend` | Supabase PostgreSQL connection string |
+| `REDIS_URL` | `knfc-backend` | Upstash Redis URL |
+| `WHATSAPP_INTERNAL_KEY` | `knfc-backend` | Shared secret — must match `INTERNAL_KEY` in `knfc-whatsapp` |
+| `INTERNAL_KEY` | `knfc-whatsapp` | Shared secret — must match `WHATSAPP_INTERNAL_KEY` in `knfc-backend` |
+| `SUPABASE_S3_URL` | Both | `https://<ref>.supabase.co/storage/v1/s3` |
+| `SUPABASE_S3_ACCESS_KEY` | Both | Supabase Dashboard → Storage → S3 Access Keys |
+| `SUPABASE_S3_SECRET_KEY` | Both | Supabase S3 secret |
+| `EMAIL_HOST_USER` | `knfc-backend` | Gmail address for staff OTP emails |
+| `EMAIL_HOST_PASSWORD` | `knfc-backend` | Gmail App Password (not account password) |
+| `DEFAULT_FROM_EMAIL` | `knfc-backend` | e.g., `KNFC <knfchead01@gmail.com>` |
+
+### Running Migrations on Render
+
+Render runs `./build.sh` before each deploy. Ensure `build.sh` includes:
+
+```bash
+python manage.py migrate --noinput
+python manage.py collectstatic --noinput
+```
+
+To run a one-off migration or management command manually, use Render's **Shell** tab on the `knfc-backend` service.
+
+### Free-Tier Limitations
+
+| Limitation | Impact | Mitigation |
+|-----------|--------|-----------|
+| Services spin down after 15 min idle | First request takes ~30 s to wake up | WhatsApp service has self-ping every 13 min; OTP sender retries once on 503 |
+| 750 free instance-hours/month per account | Both services share the allowance | Monitor usage in Render Dashboard |
+| WhatsApp session lost on container restart | Customers cannot receive OTP | Session is saved to Supabase S3 and restored on boot automatically |
+
+### Supabase Row-Level Security (RLS)
+
+Supabase enables RLS by default on new projects. The Django backend connects as the `postgres` role. Two SQL scripts must be run once in the Supabase Dashboard → SQL Editor:
+
+**1. Grant postgres full access (required — run once after enabling RLS):**
+```sql
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+    EXECUTE format(
+      'CREATE POLICY IF NOT EXISTS django_full_access ON public.%I AS PERMISSIVE FOR ALL TO postgres USING (true) WITH CHECK (true)',
+      r.tablename
+    );
+  END LOOP;
+END $$;
+```
+
+**2. Disable RLS on all tables (alternative — simpler for single-tenant):**
+```sql
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+    EXECUTE format('ALTER TABLE public.%I DISABLE ROW LEVEL SECURITY', r.tablename);
+  END LOOP;
+END $$;
+```
+
+> If home page sections (Hot Deals, Chicken Items, etc.) appear empty after enabling RLS, run one of the above scripts.
+
+### Vercel Frontend Deployment
+
+The React frontend is deployed via Vercel, connected to the GitHub repo. Vercel auto-deploys on every push to `main`.
+
+**Environment variables in Vercel Dashboard:**
+
+```
+VITE_API_URL=https://knfc-backend.onrender.com/api/v1
+VITE_WS_HOST=knfc-backend.onrender.com
+```
+
+---
+
+## 10. Glossary
 
 | Term | Definition |
 |------|-----------|
@@ -1123,5 +1241,14 @@ Expected output:
 
 ---
 
-*KNFC Fried Chicken — Internal Documentation v2.0 | June 2026*
+*KNFC Fried Chicken — Internal Documentation v2.1 | June 2026*
 *Developed by Edartx — For technical support, contact the system administrator.*
+
+---
+
+### Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| **2.1** | June 2026 | Added Render.com cloud deployment section (§9); Blinkit-style unit chip on product images (§2.3); WhatsApp keep-alive and OTP retry mechanics (§6); updated Table of Contents |
+| **2.0** | June 2026 | Initial release — full customer, staff, branch admin, super admin, WhatsApp, and site config documentation |
