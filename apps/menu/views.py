@@ -60,6 +60,13 @@ def _bust_menu_cache(branch_id):
         cache.delete(f"menu:items:{branch_id}::{sort}:true:false")
 
 
+def _bust_all_branch_caches():
+    """Bust menu cache for every branch — used when an all_branches item changes."""
+    from apps.branches.models import Branch
+    for branch in Branch.objects.values_list("id", flat=True):
+        _bust_menu_cache(str(branch))
+
+
 class CategoryListView(APIView):
     """GET /api/v1/menu/categories/ — all active categories for the branch."""
     permission_classes = [AllowAny]
@@ -231,12 +238,14 @@ class MenuItemDetailView(APIView):
 
     def get(self, request, slug):
         branch_id = request.query_params.get("branch_id") or get_request_branch_id(request)
-        try:
-            item = MenuItem.objects.get(
-                slug=slug,
-                branch_id=branch_id,
-            )
-        except MenuItem.DoesNotExist:
+        from django.db.models import Q as _Q
+        # Prefer branch-specific item; fall back to all_branches copy
+        qs = MenuItem.objects.filter(
+            _Q(branch_id=branch_id) | _Q(all_branches=True),
+            slug=slug,
+        )
+        item = qs.filter(branch_id=branch_id).first() or qs.first()
+        if not item:
             return err("Item not found.", status.HTTP_404_NOT_FOUND)
 
         serializer = MenuItemDetailSerializer(item, context={"request": request})
@@ -623,7 +632,10 @@ class AdminMenuItemListCreateView(APIView):
                 return err(f"{req} is required.")
 
         try:
-            cat = MenuCategory.objects.get(id=data["category_id"], branch_id=branch_id)
+            from django.db.models import Q as _Q
+            cat = MenuCategory.objects.get(
+                _Q(id=data["category_id"]) & (_Q(branch_id=branch_id) | _Q(all_branches=True))
+            )
         except MenuCategory.DoesNotExist:
             return err("Category not found.")
 
@@ -699,9 +711,10 @@ class AdminMenuItemDetailView(APIView):
         from apps.accounts.models import Role
         try:
             item = MenuItem.objects.get(id=item_id)
-            if request.user.role == Role.BRANCH_ADMIN and str(item.branch_id) != str(request.user.branch_id):
-                
-                return None
+            # BranchAdmin can access their own items OR any all_branches item
+            if request.user.role == Role.BRANCH_ADMIN:
+                if not item.all_branches and str(item.branch_id) != str(request.user.branch_id):
+                    return None
             return item
         except MenuItem.DoesNotExist:
             return None
@@ -780,7 +793,10 @@ class AdminMenuItemDetailView(APIView):
             MenuItemImage.objects.create(menu_item=item, image=f)
 
         item.refresh_from_db()
-        _bust_menu_cache(item.branch_id)
+        if item.all_branches:
+            _bust_all_branch_caches()
+        else:
+            _bust_menu_cache(item.branch_id)
         return ok({"item": MenuItemDetailSerializer(item, context={"request": request}).data, "message": "Updated."})
 
     def delete(self, request, item_id):
@@ -788,9 +804,13 @@ class AdminMenuItemDetailView(APIView):
         if not item:
             return err("Item not found.", status.HTTP_404_NOT_FOUND)
         name = item.name
+        was_all_branches = item.all_branches
         branch_id = item.branch_id
         item.delete()
-        _bust_menu_cache(branch_id)
+        if was_all_branches:
+            _bust_all_branch_caches()
+        else:
+            _bust_menu_cache(branch_id)
         return ok({"message": f"'{name}' deleted."})
 
 
@@ -802,14 +822,18 @@ class AdminToggleAvailabilityView(APIView):
         from apps.accounts.models import Role
         try:
             item = MenuItem.objects.get(id=item_id)
-            if request.user.role == Role.BRANCH_ADMIN and str(item.branch_id) != str(request.user.branch_id):
-                return err("Item not found.", status.HTTP_404_NOT_FOUND)
+            if request.user.role == Role.BRANCH_ADMIN:
+                if not item.all_branches and str(item.branch_id) != str(request.user.branch_id):
+                    return err("Item not found.", status.HTTP_404_NOT_FOUND)
         except MenuItem.DoesNotExist:
             return err("Item not found.", status.HTTP_404_NOT_FOUND)
 
         item.is_available = not item.is_available
         item.save(update_fields=["is_available"])
-        _bust_menu_cache(item.branch_id)
+        if item.all_branches:
+            _bust_all_branch_caches()
+        else:
+            _bust_menu_cache(item.branch_id)
         state = "available" if item.is_available else "unavailable"
         return ok({"is_available": item.is_available, "message": f"{item.name} is now {state}."})
 

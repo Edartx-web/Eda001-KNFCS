@@ -34,13 +34,14 @@ class StockDashboardView(APIView):
         ).select_related("menu_item")
         record_map = {str(r.menu_item_id): r for r in records}
 
-        # All menu items for this branch (so items without records show as 0 stock)
+        # All menu items for this branch — include all_branches items
         from apps.menu.models import MenuItem
+        from django.db.models import Q
         items = MenuItem.objects.filter(
-            branch_id=branch_id,
+            Q(branch_id=branch_id) | Q(all_branches=True),
         ).select_related("category").order_by(
             "category__display_order", "display_order"
-        )
+        ).distinct()
 
         data = []
         for item in items:
@@ -124,9 +125,12 @@ class StockTopUpView(APIView):
         except StockRecord.DoesNotExist:
             # Create record if it doesn't exist yet today
             from apps.menu.models import MenuItem
+            from django.db.models import Q
             import datetime
             try:
-                item = MenuItem.objects.get(id=menu_item_id, branch_id=branch_id)
+                item = MenuItem.objects.get(
+                    Q(id=menu_item_id) & (Q(branch_id=branch_id) | Q(all_branches=True))
+                )
             except MenuItem.DoesNotExist:
                 return err("Menu item not found.")
 
@@ -760,7 +764,11 @@ class StockBulkCarryoverView(APIView):
         yesterday = today - datetime.timedelta(days=1)
 
         from apps.menu.models import MenuItem
-        items = MenuItem.objects.filter(branch_id=branch_id, is_available=True)
+        from django.db.models import Q
+        items = MenuItem.objects.filter(
+            Q(branch_id=branch_id) | Q(all_branches=True),
+            is_available=True,
+        ).distinct()
 
         kept = discarded = skipped = 0
 
@@ -956,7 +964,11 @@ class StockBulkSetView(APIView):
         if StockDailyLock.objects.filter(branch_id=branch_id, date=today).exists():
             return err("Today's stock is locked. Unlock it before bulk-setting.")
 
-        items = MenuItem.objects.filter(branch_id=branch_id, is_available=True)
+        from django.db.models import Q
+        items = MenuItem.objects.filter(
+            Q(branch_id=branch_id) | Q(all_branches=True),
+            is_available=True,
+        ).distinct()
         if not items.exists():
             return err("No available menu items found for this branch.")
 
