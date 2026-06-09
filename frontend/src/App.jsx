@@ -107,28 +107,78 @@ class ErrorBoundary extends Component {
   }
 }
 
-/* ── Page transition loader ──────────────────────────────────────────── */
-function PageTransition({ children }) {
-  const location = useLocation();
-  const [show, setShow] = useState(false); // don't block initial render
-  const prevPath = useRef(location.pathname);
+/* ── Top progress bar — shown during route transitions ───────────────── */
+function RouteBar({ active }) {
+  const [phase, setPhase] = useState(0); // 0=idle 1=running 2=done
   const timerRef = useRef(null);
 
   useEffect(() => {
-    if (prevPath.current === location.pathname) return; // skip on mount
-    prevPath.current = location.pathname;
-    setShow(true);
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setShow(false), 180);
+    if (active) {
+      setPhase(1);
+    } else if (phase === 1) {
+      setPhase(2);
+      timerRef.current = setTimeout(() => setPhase(0), 500);
+    }
+    return () => clearTimeout(timerRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  if (phase === 0) return null;
+  return (
+    <div style={{
+      position:      "fixed",
+      top:           0,
+      left:          0,
+      right:         0,
+      height:        "3px",
+      zIndex:        9998,
+      pointerEvents: "none",
+      opacity:       phase === 2 ? 0 : 1,
+      transition:    phase === 2 ? "opacity 0.45s ease" : "none",
+    }}>
+      <div style={{
+        height:     "100%",
+        background: "linear-gradient(90deg, #E8521A 0%, #F5C843 100%)",
+        borderRadius: "0 2px 2px 0",
+        boxShadow:  "0 0 10px rgba(232,82,26,0.55)",
+        width:      phase === 2 ? "100%" : undefined,
+        transition: phase === 2 ? "width 0.25s ease" : "none",
+        animation:  phase === 1 ? "knc-rbar 2.5s ease forwards" : "none",
+      }} />
+      <style>{`
+        @keyframes knc-rbar {
+          0%  { width:0%  }
+          25% { width:35% }
+          55% { width:60% }
+          80% { width:78% }
+          100%{ width:82% }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ── Page transition — content stays visible, only bar moves ─────────── */
+function PageTransition({ children }) {
+  const location = useLocation();
+  const [active, setActive] = useState(false);
+  const prevPath  = useRef(location.pathname);
+  const timerRef  = useRef(null);
+
+  useEffect(() => {
+    if (prevPath.current === location.pathname) return; // skip mount
+    prevPath.current = location.pathname;
+    setActive(true);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setActive(false), 400);
     return () => clearTimeout(timerRef.current);
   }, [location.pathname]);
 
   return (
     <>
-      <KNCLoader visible={show} onDone={() => setShow(false)} />
-      <div style={{ opacity: show ? 0 : 1, transition: "opacity .15s ease" }}>
-        {children}
-      </div>
+      <RouteBar active={active} />
+      {children}
     </>
   );
 }
@@ -331,10 +381,25 @@ function RootOverlays() {
   );
 }
 
+/* ── Dismiss the HTML splash screen on first React render ────────────── */
+function SplashDismisser() {
+  useEffect(() => {
+    const el = document.getElementById("knfc-splash");
+    if (!el) return;
+    // Small rAF delay so the first painted frame is the app, not a flicker
+    requestAnimationFrame(() => {
+      el.classList.add("knfc-splash-out");
+      setTimeout(() => el.remove(), 500);
+    });
+  }, []);
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SplashDismisser />
         <ZoomBlocker />
         <NotificationProvider />
         <div style={{ minHeight: "100vh" }}>
