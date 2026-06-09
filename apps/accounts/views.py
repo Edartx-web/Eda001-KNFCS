@@ -127,7 +127,11 @@ class CustomerRegisterView(APIView):
 
         if not sent and not getattr(settings, "OTP_BYPASS", False):
             logger.error(f"OTP delivery failed: {phone}")
-            return err("Failed to send OTP. Please try again.", 503)
+            return err(
+                "We couldn't send the OTP to your WhatsApp right now. "
+                "Please wait a moment and try again, or contact support.",
+                503,
+            )
 
         data = {"is_new_user": is_new}
         if getattr(settings, "OTP_BYPASS", False):
@@ -212,7 +216,14 @@ class CustomerResendOTPView(APIView):
                 return err(f"Please wait {wait} seconds before requesting a new OTP.")
 
         otp  = create_otp_record(user, OTPPurpose.CUSTOMER_REGISTER)
-        send_otp_whatsapp(phone, otp)
+        sent = send_otp_whatsapp(phone, otp)
+        if not sent and not getattr(settings, "OTP_BYPASS", False):
+            logger.error(f"OTP resend delivery failed: {phone}")
+            return err(
+                "We couldn't send the OTP to your WhatsApp right now. "
+                "Please wait a moment and try again, or contact support.",
+                503,
+            )
 
         data = {}
         if getattr(settings, "OTP_BYPASS", False):
