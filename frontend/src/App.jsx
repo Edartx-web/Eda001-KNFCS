@@ -381,17 +381,24 @@ function RootOverlays() {
   );
 }
 
-/* ── Dismiss the HTML splash screen on first React render ────────────── */
+/* ── Dismiss the HTML splash screen once auth state is settled ───────── */
 function SplashDismisser() {
+  const { isLoading } = useAuth();
+  const dismissed = useRef(false);
+
   useEffect(() => {
+    // Wait until auth/branch detection finishes — then dismiss
+    // This prevents the splash disappearing while the page chunk is still downloading
+    if (isLoading || dismissed.current) return;
+    dismissed.current = true;
     const el = document.getElementById("knfc-splash");
     if (!el) return;
-    // Small rAF delay so the first painted frame is the app, not a flicker
     requestAnimationFrame(() => {
       el.classList.add("knfc-splash-out");
       setTimeout(() => el.remove(), 500);
     });
-  }, []);
+  }, [isLoading]);
+
   return null;
 }
 
