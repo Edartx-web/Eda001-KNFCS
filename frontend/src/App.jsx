@@ -335,6 +335,7 @@ export default function App() {
       <AuthProvider>
         <ZoomBlocker />
         <NotificationProvider />
+        <div style={{ minHeight: "100vh" }}>
         <Routes>
 
           {/* ── Root ──────────────────────────────────────────────────── */}
@@ -435,6 +436,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
 
         </Routes>
+        </div>
 
         {/* Footer + overlays — outside Routes/PageTransition so never hidden by opacity */}
         <RootOverlays />
