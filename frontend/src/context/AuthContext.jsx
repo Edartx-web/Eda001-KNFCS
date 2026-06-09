@@ -112,17 +112,29 @@ export function AuthProvider({ children }) {
         );
       };
 
-      getPublicBranches()
-        .then(res => {
-          const list = (res.data?.branches || []).filter(b => b.is_active !== false);
-          if (list.length) localStorage.setItem(BRANCHES_CACHE, JSON.stringify(list));
-          saveBranchFromList(list);
-        })
-        .catch(() => {
-          // API failed (429, network error) — use cached list from previous visit
-          const cached = _cachedBranches().filter(b => b.is_active !== false);
-          saveBranchFromList(cached);  // sets loading=false even when cache is empty
-        });
+      const cached = _cachedBranches().filter(b => b.is_active !== false);
+      if (cached.length) {
+        // Return visits: use cache instantly — zero wait, page renders now
+        saveBranchFromList(cached);
+        // Silently refresh cache in background (no await, no state changes)
+        getPublicBranches()
+          .then(res => {
+            const list = (res.data?.branches || []).filter(b => b.is_active !== false);
+            if (list.length) localStorage.setItem(BRANCHES_CACHE, JSON.stringify(list));
+          })
+          .catch(() => {});
+      } else {
+        // First ever visit — must fetch from API
+        getPublicBranches()
+          .then(res => {
+            const list = (res.data?.branches || []).filter(b => b.is_active !== false);
+            if (list.length) localStorage.setItem(BRANCHES_CACHE, JSON.stringify(list));
+            saveBranchFromList(list);
+          })
+          .catch(() => {
+            saveBranchFromList([]); // shows branch picker if truly no data
+          });
+      }
     }
   }, []);
 

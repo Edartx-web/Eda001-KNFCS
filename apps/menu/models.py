@@ -212,6 +212,14 @@ class MenuItem(models.Model):
             models.Index(fields=["branch", "category"]),
             models.Index(fields=["branch", "is_available"]),
             models.Index(fields=["is_featured"]),
+            # Home-sections query: Q(branch_id=x)|Q(all_branches=True), filter by flag
+            models.Index(fields=["all_branches"]),
+            models.Index(fields=["branch", "is_hotdeals"]),
+            models.Index(fields=["branch", "is_buckets"]),
+            models.Index(fields=["branch", "is_combo"]),
+            models.Index(fields=["branch", "is_chicken"]),
+            models.Index(fields=["branch", "is_snacks"]),
+            models.Index(fields=["branch", "is_cold_drinks"]),
         ]
 
     def __str__(self):

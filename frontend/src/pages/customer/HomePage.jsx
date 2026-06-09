@@ -651,6 +651,13 @@ export default function HomePage() {
   const cartTotal      = useCartStore(s => s.items.reduce((a,i)=>a+i.lineTotal,0));
   const pageRef        = useRef(null);
   const [showBranchPicker, setShowBranchPicker] = useState(false);
+  // Fallback: if authLoading stays true for >5s (slow first-visit API), stop spinning
+  const [authTimeout, setAuthTimeout] = useState(false);
+  useEffect(() => {
+    if (!authLoading) return;
+    const t = setTimeout(() => setAuthTimeout(true), 5000);
+    return () => clearTimeout(t);
+  }, [authLoading]);
 
   const [loading,      setLoading]      = useState(true);
   const [offers,       setOffers]       = useState([]);
@@ -726,7 +733,7 @@ export default function HomePage() {
   // authLoading=false, !branchId → API failed AND no cache → show branch picker
   // authLoading=false, branchId  → branch is known, proceed normally
 
-  if (authLoading) return <HomeSkeleton />;
+  if (authLoading && !authTimeout) return <HomeSkeleton />;
 
   if (!branchId) return (
     <AppLayout>

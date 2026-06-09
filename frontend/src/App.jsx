@@ -110,21 +110,23 @@ class ErrorBoundary extends Component {
 /* ── Page transition loader ──────────────────────────────────────────── */
 function PageTransition({ children }) {
   const location = useLocation();
-  const [show, setShow] = useState(true);
+  const [show, setShow] = useState(false); // don't block initial render
   const prevPath = useRef(location.pathname);
+  const timerRef = useRef(null);
 
   useEffect(() => {
-    const same = prevPath.current === location.pathname;
+    if (prevPath.current === location.pathname) return; // skip on mount
     prevPath.current = location.pathname;
     setShow(true);
-    const t = setTimeout(() => setShow(false), same ? 1100 : 900);
-    return () => clearTimeout(t);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setShow(false), 180);
+    return () => clearTimeout(timerRef.current);
   }, [location.pathname]);
 
   return (
     <>
       <KNCLoader visible={show} onDone={() => setShow(false)} />
-      <div style={{ opacity: show ? 0 : 1, transition: "opacity .18s ease" }}>
+      <div style={{ opacity: show ? 0 : 1, transition: "opacity .15s ease" }}>
         {children}
       </div>
     </>
