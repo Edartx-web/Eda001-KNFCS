@@ -497,6 +497,12 @@ const ProductCard = memo(function ProductCard({ item, rank }) {
           {item.is_new && <div style={{ background:"linear-gradient(135deg,#378ADD,#2563EB)",color:"#fff",fontSize:".5625rem",fontWeight:800,padding:"3px 8px",borderRadius:"var(--rf)",letterSpacing:".06em" }}>NEW</div>}
         </div>
         {hasDisc&&item.discount && <div style={{ position:"absolute",bottom:"7px",left:"7px",background:"var(--ok)",color:"#fff",fontSize:".5625rem",fontWeight:800,padding:"2px 7px",borderRadius:"var(--rf)",letterSpacing:".04em" }}>{item.discount}% OFF</div>}
+        {/* Blinkit-style unit chip — bottom-right of image */}
+        {formatUnit(item.unit_quantity,item.measurement_unit) && (
+          <div style={{ position:"absolute",bottom:"7px",right:"7px",zIndex:2,background:"rgba(255,255,255,.93)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",borderRadius:"var(--rf)",padding:"2px 8px",fontSize:".625rem",fontWeight:800,color:"#1a1a1a",lineHeight:1.5,letterSpacing:".02em",pointerEvents:"none" }}>
+            {formatUnit(item.unit_quantity,item.measurement_unit)}
+          </div>
+        )}
         {isOOS && <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.5)",backdropFilter:"blur(3px)" }}><span style={{ fontSize:".75rem",fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.8)" }}>Out of Stock</span></div>}
       </div>
       {/* Body */}
@@ -514,9 +520,6 @@ const ProductCard = memo(function ProductCard({ item, rank }) {
               <span className="price" style={{ fontSize:"1rem",letterSpacing:"-.01em" }}>{formatPrice(showPrice)}</span>
               {hasDisc && <span style={{ fontSize:".8125rem",color:"var(--t4)",textDecoration:"line-through" }}>{formatPrice(item.price)}</span>}
             </div>
-            {formatUnit(item.unit_quantity,item.measurement_unit) && (
-              <span style={{ fontSize:".75rem",color:"var(--t2)",fontWeight:600 }}>{formatUnit(item.unit_quantity,item.measurement_unit)}</span>
-            )}
           </div>
           {!isOOS && (inCart
             ? <div style={{ display:"flex",alignItems:"center",gap:"3px" }} onClick={e=>e.stopPropagation()}>
@@ -593,6 +596,11 @@ function HorizontalItemStrip({ items, title, icon }) {
                 ? <img loading="lazy" src={item.image_url} alt={item.name} style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover" }}/>
                 : <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",opacity:.5 }}><svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.5"><path d="M24 6C13 6 7 15 7 24s6 18 17 18c5 0 9-2 11-5 4-2 6-5 6-8 0-8-8-14-17-14v-9z" strokeLinejoin="round"/><path d="M24 16c5 0 9 4 9 8" strokeLinecap="round"/></svg></div>
               }
+              {formatUnit(item.unit_quantity,item.measurement_unit) && (
+                <div style={{ position:"absolute",bottom:"5px",right:"5px",background:"rgba(255,255,255,.93)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",borderRadius:"var(--rf)",padding:"2px 6px",fontSize:".5625rem",fontWeight:800,color:"#1a1a1a",lineHeight:1.5,pointerEvents:"none" }}>
+                  {formatUnit(item.unit_quantity,item.measurement_unit)}
+                </div>
+              )}
             </div>
             <div style={{ fontSize:".8125rem",fontWeight:600,color:"var(--t1)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:"2px" }}>{item.name}</div>
             <div className="price" style={{ fontSize:".875rem" }}>{formatPrice(item.offer_price||item.price)}</div>

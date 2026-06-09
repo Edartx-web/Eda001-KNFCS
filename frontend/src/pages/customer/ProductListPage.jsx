@@ -150,8 +150,15 @@ const GridCard = memo(function GridCard({ item, navigate }) {
             {item.discount}% OFF
           </div>
         )}
-        {/* Hurry badge — low stock only */}
-        {item.stock_status === "low" && !isOOS && (
+        {/* Unit chip — Blinkit style, bottom-right of image */}
+        {!item.stock_status || item.stock_status !== "low" ? (
+          formatUnit(item.unit_quantity, item.measurement_unit) ? (
+            <div style={{ position:"absolute", bottom:"7px", right:"7px", zIndex:2, background:"rgba(255,255,255,.93)", backdropFilter:"blur(4px)", WebkitBackdropFilter:"blur(4px)", borderRadius:"var(--rf)", padding:"2px 8px", fontSize:".625rem", fontWeight:800, color:"#1a1a1a", lineHeight:1.5, letterSpacing:".02em", pointerEvents:"none" }}>
+              {formatUnit(item.unit_quantity, item.measurement_unit)}
+            </div>
+          ) : null
+        ) : (
+          /* Hurry badge — low stock only (replaces unit chip) */
           <div style={{ position:"absolute", bottom:"7px", right:"7px", background:"linear-gradient(135deg,#ff4444,#cc0000)", color:"#fff", fontSize:".5625rem", fontWeight:800, padding:"2px 7px", borderRadius:"var(--rf)", letterSpacing:".06em", textTransform:"uppercase", boxShadow:"0 2px 6px rgba(204,0,0,.4)" }}>
             Hurry!
           </div>
@@ -187,11 +194,6 @@ const GridCard = memo(function GridCard({ item, navigate }) {
               <span className="price" style={{ fontSize:".9375rem" }}>{formatPrice(price)}</span>
               {hasDisc && <span style={{ fontSize:".75rem", color:"var(--t4)", textDecoration:"line-through" }}>{formatPrice(item.price)}</span>}
             </div>
-            {formatUnit(item.unit_quantity, item.measurement_unit) && (
-              <span style={{ fontSize:".75rem", color:"var(--t2)", fontWeight:600 }}>
-                {formatUnit(item.unit_quantity, item.measurement_unit)}
-              </span>
-            )}
           </div>
           {!isOOS && (
             inCart
