@@ -428,9 +428,8 @@ export function OpeningStockPanel({ menuItems, branchId, onClose, onDone, onMoun
       <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch", background:"var(--bgc)", borderRadius:"0 0 var(--r5) var(--r5)" }}>
         <div style={{ minWidth:"720px" }}>
 
-          {/* Column headers — sticky just below the action bar */}
+          {/* Column headers */}
           <div style={{
-            position:"sticky", top:"calc(var(--nav-h) + 73px)", zIndex:49,
             display:"grid", gridTemplateColumns:"1fr 120px 240px 80px", gap:"12px",
             padding:"8px 20px", background:"var(--bg2)", borderBottom:"1px solid var(--bd)",
           }}>

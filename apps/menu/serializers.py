@@ -140,10 +140,19 @@ class MenuItemListSerializer(serializers.ModelSerializer):
     def _get_stock_record(self, obj):
         from django.utils import timezone
         today = timezone.localdate()
-        for r in obj.stock_records.all():
-            if r.date == today:
-                return r
-        return None
+        request = self.context.get("request")
+        branch_id = ""
+        if request:
+            branch_id = request.query_params.get("branch_id") or ""
+            if not branch_id and hasattr(request, "auth") and request.auth:
+                try:
+                    branch_id = str(request.auth.get("branch_id") or "")
+                except Exception:
+                    branch_id = ""
+        qs = obj.stock_records.filter(date=today)
+        if branch_id:
+            qs = qs.filter(branch_id=branch_id)
+        return qs.first()
 
 
 class MenuItemDetailSerializer(MenuItemListSerializer):

@@ -365,7 +365,7 @@ function AdsPanel({ siteConfig }) {
     return (
       <section className="hp-section" style={{ marginBottom:"var(--s6)" }}>
         <div onClick={()=>navigate(ad.link||"/menu/all")}
-          style={{ borderRadius:"var(--r4)", overflow:"hidden", cursor:"pointer", position:"relative", aspectRatio:"16/5", background:"var(--bg2)", border:"1px solid var(--bd)" }}>
+          style={{ borderRadius:"var(--r4)", overflow:"hidden", cursor:"pointer", position:"relative", aspectRatio:"16/6", background:"var(--bg2)", border:"1px solid var(--bd)" }}>
           <img src={ad.image_url} alt={ad.title||"Promotion"}
             style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"opacity .4s ease" }}
             onError={e => e.target.style.display="none"}/>
@@ -876,7 +876,7 @@ export default function HomePage() {
             <section key={flag} className="hp-section" style={{ marginBottom:"var(--s8)" }}>
               {/* Section banner — admin image or auto-fallback from first item's image */}
               {bannerImg && (
-                <div style={{ position:"relative", borderRadius:"var(--r4)", overflow:"hidden", marginBottom:"var(--s4)", height:"clamp(90px,20vw,160px)" }}>
+                <div style={{ position:"relative", borderRadius:"var(--r4)", overflow:"hidden", marginBottom:"var(--s4)", height:"clamp(130px,28vw,210px)" }}>
                   <img src={bannerImg} alt={label}
                     style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}
                     onError={e => { e.target.parentElement.style.display="none"; }}/>
