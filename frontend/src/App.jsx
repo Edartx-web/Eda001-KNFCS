@@ -288,7 +288,7 @@ function NotFound() {
 const P = ({ roles, C }) => (
   <RequireAuth roles={roles}>
     <ErrorBoundary>
-      <Suspense fallback={<KNCLoader visible />}>
+      <Suspense fallback={null}>
         <PageTransition><C /></PageTransition>
       </Suspense>
     </ErrorBoundary>
@@ -299,7 +299,7 @@ const P = ({ roles, C }) => (
 const PG = ({ C }) => (
   <BranchGate>
     <ErrorBoundary>
-      <Suspense fallback={<KNCLoader visible />}>
+      <Suspense fallback={null}>
         <PageTransition><C /></PageTransition>
       </Suspense>
     </ErrorBoundary>
@@ -311,7 +311,7 @@ const PC = ({ C }) => (
   <RequireCustomer>
     <BranchGate>
       <ErrorBoundary>
-        <Suspense fallback={<KNCLoader visible />}>
+        <Suspense fallback={null}>
           <PageTransition><C /></PageTransition>
         </Suspense>
       </ErrorBoundary>
@@ -324,7 +324,7 @@ const PA = ({ roles, C }) => (
   <RequireAuth roles={roles}>
     <MustChangePasswordGate>
       <ErrorBoundary>
-        <Suspense fallback={<KNCLoader visible />}>
+        <Suspense fallback={null}>
           <PageTransition><C /></PageTransition>
         </Suspense>
       </ErrorBoundary>
@@ -381,23 +381,40 @@ function RootOverlays() {
   );
 }
 
-/* ── Dismiss the HTML splash screen once auth state is settled ───────── */
+/* ── Crossfade: splash out + app content in, once auth settles ───────── */
 function SplashDismisser() {
   const { isLoading } = useAuth();
   const dismissed = useRef(false);
 
   useEffect(() => {
-    // Wait until auth/branch detection finishes — then dismiss
-    // This prevents the splash disappearing while the page chunk is still downloading
     if (isLoading || dismissed.current) return;
     dismissed.current = true;
-    const el = document.getElementById("knfc-splash");
-    if (!el) return;
+
+    const splash = document.getElementById("knfc-splash");
+    const root   = document.getElementById("root");
+
     requestAnimationFrame(() => {
-      el.classList.add("knfc-splash-out");
-      setTimeout(() => el.remove(), 500);
+      // Fade in app content and fade out splash at the same time
+      if (root)   root.style.opacity = "1";
+      if (splash) {
+        splash.classList.add("knfc-splash-out");
+        setTimeout(() => splash.remove(), 500);
+      }
     });
   }, [isLoading]);
+
+  // Safety: if auth never settles (JS error, network down), show content after 5s
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (dismissed.current) return;
+      dismissed.current = true;
+      const splash = document.getElementById("knfc-splash");
+      const root   = document.getElementById("root");
+      if (root)   root.style.opacity = "1";
+      if (splash) { splash.classList.add("knfc-splash-out"); setTimeout(() => splash.remove(), 500); }
+    }, 5000);
+    return () => clearTimeout(t);
+  }, []);
 
   return null;
 }

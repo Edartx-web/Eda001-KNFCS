@@ -163,6 +163,13 @@
       opacity: 0;
       pointer-events: none;
     }
+    /* Safety: auto-dismiss after 6s even if JS crashes completely */
+    #knfc-splash {
+      animation: knfc-sp-auto 0.5s ease 6s forwards;
+    }
+    @keyframes knfc-sp-auto {
+      to { opacity: 0; pointer-events: none; visibility: hidden; }
+    }
     .knfc-sp-logo {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 2.25rem;
@@ -212,6 +219,7 @@
     </div>
 
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <!-- root starts invisible; SplashDismisser fades it in when content is ready -->
+    <div id="root" style="opacity:0;transition:opacity 0.45s ease;"></div>
   </body>
 </html>
