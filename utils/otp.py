@@ -127,26 +127,46 @@ def validate_otp(user, purpose: str, plain: str):
 # ── Send ──────────────────────────────────────────────────────────────────────
 
 def send_otp_whatsapp(phone: str, otp: str) -> bool:
-    """Send OTP via Baileys WhatsApp (otp session on the Node service)."""
+    """Send OTP via Baileys WhatsApp (otp session on the Node service).
+
+    Retries once after 10 s if the service returns 503 — covers the Render
+    free-tier cold-start window where the session is still reconnecting.
+    """
     if getattr(settings, "OTP_BYPASS", False):
         logger.debug(f"[DEV WA-OTP] {phone}: {otp}")
         return True
+
+    import time
+    import requests as req_lib
 
     wa_url = getattr(settings, "WHATSAPP_SERVICE_URL", "http://127.0.0.1:3001")
     wa_key = getattr(settings, "WHATSAPP_INTERNAL_KEY", "")
     expiry = getattr(settings, "OTP_EXPIRY_MINUTES", 5)
 
-    try:
-        import requests as req_lib
+    def _attempt():
         r = req_lib.post(
             f"{wa_url}/send-otp",
             json={"phone": phone, "otp": otp, "expiry_minutes": expiry},
             headers={"Content-Type": "application/json", "X-Internal-Key": wa_key},
-            timeout=8,
+            timeout=10,
         )
+        return r
+
+    try:
+        r = _attempt()
         if r.status_code == 200:
             logger.info(f"WhatsApp OTP sent → {phone}")
             return True
+        # 503 = WhatsApp session still reconnecting (Render cold-start) — retry once
+        if r.status_code == 503:
+            logger.warning(f"WhatsApp OTP 503 (cold-start?) → {phone}, retrying in 10 s")
+            time.sleep(10)
+            r2 = _attempt()
+            if r2.status_code == 200:
+                logger.info(f"WhatsApp OTP sent (retry) → {phone}")
+                return True
+            logger.error(f"WhatsApp OTP retry failed → {phone}: {r2.text}")
+            return False
         logger.error(f"WhatsApp OTP failed → {phone}: {r.text}")
         return False
     except Exception as e:
