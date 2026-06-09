@@ -59,6 +59,14 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute="*/5"),
         "options":  {"expires": 300},
     },
+    # Keep-alive ping — Render free-tier web services sleep after 15 min idle.
+    # The Celery worker (a background worker, not a web service) stays running
+    # always and pings the web endpoint every 12 min to prevent cold starts.
+    "keep-backend-alive": {
+        "task":     "config.tasks.ping_backend",
+        "schedule": crontab(minute="*/12"),
+        "options":  {"expires": 120},
+    },
 }
 
 app.conf.timezone = "Asia/Kolkata"
