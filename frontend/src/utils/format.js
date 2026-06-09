@@ -53,10 +53,6 @@ export const truncate = (str, n = 60) =>
  *      (null, "pcs") → ""     (null, null) → ""
  */
 export function formatUnit(unitQuantity, measurementUnit) {
-  if (!measurementUnit || measurementUnit === "pcs") {
-    if (!unitQuantity) return "";
-    return `${unitQuantity} pcs`;
-  }
   const UNIT_LABELS = {
     g:       "g",
     kg:      "kg",
@@ -67,9 +63,15 @@ export function formatUnit(unitQuantity, measurementUnit) {
     cup:     "cup",
     pcs:     "pcs",
   };
+  if (!measurementUnit || measurementUnit === "pcs") {
+    if (!unitQuantity) return "";
+    return `${unitQuantity} pcs`;
+  }
   const label = UNIT_LABELS[measurementUnit] || measurementUnit;
   if (!unitQuantity) return label;
-  return `${unitQuantity}${label}`;
+  // Space between number and label only for g/ml (e.g. "500 g", "250 ml")
+  const spacer = ["g","kg","ml","l"].includes(measurementUnit) ? " " : "";
+  return `${unitQuantity}${spacer}${label}`;
 }
 
 /** Returns null if calories is falsy/zero — never show "0 kcal" */
