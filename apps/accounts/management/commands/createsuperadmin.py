@@ -35,7 +35,15 @@ class Command(BaseCommand):
 
         if User.objects.filter(role=Role.SUPER_ADMIN).exists():
             self.stdout.write(self.style.WARNING("A Super Admin already exists."))
-            confirm = input("Continue and create another? (yes/no): ").strip().lower()
+            import sys
+            if not sys.stdin.isatty() or options.get("no_input"):
+                self.stdout.write("Non-interactive mode — skipping.")
+                return
+            try:
+                confirm = input("Continue and create another? (yes/no): ").strip().lower()
+            except EOFError:
+                self.stdout.write("No input available — skipping.")
+                return
             if confirm != "yes":
                 self.stdout.write("Aborted.")
                 return

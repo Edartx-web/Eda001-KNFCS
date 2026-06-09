@@ -149,10 +149,14 @@ class MenuItemListSerializer(serializers.ModelSerializer):
                     branch_id = str(request.auth.get("branch_id") or "")
                 except Exception:
                     branch_id = ""
-        qs = obj.stock_records.filter(date=today)
-        if branch_id:
-            qs = qs.filter(branch_id=branch_id)
-        return qs.first()
+        # Use prefetch_related cache — never fire extra DB queries per item
+        for r in obj.stock_records.all():
+            if r.date != today:
+                continue
+            if branch_id and str(r.branch_id) != str(branch_id):
+                continue
+            return r
+        return None
 
 
 class MenuItemDetailSerializer(MenuItemListSerializer):

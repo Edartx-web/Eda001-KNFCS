@@ -44,3 +44,5 @@ qrcode==7.4.2
 # and payment transaction references stored in the database.
 cryptography>=42.0.0
 
+
+openpyxl>=3.1.0
