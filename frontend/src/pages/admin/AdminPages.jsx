@@ -2518,7 +2518,7 @@ const DEFAULT_SLIDES_FOR_EDITOR = [
   { word:"SMASH",  sub:"Juicy smash burgers",   gradient:"linear-gradient(160deg,#0c0020 0%,#2d0060 55%,#6600cc 100%)", accent:"#a855f7", img:"/assets/image/dishes/dish-1.png" },
   { word:"ENJOY",  sub:"Golden crispy fries",   gradient:"linear-gradient(160deg,#001408 0%,#003d18 55%,#007330 100%)", accent:"#22c55e", img:"/assets/image/dishes/dish-2.png" },
   { word:"RELISH", sub:"Ice-cold beverages",    gradient:"linear-gradient(160deg,#000d1a 0%,#002a50 55%,#005599 100%)", accent:"#3b82f6", img:"/assets/image/dishes/dish-3.png" },
-  { word:"FEAST",  sub:"Spicy loaded combos",   gradient:"linear-gradient(160deg,#1a0000 0%,#4d0000 55%,#990000 100%)", accent:"#ef4444", img:"/assets/image/dishes/dish-4.png" },
+  { word:"FEAST",  sub:"Spicy loaded combos",   gradient:"linear-gradient(160deg,#1a0000 0%,#4d0000 55%,#990000 100%)", accent:"#ef4444", img:"/assets/image/dishes/dish-4.jpg" },
 ];
 
 function LoginSlidesEditor({ slides, onChange }) {

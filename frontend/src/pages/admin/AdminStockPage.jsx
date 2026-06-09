@@ -10,8 +10,8 @@ import KNCLoader, { usePageLoader }  from "../../components/common/KNCLoader";
 import { useAuth }                   from "../../context/AuthContext";
 import axiosClient                   from "../../api/axiosClient";
 import {
-  IcBox, IcRefresh, IcLock, IcHistory,
-  StockCard, TopUpModal,
+  IcBox, IcRefresh, IcLock, IcHistory, IcSun,
+  StockCard, TopUpModal, OpeningStockPanel,
   StockLockBanner, StockActivityLog,
   lockStock,
 } from "./StockComponents";
@@ -50,6 +50,10 @@ export default function AdminStockPage() {
   const [showResetModal,      setShowResetModal]      = useState(false);
   const [resetReason,         setResetReason]         = useState("");
   const [resetting,           setResetting]           = useState(false);
+
+  // Opening stock panel — menu items list
+  const [menuItems,           setMenuItems]           = useState([]);
+  const [menuLoading,         setMenuLoading]         = useState(false);
 
   // Bulk set all items to N quantity
   const [bulkQty,             setBulkQty]             = useState(20);
@@ -99,6 +103,23 @@ export default function AdminStockPage() {
   }, []);
 
   useEffect(() => { setAcknowledged(new Set()); }, [effectiveBranchId]);
+
+  const loadMenuItems = useCallback(async () => {
+    if (!effectiveBranchId) return;
+    setMenuLoading(true);
+    try {
+      const res = await axiosClient.get("/menu/admin/items/", {
+        params: { branch_id: effectiveBranchId, page_size: 200 },
+      });
+      const raw = res.data.results ?? res.data.items ?? res.data ?? [];
+      setMenuItems(Array.isArray(raw) ? raw : []);
+    } catch {}
+    finally { setMenuLoading(false); }
+  }, [effectiveBranchId]);
+
+  useEffect(() => {
+    if (activeTab === "opening") loadMenuItems();
+  }, [activeTab]);
 
   const handleAckAlerts = async () => { await ackAlerts(); setAlertCount(0); };
 
@@ -241,6 +262,7 @@ export default function AdminStockPage() {
         <div style={{ display:"flex", gap:0, marginBottom:"var(--s4)", borderBottom:"2px solid var(--bd)" }}>
           {[
             { id:"stock",    label:"Stock Overview", icon:<IcBox /> },
+            { id:"opening",  label:"Opening Stock",  icon:<IcSun /> },
             { id:"activity", label:"Activity Log",   icon:<IcHistory /> },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -278,10 +300,16 @@ export default function AdminStockPage() {
             {loading ? (
               <div style={{ padding:"var(--s12)", textAlign:"center", color:"var(--t3)" }}>Loading stock…</div>
             ) : stock.length === 0 ? (
-              <div style={{ padding:"var(--s12)", textAlign:"center", background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r5)" }}>
-                <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="var(--t4)" strokeWidth="1.5" style={{ marginBottom:"var(--s4)" }}><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-                <p style={{ fontWeight:700, marginBottom:"var(--s2)" }}>No stock data yet</p>
-                <p style={{ color:"var(--t3)", fontSize:".875rem" }}>Click "Add stock" on any item card to set opening quantities.</p>
+              <div style={{ padding:"var(--s10)", textAlign:"center", background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r5)" }}>
+                <div style={{ width:56, height:56, borderRadius:"var(--r4)", background:"rgba(232,82,26,.08)", border:"1px solid rgba(232,82,26,.15)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto var(--s4)" }}>
+                  <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="var(--brand)" strokeWidth="1.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                </div>
+                <p style={{ fontWeight:800, fontSize:"1.0625rem", marginBottom:"var(--s2)" }}>No stock data yet</p>
+                <p style={{ color:"var(--t3)", fontSize:".875rem", marginBottom:"var(--s5)" }}>Use <strong>Opening Stock</strong> to set today's starting quantities for all items at once.</p>
+                <button onClick={() => setActiveTab("opening")}
+                  style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"10px 22px", borderRadius:"var(--r3)", background:"var(--brand)", color:"#fff", fontFamily:"var(--ff-b)", fontSize:".9375rem", fontWeight:700, border:"none", cursor:"pointer", boxShadow:"var(--sh-br)" }}>
+                  <IcSun /> Set Opening Stock
+                </button>
               </div>
             ) : (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(310px,1fr))", gap:"var(--s4)" }}>
@@ -303,6 +331,39 @@ export default function AdminStockPage() {
             <div style={{ textAlign:"center", marginTop:"var(--s5)", fontSize:".8125rem", color:"var(--t4)" }}>
               Stock auto-resets at midnight · Next rollover in {24 - new Date().getHours()}h · Pending stock saved in daily snapshot
             </div>
+          </>
+        )}
+
+        {activeTab === "opening" && (
+          <>
+            {/* ── Opening Stock intro card ──────────────────────────── */}
+            <div style={{ background:"linear-gradient(135deg,rgba(232,82,26,.08),rgba(232,82,26,.03))", border:"1px solid rgba(232,82,26,.2)", borderRadius:"var(--r5)", padding:"var(--s5)", marginBottom:"var(--s5)", display:"flex", alignItems:"flex-start", gap:"var(--s4)" }}>
+              <div style={{ width:42, height:42, borderRadius:"var(--r3)", background:"var(--brand)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:2, color:"#fff" }}>
+                <IcSun />
+              </div>
+              <div>
+                <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:800, color:"var(--brand)", marginBottom:"var(--s1)" }}>Set Opening Stock</div>
+                <p style={{ fontSize:".875rem", color:"var(--t2)", margin:0, lineHeight:1.6 }}>
+                  Enter today's starting quantities for each menu item. Use the preset buttons for quick entry or type a custom amount. Click <strong>Save all</strong> when ready.
+                </p>
+              </div>
+            </div>
+
+            {menuLoading ? (
+              <div style={{ padding:"var(--s12)", textAlign:"center", color:"var(--t3)" }}>Loading menu items…</div>
+            ) : menuItems.length === 0 ? (
+              <div style={{ padding:"var(--s10)", textAlign:"center", background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r5)" }}>
+                <p style={{ fontWeight:700 }}>No menu items found</p>
+                <p style={{ color:"var(--t3)", fontSize:".875rem" }}>Add menu items first to set opening stock.</p>
+              </div>
+            ) : (
+              <OpeningStockPanel
+                menuItems={menuItems}
+                branchId={effectiveBranchId}
+                onClose={() => setActiveTab("stock")}
+                onDone={loadStock}
+              />
+            )}
           </>
         )}
 

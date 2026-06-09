@@ -44,18 +44,11 @@ const NAV = {
   super_admin:  [], // SuperAdmin uses sidebar navigation inside SuperAdminDashboard
 };
 
-/* ── Logo swap sequence: text → emoji → text → emoji … (5s each) ───────── */
-const LOGO_FRAMES = [
-  { type:"text", label:"KNFC",  sub:"Fried Chicken" },
-  { type:"emoji", label:"🍗",   sub:"Chicken"        },
-  { type:"emoji", label:"🍔",   sub:"Burger"         },
-  { type:"emoji", label:"🥤",   sub:"Drinks"         },
-  { type:"emoji", label:"🌶️",  sub:"Spicy"          },
-  { type:"emoji", label:"🍟",   sub:"Fries"          },
-];
+/* ── Logo: one-letter-at-a-time emoji flip (K→🍗 N→🍔 F→🥤 C→🌶️) ──────── */
+const LETTER_EMOJIS = ["🍗","🍔","🥤","🌶️"];
 
 /* ── Icons ──────────────────────────────────────────────────────────────── */
-const LogoIcon = () => <img src="/KNFC-logo.svg" alt="KNFC" width="36" height="36" style={{ objectFit:"contain", borderRadius:"8px" }} />;
+const LogoIcon = () => <img src="/KNFC-logo.svg" alt="KNFC" width="44" height="44" style={{ objectFit:"contain", borderRadius:"10px", boxShadow:"0 0 0 2px rgba(232,82,26,.22), 0 2px 10px rgba(232,82,26,.18)" }} />;
 const SearchIcon= () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" strokeLinecap="round"/></svg>;
 const CartIcon  = () => <svg width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" strokeLinejoin="round"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>;
 /* Dark/Light mode — pill toggle, no SVG ─── */
@@ -89,8 +82,8 @@ export default function Header() {
   const [shopOpen,      setShopOpen]      = useState(true);
   const [nextOpenAt,    setNextOpenAt]    = useState(null);
   const [searchHistory, setSearchHistory] = useState([]);
-  const [logoFrame,     setLogoFrame]     = useState(0);
-  const [logoVisible,   setLogoVisible]   = useState(true);
+  const [flipIdx,       setFlipIdx]       = useState(-1);
+  const flipCycleRef = useRef(0);
   const searchRef  = useRef(null);
   const { logout } = useAuth();
 
@@ -153,15 +146,14 @@ export default function Header() {
     return () => clearInterval(t);
   }, [hasBranch]);
 
-  /* Logo swap — fade out, change frame, fade in — every 5 seconds */
+  /* Logo — flip one letter at a time every 2.8 s */
   useEffect(() => {
     const t = setInterval(() => {
-      setLogoVisible(false);
-      setTimeout(() => {
-        setLogoFrame(f => (f + 1) % LOGO_FRAMES.length);
-        setLogoVisible(true);
-      }, 350);
-    }, 5000);
+      const idx = flipCycleRef.current % 4;
+      flipCycleRef.current++;
+      setFlipIdx(idx);
+      setTimeout(() => setFlipIdx(-1), 1100);
+    }, 2800);
     return () => clearInterval(t);
   }, []);
 
@@ -254,22 +246,26 @@ export default function Header() {
             "/menu"
           } className="hdr-logo" style={{ gap:"10px" }}>
             <LogoIcon />
-            <div style={{
-              opacity: logoVisible ? 1 : 0,
-              transform: logoVisible ? "translateY(0)" : "translateY(-4px)",
-              transition: "opacity .3s ease, transform .3s ease",
-            }}>
-              {LOGO_FRAMES[logoFrame].type === "emoji" ? (
-                <>
-                  <div style={{ fontSize:"1.375rem", lineHeight:1 }}>{LOGO_FRAMES[logoFrame].label}</div>
-                  <div style={{ fontSize:".5625rem", fontWeight:600, color:"var(--t2)", letterSpacing:".08em", textTransform:"uppercase", lineHeight:1, marginTop:"2px" }}>{LOGO_FRAMES[logoFrame].sub}</div>
-                </>
-              ) : (
-                <>
-                  <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:800, letterSpacing:"-.02em", color:"var(--t1)", lineHeight:1 }}>KNFC</div>
-                  <div style={{ fontSize:".5625rem", fontWeight:600, color:"var(--t2)", letterSpacing:".08em", textTransform:"uppercase", lineHeight:1, marginTop:"2px" }}>Fried Chicken</div>
-                </>
-              )}
+            <div>
+              <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:900, letterSpacing:"-.02em", color:"var(--t1)", lineHeight:1, display:"flex" }}>
+                {["K","N","F","C"].map((ch, i) => (
+                  <span key={i} style={{ display:"inline-block", position:"relative" }}>
+                    <span style={{
+                      display:"inline-block",
+                      transition:"opacity .18s ease, transform .18s ease",
+                      opacity: flipIdx === i ? 0 : 1,
+                      transform: flipIdx === i ? "translateY(4px)" : "none",
+                    }}>{ch}</span>
+                    {flipIdx === i && (
+                      <span style={{
+                        position:"absolute", left:0, top:0, pointerEvents:"none",
+                        animation:"letterFlipIn .25s ease forwards",
+                      }}>{LETTER_EMOJIS[i]}</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+              <div style={{ fontSize:".5625rem", fontWeight:600, color:"var(--t2)", letterSpacing:".08em", textTransform:"uppercase", lineHeight:1, marginTop:"2px" }}>Fried Chicken</div>
             </div>
           </Link>
 
@@ -698,6 +694,7 @@ export default function Header() {
         @media(min-width:1024px){ .hdr-ba-hamburger{display:none !important} }
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes letterFlipIn{0%{opacity:0;transform:translateY(-5px) scale(.7)}65%{opacity:1;transform:translateY(1px) scale(1.1)}100%{opacity:1;transform:translateY(0) scale(1)}}
       `}</style>
       {/* Branch picker modal */}
       {showBranchPicker && (
