@@ -14,7 +14,6 @@ import React, { useEffect, useState, useRef, useCallback, memo } from "react";
 import useSEO from "../../hooks/useSEO";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { gsap } from "gsap";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
 import AppLayout from "../../components/layout/AppLayout";
 import { getCategoryDetail, getCategories, getItems } from "../../api/menu";
 import { formatPrice, formatUnit } from "../../utils/format";
@@ -331,10 +330,10 @@ export default function ProductListPage() {
     description: "Browse KNFC's full menu — crispy fried chicken, buckets, combos, snacks and cold drinks. Fresh, hot and delivered fast.",
   });
 
-  const gridRef    = useRef(null);
-  const headerRef  = useRef(null);
-  const filterRef  = useRef(null);
-  const { loading: pageLoading } = usePageLoader();
+  const gridRef       = useRef(null);
+  const headerRef     = useRef(null);
+  const filterRef     = useRef(null);
+  const isInitialLoad = useRef(true);
 
   const [loading,   setLoading]   = useState(true);
   const [category,  setCategory]  = useState(null);
@@ -374,7 +373,10 @@ export default function ProductListPage() {
         const list = itemR.data.items || [];
         setItems(list);
         setFiltered(list);
-      } finally { setLoading(false); }
+      } finally {
+        isInitialLoad.current = false;
+        setLoading(false);
+      }
     };
     load();
   }, [slug, sort, isAllMode, sectionFilter]);
@@ -433,7 +435,7 @@ export default function ProductListPage() {
     : (cat.name || "Menu");
   const avail = filtered.filter(i => i.is_available).length;
 
-  if (pageLoading) return <ProductListSkeleton />;
+  if (loading && isInitialLoad.current) return <ProductListSkeleton />;
 
   /* Group items by category for ALL-mode section display */
   const sections = isAllMode

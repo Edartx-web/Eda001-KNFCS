@@ -317,17 +317,33 @@ export default function SearchPage() {
             {categories.length > 0 && (
               <section style={{ marginBottom:"var(--s6)" }}>
                 <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1rem", fontWeight:700, marginBottom:"var(--s3)" }}>Browse categories</h2>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))", gap:"var(--s2)" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(104px,1fr))", gap:"var(--s3)" }}>
                   {categories.map(cat => (
                     <button key={cat.id} onClick={() => navigate(`/menu/category/${cat.slug}`)}
-                      style={{ padding:"var(--s3)", borderRadius:"var(--r4)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", textAlign:"center", transition:"all var(--d1) var(--ease)" }}
-                      onMouseEnter={e => { e.currentTarget.style.background="var(--brand-tint)"; e.currentTarget.style.borderColor="var(--brand)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background="var(--bg2)"; e.currentTarget.style.borderColor="var(--bd)"; }}>
-                      <div style={{ fontSize:"1.5rem", marginBottom:"4px", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                        {cat.emoji || <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 6h18M3 12h18M8 18h8"/><circle cx="12" cy="6" r="2" fill="currentColor" fillOpacity=".15"/></svg>}
+                      style={{ padding:0, borderRadius:"var(--r4)", border:"1px solid var(--bd)", background:"var(--bgc)", cursor:"pointer", textAlign:"center", overflow:"hidden", transition:"box-shadow var(--d1) var(--ease), border-color var(--d1) var(--ease)", display:"flex", flexDirection:"column" }}
+                      onMouseEnter={e => { e.currentTarget.style.boxShadow="var(--sh-md)"; e.currentTarget.style.borderColor="var(--brand)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="var(--bd)"; }}>
+
+                      {/* Image area */}
+                      <div style={{ width:"100%", aspectRatio:"1/1", position:"relative", overflow:"hidden", background: cat.gradient_from ? `linear-gradient(135deg,${cat.gradient_from},${cat.gradient_to||"#2D1200"})` : "var(--bg3)", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                        {cat.image_url
+                          ? <img
+                              loading="lazy"
+                              src={cat.image_url}
+                              alt={cat.name}
+                              style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
+                            />
+                          : <span style={{ fontSize:"2rem", lineHeight:1 }}>{cat.emoji || "🍽️"}</span>
+                        }
                       </div>
-                      <div style={{ fontSize:".8125rem", fontWeight:600, color:"var(--t1)" }}>{cat.name}</div>
-                      <div style={{ fontSize:".6875rem", color:"var(--t2)", marginTop:"2px" }}>{cat.available_count || cat.item_count || 0} items</div>
+
+                      {/* Label */}
+                      <div style={{ padding:"8px 6px 9px", flex:1 }}>
+                        <div style={{ fontSize:".8125rem", fontWeight:700, color:"var(--t1)", lineHeight:1.2 }}>{cat.name}</div>
+                        <div style={{ fontSize:".6875rem", color:"var(--t3)", marginTop:"3px" }}>
+                          {cat.available_count || cat.item_count || 0} items
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
