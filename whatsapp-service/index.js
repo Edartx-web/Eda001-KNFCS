@@ -351,21 +351,13 @@ app.post("/logout/:session", requireKey, async (req, res) => {
  * templateButtons / buttonsMessage are intentionally NOT used —
  * WhatsApp blocks those from unofficial clients since 2023.
  */
-function otpButtons(otp, site_url) {
+function otpButtons(otp) {
   return [
     {
       name: "cta_copy",
       buttonParamsJson: JSON.stringify({
-        display_text: "Copy OTP Code",
+        display_text: "Copy Code",
         copy_code:    otp,
-      }),
-    },
-    {
-      name: "cta_url",
-      buttonParamsJson: JSON.stringify({
-        display_text: "Open KNFC",
-        url:          site_url,
-        merchant_url: site_url,
       }),
     },
   ];
@@ -373,11 +365,9 @@ function otpButtons(otp, site_url) {
 
 function otpBody(otp, expiry_minutes) {
   return (
-    `Dear User,\n\n` +
-    `We received a request to access your account. Please use the following OTP to complete your login:\n\n` +
-    `🔑  *${otp}*\n\n` +
-    `This code will expire in *${expiry_minutes} minutes*.\n\n` +
-    `If you did not initiate this request, please disregard this message and contact support if necessary.`
+    `*${otp}* is your KNFC verification code.\n\n` +
+    `For your security, do not share this code.\n\n` +
+    `This code expires in *${expiry_minutes} minutes*.`
   );
 }
 
@@ -390,11 +380,10 @@ app.post("/send-otp", requireKey, async (req, res) => {
   if (state.otp.status !== "connected")
     return res.status(503).json({ error: "OTP WhatsApp not connected", status: state.otp.status });
 
-  const jid      = toJid(phone);
-  const site_url = process.env.SITE_URL || "https://knfcs.com";
-  const body     = otpBody(otp, expiry_minutes);
-  const footer   = "Regards, KNFC Fried Chicken";
-  const buttons  = otpButtons(otp, site_url);
+  const jid     = toJid(phone);
+  const body    = otpBody(otp, expiry_minutes);
+  const footer  = "KNFC Fried Chicken";
+  const buttons = otpButtons(otp);
 
   try {
     await sendInteractive(sessions.otp, jid, body, footer, buttons);
