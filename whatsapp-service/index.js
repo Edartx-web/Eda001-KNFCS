@@ -427,23 +427,9 @@ wss.on("connection", ws => {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
-// ── Keep-alive self-ping (prevents Render free-tier spin-down) ───────────────
-// Pings own /health every 13 minutes so the service never idles to sleep.
-// Only runs when a PUBLIC_URL is set (not in local dev).
-function startKeepAlive() {
-  const selfUrl = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL;
-  if (!selfUrl) return;
-  const interval = 13 * 60 * 1000; // 13 min — under Render's 15-min idle cutoff
-  setInterval(async () => {
-    try {
-      const res = await fetch(`${selfUrl}/health`);
-      if (!res.ok) logger.warn(`keep-alive ping returned ${res.status}`);
-    } catch (e) {
-      logger.warn(`keep-alive ping failed: ${e.message}`);
-    }
-  }, interval);
-  logger.info(`Keep-alive ping active → ${selfUrl}/health every 13 min`);
-}
+// Keep-alive note: Render ignores self-pings for inactivity tracking.
+// This service is kept alive by the Django Celery worker (knfc-celery),
+// which pings /health every 12 min from outside this container.
 
 async function main() {
   logger.info("Starting KNFC WhatsApp service…");
@@ -456,7 +442,6 @@ async function main() {
   await startSession("broadcast");
   server.listen(PORT, () => {
     logger.info(`Listening on port ${PORT}  |  WS: ws://127.0.0.1:${PORT}`);
-    startKeepAlive();
   });
 }
 

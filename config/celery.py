@@ -59,12 +59,18 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute="*/5"),
         "options":  {"expires": 300},
     },
-    # Keep-alive ping — Render free-tier web services sleep after 15 min idle.
-    # The Celery worker (a background worker, not a web service) stays running
-    # always and pings the web endpoint every 12 min to prevent cold starts.
+    # Keep-alive pings — Render free-tier WEB services sleep after 15 min idle.
+    # Render ignores self-pings; only external traffic counts.
+    # The Celery WORKER never sleeps (it's a worker type, not web), so it acts
+    # as the external pinger for both web services.
     "keep-backend-alive": {
         "task":     "config.tasks.ping_backend",
         "schedule": crontab(minute="*/12"),
+        "options":  {"expires": 120},
+    },
+    "keep-whatsapp-alive": {
+        "task":     "config.tasks.ping_whatsapp",
+        "schedule": crontab(minute="2-59/12"),  # offset by 2 min so pings don't overlap
         "options":  {"expires": 120},
     },
 }
