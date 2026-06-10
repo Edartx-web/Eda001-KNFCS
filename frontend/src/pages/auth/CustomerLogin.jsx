@@ -43,6 +43,76 @@ const FlameIcon = () => (
   </svg>
 );
 
+/* ─── Flip Logo ───────────────────────────────────────────────── */
+function FlipLogo() {
+  const [flipped, setFlipped] = React.useState(false);
+
+  // Auto-flip every 2.8 s
+  React.useEffect(() => {
+    const t = setInterval(() => setFlipped(f => !f), 2800);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <>
+      <style>{`
+        @keyframes knfc-glow-pulse {
+          0%,100% { box-shadow: 0 0 18px rgba(232,82,26,.35), 0 8px 32px rgba(232,82,26,.20); }
+          50%      { box-shadow: 0 0 32px rgba(232,82,26,.60), 0 8px 40px rgba(232,82,26,.30); }
+        }
+        .flip-card-inner {
+          transition: transform .72s cubic-bezier(.55,.06,.68,.19);
+          transform-style: preserve-3d;
+          position: relative; width: 96px; height: 96px;
+        }
+        .flip-card-inner.flipped { transform: rotateY(180deg); }
+        .flip-face {
+          position: absolute; inset: 0;
+          backface-visibility: hidden; -webkit-backface-visibility: hidden;
+          border-radius: 22px; overflow: hidden;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .flip-face-back { transform: rotateY(180deg); }
+      `}</style>
+      <div
+        style={{ perspective: "600px", cursor: "pointer" }}
+        onClick={() => setFlipped(f => !f)}
+        title="Tap to flip"
+      >
+        <div className={`flip-card-inner${flipped ? " flipped" : ""}`}>
+
+          {/* Front — KNFC logo */}
+          <div className="flip-face" style={{
+            background: "linear-gradient(135deg,#1a0800 0%,#3d1200 60%,#6b2200 100%)",
+            animation: "knfc-glow-pulse 2.8s ease-in-out infinite",
+          }}>
+            <img src="/KNFC-logo.svg" alt="KNFC" width="64" height="64"
+              style={{ objectFit:"contain", borderRadius:"12px" }}/>
+          </div>
+
+          {/* Back — Fried Chicken SVG */}
+          <div className="flip-face flip-face-back" style={{
+            background: "linear-gradient(135deg,#2d0e00 0%,#7a2e00 60%,#E8521A 100%)",
+            animation: "knfc-glow-pulse 2.8s ease-in-out infinite",
+            padding: "10px",
+          }}>
+            <img
+              src="/assets/fried-chicken.svg"
+              alt="Fried Chicken"
+              width="68"
+              height="68"
+              style={{
+                objectFit: "contain",
+                filter: "brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%)",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 const BRAND_DATA = [
   { char: "K", icon: <DrumstickIcon /> },
   { char: "N", icon: <BurgerIcon /> },
@@ -581,10 +651,9 @@ export default function CustomerLogin() {
 
             {step === "otp" && (
               <>
-                {/* Brand mark — full-page OTP */}
+                {/* Brand mark — flip card SVG logo */}
                 <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"12px", marginBottom:"var(--s6)" }}>
-                  <img src="/KNFC-logo.svg" alt="KNFC" width="96" height="96"
-                    style={{ objectFit:"contain", borderRadius:"20px", boxShadow:"0 10px 32px rgba(232,82,26,.30)" }}/>
+                  <FlipLogo />
                   <div style={{ textAlign:"center" }}>
                     <div style={{ fontFamily:"var(--ff-d)", fontSize:"1.75rem", fontWeight:900, letterSpacing:"-.04em", color:"var(--t1)", lineHeight:1 }}>
                       KN<span style={{ color:"#E8521A" }}>FC</span>

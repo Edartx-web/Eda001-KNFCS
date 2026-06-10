@@ -59,7 +59,7 @@ const TABS = {
     { key:"home",    path:"/menu",         label:"Home",     Icon:T.Home   },
     { key:"offers",  path:"/offers",       label:"Offers",   Icon:T.Tag    },
     { key:"cart",    path:"/cart",         label:"Order",    Icon:T.Cart, badge:true },
-    { key:"browse",  path:"/menu/search",  label:"Browse",   Icon:T.Browse },
+    { key:"browse",  path:"/menu/all",      label:"Browse",   Icon:T.Grid   },
     { key:"acct",    path:"/account",      label:"Account",  Icon:T.User   },
   ],
   staff: [
