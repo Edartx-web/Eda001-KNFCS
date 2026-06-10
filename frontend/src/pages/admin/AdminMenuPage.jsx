@@ -1353,7 +1353,7 @@ function ReviewsTab({ activeBranchId }) {
 ═══════════════════════════════════════════════════════════════════════ */
 export default function AdminMenuPage() {
   const { user } = useAuth();
-  const { loading: pageLoading } = usePageLoader(900);
+  const { loading: pageLoading } = usePageLoader();
 
   const isSuperAdmin = user?.role === "super_admin";
 

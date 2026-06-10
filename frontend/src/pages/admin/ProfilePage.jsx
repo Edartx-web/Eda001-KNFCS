@@ -174,7 +174,7 @@ function ChangePasswordForm() {
 export default function ProfilePage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const { loading: pageLoading } = usePageLoader(600);
+  const { loading: pageLoading } = usePageLoader();
   const [editingName, setEditingName] = useState(false);
   const [displayName, setDisplayName] = useState(user?.name || "");
 

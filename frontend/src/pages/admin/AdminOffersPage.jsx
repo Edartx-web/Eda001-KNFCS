@@ -1145,7 +1145,7 @@ function OfferCard({ offer, isSuperAdmin, onEdit, onDelete, onView, branches }) 
 ═══════════════════════════════════════════════════════════════════════ */
 export default function AdminOffersPage() {
   const { user }  = useAuth();
-  const { loading: pageLoading } = usePageLoader(900);
+  const { loading: pageLoading } = usePageLoader();
   const isSuperAdmin = user?.role === "super_admin";
 
   const [offers,       setOffers]       = useState([]);

@@ -240,7 +240,7 @@ export default function OffersPage() {
 
   const { branchName, branchId, hasBranch } = useBranch();
   const navigate = useNavigate();
-  const { loading: pageLoading } = usePageLoader(800);
+  const { loading: pageLoading } = usePageLoader();
   const [offers,  setOffers]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter,    setFilter]   = useState("all");

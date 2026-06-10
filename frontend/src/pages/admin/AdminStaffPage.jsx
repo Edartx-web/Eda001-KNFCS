@@ -263,7 +263,7 @@ function StaffRow({ member, isSuperAdmin, onToggle, onDeactivate, onTerminate, t
 export default function AdminStaffPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { loading: pageLoading } = usePageLoader(800);
+  const { loading: pageLoading } = usePageLoader();
   const isSuperAdmin = user?.role === "super_admin";
 
   const headerRef = useRef(null);

@@ -388,7 +388,7 @@ export function OrderConfirmPage() {
   const navigate   = useNavigate();
   const tokenRef   = useRef(null);
   const cardsRef   = useRef(null);
-  const { loading: pageLoading } = usePageLoader(900);
+  const { loading: pageLoading } = usePageLoader();
   const { user }   = useAuth();
   const [order,      setOrder]      = useState(null);
   const [loaded,     setLoaded]     = useState(false);
@@ -565,7 +565,7 @@ export function OrderConfirmPage() {
 export function OrderTrackPage() {
   const { id }     = useParams();
   const navigate   = useNavigate();
-  const { loading: pageLoading } = usePageLoader(700);
+  const { loading: pageLoading } = usePageLoader();
   const { user }   = useAuth();
   const msgRef     = useRef(null);
   const stepRef    = useRef(null);

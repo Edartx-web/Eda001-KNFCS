@@ -357,11 +357,12 @@ export function KNCPageSkeleton({ AppLayout }) {
 /* ══════════════════════════════════════════════════════════════════════════
    4. usePageLoader
 ══════════════════════════════════════════════════════════════════════════ */
-export function usePageLoader(minMs = 1200) {
+export function usePageLoader(minMs = 0) {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
+    if (minMs <= 0) { setLoading(false); return; }
     const t = setTimeout(() => setLoading(false), minMs);
     return () => clearTimeout(t);
-  }, []);
+  }, [minMs]);
   return { loading, setLoading };
 }

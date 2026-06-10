@@ -334,7 +334,7 @@ export default function ProductListPage() {
   const gridRef    = useRef(null);
   const headerRef  = useRef(null);
   const filterRef  = useRef(null);
-  const { loading: pageLoading } = usePageLoader(900);
+  const { loading: pageLoading } = usePageLoader();
 
   const [loading,   setLoading]   = useState(true);
   const [category,  setCategory]  = useState(null);

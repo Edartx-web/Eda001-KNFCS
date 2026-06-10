@@ -53,7 +53,7 @@ export default function OfferDetailPage() {
   const heroRef   = useRef(null);
   const videoRef  = useRef(null);
   const ctaRef    = useRef(null);
-  const { loading: pageLoading } = usePageLoader(900);
+  const { loading: pageLoading } = usePageLoader();
 
   const [offer,        setOffer]        = useState(null);
   const [secs,         setSecs]         = useState(0);
