@@ -59,15 +59,10 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute="*/5"),
         "options":  {"expires": 300},
     },
-    # Keep-alive pings — Render free-tier WEB services sleep after 15 min idle.
-    # Render ignores self-pings; only external traffic counts.
-    # The Celery WORKER never sleeps (it's a worker type, not web), so it acts
-    # as the external pinger for both web services.
-    "keep-backend-alive": {
-        "task":     "config.tasks.ping_backend",
-        "schedule": crontab(minute="*/12"),
-        "options":  {"expires": 120},
-    },
+    # Keep WhatsApp service alive — Celery now runs inside the Django web dyno,
+    # so it cannot keep this backend alive (self-pings are ignored by Render).
+    # Use cron-job.org to ping /api/v1/branches/ every 10 min for the backend.
+    # Celery CAN ping the WhatsApp service (separate container = external ping).
     "keep-whatsapp-alive": {
         "task":     "config.tasks.ping_whatsapp",
         "schedule": crontab(minute="2-59/12"),  # offset by 2 min so pings don't overlap
