@@ -1236,7 +1236,7 @@ export default function AdminOffersPage() {
     } catch { showToast("Delete failed."); setConfirm(null); }
   };
 
-  if (pageLoading) return <KNCLoader visible label="Loading offers…" />;
+  if (pageLoading || loading) return <KNCLoader visible label="Loading offers…" />;
 
   const now = Date.now();
   const filtered = offers.filter(o => {

@@ -273,7 +273,7 @@ export default function AnalyticsDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  if (pageLoading) return <KNCLoader visible label="Loading analytics…"/>;
+  if (pageLoading || loading) return <KNCLoader visible label="Loading analytics…"/>;
 
   return (
     <AppLayout>

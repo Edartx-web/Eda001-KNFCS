@@ -907,7 +907,7 @@ export function QueuePage() {
 
   const handleAck = async () => { await ackAlerts(); setAlertCount(0); };
 
-  if (pageLoading) return <KNCLoader visible label="Loading queue…"/>;
+  if (pageLoading || dataLoading) return <KNCLoader visible label="Loading queue…"/>;
 
   const carriedOver = queue.filter(o => o.carried_over);
   const todayRev    = completed.reduce((s, o) => s + parseFloat(o.total || 0), 0);
@@ -1202,7 +1202,7 @@ export function StockPage() {
     } finally { setSubmitting(false); }
   };
 
-  if (pageLoading) return <KNCLoader visible label="Loading stock…"/>;
+  if (pageLoading || loading) return <KNCLoader visible label="Loading stock…"/>;
 
   const QUICK = [5, 10, 20, 50];
 
@@ -1430,7 +1430,7 @@ export function NewOrderPage() {
     } finally { setPlacing(false); }
   };
 
-  if (pageLoading) return <KNCLoader visible label="New walk-in order…"/>;
+  if (pageLoading || itemsLoading) return <KNCLoader visible label="New walk-in order…"/>;
 
   return (
     <AppLayout>

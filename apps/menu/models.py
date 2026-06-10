@@ -11,6 +11,7 @@ Models:
 """
 
 import uuid
+from decimal import Decimal
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -190,7 +191,7 @@ class MenuItem(models.Model):
     # Rating cache — updated by signals when reviews are added
     avg_rating      = models.DecimalField(
         max_digits=3, decimal_places=2,
-        default=0.00, validators=[MinValueValidator(0), MaxValueValidator(5)]
+        default=Decimal("0.00"), validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("5"))]
     )
     review_count    = models.PositiveIntegerField(default=0)
 
@@ -304,8 +305,8 @@ class ItemCustomisation(models.Model):
     name        = models.CharField(max_length=100)   # "Extra Spicy"
     extra_price = models.DecimalField(
         max_digits=6, decimal_places=2,
-        default=0.00,
-        validators=[MinValueValidator(0)]
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0"))]
     )
     is_default  = models.BooleanField(default=False)
     display_order = models.PositiveSmallIntegerField(default=0)
