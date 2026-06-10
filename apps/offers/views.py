@@ -401,15 +401,22 @@ class ReferralStatsView(APIView):
         links = ReferralLink.objects.filter(referrer=request.user).select_related("offer")
         result = []
         for link in links:
-            usages = ReferralUsage.objects.filter(link=link)
+            usages = list(ReferralUsage.objects.filter(link=link))
+            reward_coupons = [
+                u.reward_coupon for u in usages
+                if u.status == ReferralUsage.STATUS_REWARD_SENT and u.reward_coupon
+            ]
+            pending_count = sum(1 for u in usages if u.status == ReferralUsage.STATUS_SIGNED_UP)
             result.append({
-                "offer_id":         str(link.offer_id),
-                "offer_name":       link.offer.name,
-                "code":             link.code,
-                "visits":           link.used_count,
-                "signups":          usages.count(),
-                "rewards_earned":   link.reward_sent_count,
-                "share_url":        f"{_site_url()}/refer/{link.code}",
+                "offer_id":       str(link.offer_id),
+                "offer_name":     link.offer.name,
+                "code":           link.code,
+                "visits":         link.used_count,
+                "signups":        len(usages),
+                "rewards_earned": link.reward_sent_count,
+                "pending_rewards": pending_count,
+                "reward_coupons": reward_coupons,
+                "share_url":      f"{_site_url()}/refer/{link.code}",
             })
         return ok({"referrals": result})
 

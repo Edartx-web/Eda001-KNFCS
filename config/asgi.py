@@ -1,8 +1,9 @@
 """
 config/asgi.py — ASGI config with Django Channels WebSocket support
 
-HTTP  → Django views (unchanged)
-WS    → ws/queue/<branch_id>/ → OrderQueueConsumer
+HTTP      → Django views
+WS        → ws/queue/<branch_id>/ → OrderQueueConsumer
+lifespan  → no-op handler so Hypercorn doesn't log a warning
 """
 import os
 from decouple import config
@@ -27,9 +28,23 @@ websocket_urlpatterns = [
     ),
 ]
 
+
+async def _lifespan_app(scope, receive, send):
+    """Minimal lifespan ASGI app — acknowledges startup/shutdown so Hypercorn
+    doesn't emit 'ASGI Framework Lifespan error' warnings."""
+    while True:
+        message = await receive()
+        if message["type"] == "lifespan.startup":
+            await send({"type": "lifespan.startup.complete"})
+        elif message["type"] == "lifespan.shutdown":
+            await send({"type": "lifespan.shutdown.complete"})
+            return
+
+
 application = ProtocolTypeRouter({
-    "http": django_asgi_app,
+    "http":      django_asgi_app,
     "websocket": AuthMiddlewareStack(
         URLRouter(websocket_urlpatterns)
     ),
+    "lifespan":  _lifespan_app,
 })

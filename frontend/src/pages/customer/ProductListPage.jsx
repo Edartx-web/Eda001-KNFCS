@@ -347,6 +347,9 @@ export default function ProductListPage() {
   const [viewMode,  setViewMode]  = useState("grid");
   const [showSort,  setShowSort]  = useState(false);
   const [stickyBar, setStickyBar] = useState(false);
+  const [activeSection, setActiveSection] = useState("all");
+  const catBarRef   = useRef(null);
+  const sectionRefs = useRef({});
 
   const cartCount = useCartStore(s => s.items.reduce((a, i) => a + i.quantity, 0));
   const cartTotal = useCartStore(s => s.items.reduce((a, i) => a + i.lineTotal, 0));
@@ -400,6 +403,30 @@ export default function ProductListPage() {
     return () => obs.disconnect();
   }, []);
 
+  /* Scroll-spy: highlight the category chip matching the section in view */
+  useEffect(() => {
+    if (!isAllMode) return;
+    const refs = sectionRefs.current;
+    const observers = [];
+    Object.entries(refs).forEach(([slug, el]) => {
+      if (!el) return;
+      const obs = new IntersectionObserver(
+        ([e]) => { if (e.isIntersecting) setActiveSection(slug); },
+        { rootMargin: "-72px 0px -65% 0px", threshold: 0 }
+      );
+      obs.observe(el);
+      observers.push(obs);
+    });
+    return () => observers.forEach(o => o.disconnect());
+  }, [isAllMode, filtered]);
+
+  /* Auto-scroll active chip into centre of category bar */
+  useEffect(() => {
+    if (!catBarRef.current || !activeSection) return;
+    const chip = catBarRef.current.querySelector(`[data-cat="${activeSection}"]`);
+    if (chip) chip.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [activeSection]);
+
   const cat   = category || {};
   const pageTitle = isAllMode
     ? (sectionFilter ? SECTION_LABELS[sectionFilter] || "Menu" : "All Items")
@@ -407,6 +434,16 @@ export default function ProductListPage() {
   const avail = filtered.filter(i => i.is_available).length;
 
   if (pageLoading) return <ProductListSkeleton />;
+
+  /* Group items by category for ALL-mode section display */
+  const sections = isAllMode
+    ? allCats
+        .map(cat => ({ ...cat, items: filtered.filter(i => i.category_slug === cat.slug) }))
+        .filter(s => s.items.length > 0)
+    : [];
+  /* Items without a matching category go to "More" section */
+  const knownSlugs = new Set(sections.map(s => s.slug));
+  const otherItems = isAllMode ? filtered.filter(i => !knownSlugs.has(i.category_slug)) : [];
 
   const DIET_FILTERS = [
     { key:"all",     label:"All" },
@@ -441,7 +478,58 @@ export default function ProductListPage() {
         </div>
       </div>
 
-      <style>{`@media(max-width:639px){.sort-btn-wrap{display:none}}`}</style>
+      <style>{`
+        @media(max-width:639px){.sort-btn-wrap{display:none}}
+        .cat-bar::-webkit-scrollbar{display:none}
+        .cat-bar{-ms-overflow-style:none;scrollbar-width:none}
+        @keyframes cat-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+      `}</style>
+
+      {/* ── CATEGORY STRIP ──────────────────────────────────────────── */}
+      {allCats.length > 0 && (
+        <div style={{ position:"sticky", top:"var(--nav-h)", zIndex:31, marginBottom:"var(--s3)", background:"var(--bgo)", backdropFilter:"blur(20px)", marginLeft:"calc(-1 * var(--s4))", marginRight:"calc(-1 * var(--s4))", borderBottom:"1px solid var(--bd)" }}>
+          <div ref={catBarRef} className="cat-bar" style={{ display:"flex", gap:"var(--s2)", overflowX:"auto", padding:"10px var(--s4)" }}>
+
+            {/* "All" chip */}
+            <button
+              data-cat="all"
+              onClick={() => isAllMode ? window.scrollTo({top:0,behavior:"smooth"}) : navigate("/menu/all")}
+              style={{ flexShrink:0, display:"flex", alignItems:"center", gap:"6px", padding:"7px 16px", borderRadius:"var(--rf)", border:"none", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".8125rem", fontWeight:700, transition:"all .2s", whiteSpace:"nowrap",
+                background: (!isAllMode || activeSection === "all") ? "var(--brand)" : "var(--bg2)",
+                color:      (!isAllMode || activeSection === "all") ? "#fff"         : "var(--t2)",
+                boxShadow:  (!isAllMode || activeSection === "all") ? "0 2px 10px rgba(232,82,26,.4)" : "none",
+              }}>
+              🍽 All
+            </button>
+
+            {allCats.map(cat => {
+              const isActive = isAllMode ? activeSection === cat.slug : slug === cat.slug;
+              return (
+                <button
+                  key={cat.id || cat.slug}
+                  data-cat={cat.slug}
+                  onClick={() => {
+                    if (isAllMode) {
+                      const el = sectionRefs.current[cat.slug];
+                      if (el) { const y = el.getBoundingClientRect().top + window.scrollY - 120; window.scrollTo({top:y,behavior:"smooth"}); }
+                    } else {
+                      navigate(`/menu/${cat.slug}`);
+                    }
+                    setActiveSection(cat.slug);
+                  }}
+                  style={{ flexShrink:0, display:"flex", alignItems:"center", gap:"6px", padding:"7px 14px", borderRadius:"var(--rf)", border:"none", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".8125rem", fontWeight:isActive?700:500, transition:"all .2s", whiteSpace:"nowrap",
+                    background: isActive ? "var(--brand)" : "var(--bg2)",
+                    color:      isActive ? "#fff"         : "var(--t2)",
+                    boxShadow:  isActive ? "0 2px 10px rgba(232,82,26,.4)" : "none",
+                  }}>
+                  {cat.emoji && <span style={{fontSize:"1rem",lineHeight:1}}>{cat.emoji}</span>}
+                  {cat.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── STICKY FILTER BAR ───────────────────────────────────────── */}
       <div ref={filterRef} style={{ position:"sticky", top:"var(--nav-h)", zIndex:30, marginBottom:"var(--s4)", transition:"all var(--d2) var(--ease)" }}>
@@ -497,25 +585,81 @@ export default function ProductListPage() {
       </div>
 
       {/* ── RESULT COUNT ────────────────────────────────────────────── */}
-      <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", marginBottom:"var(--s4)", fontSize:".8125rem", color:"var(--t2)", padding:"var(--s2) var(--s3)", background:"var(--bg2)", borderRadius:"var(--r3)" }}>
-        <span style={{ fontWeight:600, color:"var(--t1)" }}>{filtered.length}</span> items
-        <span>·</span>
-        <span style={{ color:"var(--ok)", fontWeight:600 }}>{avail} available</span>
-        {searchQ && <><span>·</span><span style={{ color:"var(--brand)" }}>Filtered</span><button onClick={() => setSearchQ("")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--brand)", fontSize:".75rem", fontWeight:700 }}>Clear ×</button></>}
-        {diet !== "all" && <><span>·</span><button onClick={() => setDiet("all")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--brand)", fontSize:".75rem", fontWeight:700 }}>{diet === "veg" ? "Veg only" : "Non-veg only"} ×</button></>}
-      </div>
+      {!loading && (
+        <div style={{ display:"flex", alignItems:"center", gap:"var(--s3)", marginBottom:"var(--s4)", fontSize:".8125rem", color:"var(--t2)", padding:"var(--s2) var(--s3)", background:"var(--bg2)", borderRadius:"var(--r3)" }}>
+          <span style={{ fontWeight:600, color:"var(--t1)" }}>{filtered.length}</span> items
+          <span>·</span>
+          <span style={{ color:"var(--ok)", fontWeight:600 }}>{avail} available</span>
+          {searchQ && <><span>·</span><span style={{ color:"var(--brand)" }}>Filtered</span><button onClick={() => setSearchQ("")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--brand)", fontSize:".75rem", fontWeight:700 }}>Clear ×</button></>}
+          {diet !== "all" && <><span>·</span><button onClick={() => setDiet("all")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--brand)", fontSize:".75rem", fontWeight:700 }}>{diet === "veg" ? "Veg only" : "Non-veg only"} ×</button></>}
+        </div>
+      )}
 
       {/* ── ITEMS ───────────────────────────────────────────────────── */}
       {loading ? (
-        <div className="product-grid">
-          {Array.from({length:8}).map((_,i) => <SkeletonCard key={i}/>)}
-        </div>
+        /* Shimmer cards in-place — category strip & hero stay visible */
+        viewMode === "grid" ? (
+          <div className="product-grid">
+            {Array.from({length:8}).map((_,i) => <SkeletonCard key={i}/>)}
+          </div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:"var(--s3)" }}>
+            {Array.from({length:6}).map((_,i) => (
+              <div key={i} style={{ display:"flex", gap:0, background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden", height:"108px" }}>
+                <div style={{ width:"120px", minWidth:"120px", ...shimmer }}/>
+                <div style={{ flex:1, padding:"var(--s3) var(--s4)", display:"flex", flexDirection:"column", gap:8, justifyContent:"center" }}>
+                  <div style={{ height:"14px", borderRadius:"6px", width:"70%", ...shimmer }}/>
+                  <div style={{ height:"11px", borderRadius:"6px", width:"45%", ...shimmer }}/>
+                  <div style={{ height:"16px", borderRadius:"6px", width:"30%", ...shimmer }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       ) : filtered.length === 0 ? (
         <div style={{ textAlign:"center", padding:"var(--s16) var(--s4)", background:"var(--bg2)", borderRadius:"var(--r4)", border:"1px dashed var(--bd)" }}>
           <div style={{ fontSize:"3rem", marginBottom:"var(--s4)" }}>🔍</div>
           <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1.25rem", fontWeight:700, marginBottom:"var(--s2)" }}>Nothing found</h2>
           <p style={{ fontSize:".9375rem", color:"var(--t2)", marginBottom:"var(--s5)" }}>Try a different search or filter</p>
           <button onClick={() => { setSearchQ(""); setDiet("all"); }} className="btn btn-p">Clear filters</button>
+        </div>
+      ) : isAllMode && (sections.length > 0 || loading) ? (
+        /* ALL MODE — grouped by category with section headers */
+        <div ref={gridRef}>
+          {[...sections, ...(otherItems.length > 0 ? [{ slug:"_other", name:"More", emoji:"🍴", items:otherItems }] : [])].map(section => (
+            <div key={section.slug} style={{ marginBottom:"var(--s10)" }}>
+              {/* Section header */}
+              <div
+                ref={el => { sectionRefs.current[section.slug] = el; }}
+                style={{ display:"flex", alignItems:"center", gap:"var(--s3)", marginBottom:"var(--s4)", paddingBottom:"var(--s3)", borderBottom:"2px solid var(--bd)" }}>
+                {section.emoji && <span style={{ fontSize:"1.5rem", lineHeight:1 }}>{section.emoji}</span>}
+                {section.image && !section.emoji && (
+                  <div style={{ width:"32px", height:"32px", borderRadius:"var(--r2)", overflow:"hidden", flexShrink:0 }}>
+                    <img src={section.image} alt={section.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                  </div>
+                )}
+                <div>
+                  <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:800, color:"var(--t1)", margin:0, lineHeight:1.2 }}>{section.name}</h2>
+                  <span style={{ fontSize:".75rem", color:"var(--t3)", fontWeight:500 }}>{section.items.length} item{section.items.length !== 1 ? "s" : ""}</span>
+                </div>
+                {/* Scroll anchor pill */}
+                <button onClick={() => { setActiveSection(section.slug); catBarRef.current?.querySelector(`[data-cat="${section.slug}"]`)?.scrollIntoView({behavior:"smooth",inline:"center"}); }}
+                  style={{ marginLeft:"auto", padding:"4px 12px", borderRadius:"var(--rf)", border:"1px solid var(--bd)", background:"var(--bg2)", color:"var(--t3)", fontSize:".6875rem", fontWeight:600, cursor:"pointer", fontFamily:"var(--ff-b)" }}>
+                  ↑ Top
+                </button>
+              </div>
+              {/* Items grid or list */}
+              {viewMode === "grid" ? (
+                <div className="product-grid">
+                  {section.items.map(item => <GridCard key={item.id} item={item} navigate={navigate}/>)}
+                </div>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:"var(--s3)" }}>
+                  {section.items.map(item => <ListCard key={item.id} item={item} navigate={navigate}/>)}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       ) : viewMode === "grid" ? (
         <div ref={gridRef} className="product-grid">

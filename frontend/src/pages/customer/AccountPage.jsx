@@ -133,7 +133,7 @@ const handleCancelOrder = async (order) => {
     }
   };
 
-  if (pageLoading) return <KNCLoader visible label="Loading account…" />;
+  if (pageLoading || loading) return <KNCLoader visible label="Loading account…" />;
   const TABS = [
     { key:"orders",     label:"Orders",   count:orders.length     },
     { key:"favourites", label:"Saved",    count:favourites.length },

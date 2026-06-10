@@ -141,8 +141,12 @@ function OfferCard({ offer, index }) {
               {disc}
             </span>
             {offer.offer_type && offer.offer_type !== "percentage" && offer.offer_type !== "flat" && (
-              <span style={{ background:"rgba(255,255,255,.12)", color:"#fff", fontSize:".6875rem", fontWeight:700, padding:"4px 10px", borderRadius:"var(--rf)", backdropFilter:"blur(8px)", textTransform:"capitalize" }}>
-                {offer.offer_type === "bogo" ? "Buy 1 Get 1" : offer.offer_type === "combo" ? "Combo" : "Special"}
+              <span style={{ background: offer.offer_type === "referral" ? "rgba(37,211,102,.25)" : "rgba(255,255,255,.12)", color: offer.offer_type === "referral" ? "#25D366" : "#fff", fontSize:".6875rem", fontWeight:700, padding:"4px 10px", borderRadius:"var(--rf)", backdropFilter:"blur(8px)" }}>
+                {offer.offer_type === "bogo"      ? "Buy 1 Get 1"   :
+                 offer.offer_type === "combo"     ? "Combo Deal"    :
+                 offer.offer_type === "referral"  ? "Share & Earn"  :
+                 offer.offer_type === "welcome"   ? "Welcome Bonus" :
+                 offer.offer_type === "free_item" ? "Free Item"     : "Special"}
               </span>
             )}
           </div>
@@ -282,11 +286,10 @@ export default function OffersPage() {
     }
   }, [loading]);
 
-  if (pageLoading) return <KNCLoader visible label="Loading offers…"/>;
+  if (pageLoading || loading) return <KNCLoader visible label="Loading offers…"/>;
 
   const now = Date.now();
-  /* Filter out offers already fully claimed by this user */
-  const visibleOffers = offers.filter(o => o.user_can_redeem !== false);
+  const visibleOffers = offers; // show all — including claimed so user can see their coupon
   const filtered = visibleOffers.filter(o => {
     if (filter === "active")  return !o.end_at || new Date(o.end_at) > now;
     if (filter === "urgent")  return o.end_at && (new Date(o.end_at) - now) < 3600000 && new Date(o.end_at) > now;

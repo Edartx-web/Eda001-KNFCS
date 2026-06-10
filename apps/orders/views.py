@@ -93,6 +93,48 @@ def _send_whatsapp_invoice(order):
     )
 
 
+def _trigger_referral_reward(order):
+    """
+    Called when an order is marked COMPLETED.
+    Checks if the customer was referred by another customer and, if so,
+    grants the referrer their reward (coupon via WhatsApp).
+    Only fires for STATUS_SIGNED_UP usages — avoids double-rewarding.
+    """
+    from apps.offers.models import ReferralUsage
+    from apps.offers.views import _grant_referral_reward
+
+    usage = (
+        ReferralUsage.objects
+        .filter(
+            referred_user_id=order.customer_id,
+            status=ReferralUsage.STATUS_SIGNED_UP,
+            link__offer__is_active=True,
+        )
+        .select_related("link__offer", "link__referrer")
+        .first()
+    )
+    if not usage:
+        return
+
+    offer = usage.link.offer
+
+    # Skip if reward was already handled at signup
+    if offer.referral_reward_on_signup:
+        return
+
+    # Check minimum order value
+    if offer.referral_min_friend_order and float(order.total) < float(offer.referral_min_friend_order):
+        return
+
+    # Advance status to ordered so we know the qualifying order
+    usage.status = ReferralUsage.STATUS_ORDERED
+    usage.qualifying_order = order
+    usage.save(update_fields=["status", "qualifying_order"])
+
+    # Grant the reward (generates coupon + sends WhatsApp to referrer)
+    _grant_referral_reward(usage.link, usage)
+
+
 class PlaceOrderView(APIView):
     """
     POST /api/v1/orders/
@@ -325,6 +367,13 @@ class UpdateOrderStatusView(APIView):
                 _send_whatsapp_invoice(order)
             except Exception:
                 pass  # WhatsApp failure never blocks status update
+
+        # Grant referral reward to referrer if this was the friend's qualifying order
+        if new_status == OrderStatus.COMPLETED and order.customer_id:
+            try:
+                _trigger_referral_reward(order)
+            except Exception:
+                pass  # Referral failure never blocks status update
 
         # Push real-time update to connected staff via WebSocket
         try:

@@ -426,7 +426,7 @@ export default function AdminStaffPage() {
   const createStaffPath      = "/admin/staff/create";
   const createBranchAdminPath = "/superadmin/branch-admin/create";
 
-  if (pageLoading) return <KNCLoader visible label="Loading staff…" />;
+  if (pageLoading || loading) return <KNCLoader visible label="Loading staff…" />;
 
   return (
     <AppLayout>

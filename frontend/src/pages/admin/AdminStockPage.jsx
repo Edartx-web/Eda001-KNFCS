@@ -189,7 +189,7 @@ export default function AdminStockPage() {
     } finally { setResetting(false); }
   };
 
-  if (pageLoading) return <KNCLoader visible label="Loading stock…" />;
+  if (pageLoading || loading) return <KNCLoader visible label="Loading stock…" />;
 
   const outCount  = stock.filter(s => s.status === "out").length;
   const lowCount  = stock.filter(s => s.status === "low" || s.status === "critical").length;
