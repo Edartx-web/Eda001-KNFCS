@@ -314,13 +314,13 @@ app.post("/logout/:session", requireKey, async (req, res) => {
  */
 function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
   const body =
-    `🍗 *KNFC Verification Code*\n\n` +
-    `Your OTP is:\n\n` +
-    `  *${otp}*\n\n` +
-    `⏱ Valid for *${expiry_minutes} minutes*.\n` +
-    `🔒 Do not share this code with anyone.`;
+    `Dear User,\n\n` +
+    `We received a request to access your account. Please use the following OTP to complete your login:\n\n` +
+    `🔑  *${otp}*\n\n` +
+    `This code will expire in *${expiry_minutes} minutes*.\n\n` +
+    `If you did not initiate this request, please disregard this message and contact support if necessary.`;
 
-  const footer = "KNFC Fried Chicken — knfcs.com";
+  const footer = "Regards, KNFC Fried Chicken";
 
   const interactive = {
     viewOnceMessage: {
@@ -333,7 +333,7 @@ function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
               {
                 name: "cta_url",
                 buttonParamsJson: JSON.stringify({
-                  display_text: "Open Website or Copy Code for OTP",
+                  display_text: "Open KNFC",
                   url:          site_url,
                   merchant_url: site_url,
                 }),
@@ -341,7 +341,7 @@ function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
               {
                 name: "cta_copy",
                 buttonParamsJson: JSON.stringify({
-                  display_text: `Copy OTP: ${otp}`,
+                  display_text: "Copy OTP",
                   copy_code:    otp,
                 }),
               },
@@ -353,10 +353,7 @@ function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
   };
 
   const plainText = {
-    text:
-      body +
-      `\n\n👉 *Open Website:* ${site_url}` +
-      `\n\n_${footer}_`,
+    text: body + `\n\n_${footer}_`,
   };
 
   return { interactive, plainText };

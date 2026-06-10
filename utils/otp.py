@@ -177,48 +177,41 @@ def send_otp_whatsapp(phone: str, otp: str) -> bool:
 def send_otp_email(email: str, otp: str, purpose: str) -> bool:
     from django.core.mail import EmailMultiAlternatives
 
-    # Ensure FROM matches the authenticated Gmail account — Gmail rejects mismatches
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
-    host_user  = getattr(settings, "EMAIL_HOST_USER", "")
-    if host_user and from_email:
-        _bare_from = from_email.split("<")[-1].rstrip(">").strip() if "<" in from_email else from_email
-        if _bare_from.lower() != host_user.lower():
-            logger.warning(
-                "DEFAULT_FROM_EMAIL '%s' != EMAIL_HOST_USER '%s' — fixing sender.",
-                _bare_from, host_user,
-            )
-            from_email = host_user
+    # Gmail SMTP requires the bare address to match EMAIL_HOST_USER.
+    # We set a professional display name so it appears as "KNFC Fried Chicken"
+    # in the inbox while the actual sending address stays the Gmail account.
+    host_user = getattr(settings, "EMAIL_HOST_USER", "")
+    from_email = f"KNFC Fried Chicken <{host_user}>" if host_user else getattr(settings, "DEFAULT_FROM_EMAIL", "")
 
     subjects = {
-        "staff_email_verify": "[KNFC] Your staff account verification code",
-        "password_reset":     "[KNFC] Reset your password",
+        "staff_email_verify": "Your Account Verification Code — KNFC",
+        "password_reset":     "Reset Your Password — KNFC",
     }
-    subject = subjects.get(purpose, "[KNFC] Your verification code")
+    subject = subjects.get(purpose, "Your Verification Code — KNFC")
 
-    title = (
-        "Verify your staff account"
+    action_label = (
+        "Staff Account Verification"
         if purpose == "staff_email_verify"
-        else "Reset your password"
+        else "Password Reset"
     )
-    description = (
-        "Use this one-time code to verify your KNFC staff account and set your password."
+    action_description = (
+        "verify your KNFC staff account"
         if purpose == "staff_email_verify"
-        else "Use this one-time code to reset your KNFC account password."
+        else "reset your KNFC account password"
     )
     expiry = getattr(settings, "OTP_EXPIRY_MINUTES", 15)
 
-    # Plain text — always include for spam score
     text_body = (
+        f"Dear User,\n\n"
+        f"We received a request to {action_description}. "
+        f"Please use the following OTP to complete your {action_label.lower()}:\n\n"
+        f"  {otp}\n\n"
+        f"This code will expire in {expiry} minutes.\n\n"
+        f"If you did not initiate this request, please disregard this message "
+        f"and contact support if necessary.\n\n"
+        f"Regards,\n"
         f"KNFC Fried Chicken\n"
-        f"{'=' * 40}\n\n"
-        f"{title}\n\n"
-        f"{description}\n\n"
-        f"Your verification code: {otp}\n\n"
-        f"Valid for {expiry} minutes.\n"
-        f"Do not share this code with anyone.\n\n"
-        f"If you did not request this, please ignore this email.\n\n"
-        f"-- KNFC Staff Team\n"
-        f"knfchead01@gmail.com\n"
+        f"support@knfcs.com\n"
     )
 
     html_body = f"""<!DOCTYPE html>
@@ -229,38 +222,40 @@ def send_otp_email(email: str, otp: str, purpose: str) -> bool:
   <meta name="color-scheme" content="light">
   <title>{subject}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f5;padding:24px 16px;">
+<body style="margin:0;padding:0;background-color:#f0f0f0;font-family:'Segoe UI',Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f0f0;padding:32px 16px;">
     <tr>
       <td align="center">
 
-        <!-- Email card -->
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-               style="max-width:480px;background-color:#ffffff;border-radius:8px;border:1px solid #e0e0e0;">
+               style="max-width:500px;background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
 
           <!-- Header -->
           <tr>
-            <td style="background-color:#C85A1A;border-radius:8px 8px 0 0;padding:24px 32px;text-align:center;">
-              <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">KNFC Fried Chicken</p>
-              <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Staff Portal</p>
+            <td style="background-color:#C85A1A;padding:28px 40px;text-align:center;">
+              <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.7);">KNFC Fried Chicken</p>
+              <p style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{action_label}</p>
             </td>
           </tr>
 
           <!-- Body -->
           <tr>
-            <td style="padding:32px 32px 24px;">
-              <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1a1a1a;">{title}</p>
-              <p style="margin:0 0 28px;font-size:14px;color:#666666;line-height:1.6;">{description}</p>
+            <td style="padding:36px 40px 28px;">
+              <p style="margin:0 0 6px;font-size:16px;font-weight:600;color:#1a1a1a;">Dear User,</p>
+              <p style="margin:0 0 28px;font-size:14px;color:#555555;line-height:1.7;">
+                We received a request to <strong>{action_description}</strong>.
+                Please use the following OTP to complete your {action_label.lower()}:
+              </p>
 
               <!-- OTP box -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
                 <tr>
-                  <td align="center" style="padding:0 0 28px;">
+                  <td align="center">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="background-color:#fef9f5;border:2px solid #C85A1A;border-radius:8px;padding:16px 32px;text-align:center;">
-                          <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#8b7560;">Verification code</p>
-                          <p style="margin:0;font-size:38px;font-weight:700;letter-spacing:10px;color:#C85A1A;font-family:Courier,monospace;">{otp}</p>
+                        <td style="background-color:#fdf6f2;border:2px dashed #C85A1A;border-radius:10px;padding:20px 48px;text-align:center;">
+                          <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#a06040;">Your OTP</p>
+                          <p style="margin:0;font-size:40px;font-weight:700;letter-spacing:12px;color:#C85A1A;font-family:'Courier New',Courier,monospace;">{otp}</p>
                         </td>
                       </tr>
                     </table>
@@ -268,22 +263,17 @@ def send_otp_email(email: str, otp: str, purpose: str) -> bool:
                 </tr>
               </table>
 
-              <p style="margin:0;font-size:13px;color:#888888;text-align:center;line-height:1.6;">
-                Code valid for <strong style="color:#1a1a1a;">{expiry}&nbsp;minutes</strong>
-                &nbsp;&bull;&nbsp;Do not share this code with anyone
+              <p style="margin:0 0 24px;font-size:13px;color:#777777;text-align:center;line-height:1.6;">
+                This code will expire in&nbsp;<strong style="color:#1a1a1a;">{expiry}&nbsp;minutes</strong>.
               </p>
-            </td>
-          </tr>
 
-          <!-- Spam tip -->
-          <tr>
-            <td style="padding:0 32px 20px;">
+              <!-- Warning box -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="background-color:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:10px 14px;">
-                    <p style="margin:0;font-size:12px;color:#7a6000;line-height:1.5;">
-                      <strong>Didn't see this email?</strong> Check your <strong>Spam</strong> or
-                      <strong>Promotions</strong> folder. Mark as "Not spam" to receive future codes in your inbox.
+                  <td style="background-color:#fff8f6;border-left:4px solid #C85A1A;border-radius:0 6px 6px 0;padding:12px 16px;">
+                    <p style="margin:0;font-size:13px;color:#7a4030;line-height:1.6;">
+                      If you did not initiate this request, please disregard this message and
+                      contact support if necessary.
                     </p>
                   </td>
                 </tr>
@@ -291,19 +281,30 @@ def send_otp_email(email: str, otp: str, purpose: str) -> bool:
             </td>
           </tr>
 
+          <!-- Regards -->
+          <tr>
+            <td style="padding:0 40px 28px;">
+              <p style="margin:0;font-size:14px;color:#333333;line-height:1.8;">
+                Regards,<br>
+                <strong>KNFC Fried Chicken</strong>
+              </p>
+            </td>
+          </tr>
+
           <!-- Footer -->
           <tr>
-            <td style="padding:16px 32px 24px;border-top:1px solid #eeeeee;text-align:center;">
+            <td style="padding:16px 40px 24px;border-top:1px solid #eeeeee;text-align:center;">
               <p style="margin:0;font-size:12px;color:#aaaaaa;line-height:1.6;">
-                You are receiving this because an account action was requested for this email address.<br>
-                If you did not request this, ignore this email &mdash; your account is safe.
+                This is an automated message — please do not reply to this email.<br>
+                For support, contact us at <a href="mailto:support@knfcs.com" style="color:#C85A1A;text-decoration:none;">support@knfcs.com</a>
               </p>
-              <p style="margin:8px 0 0;font-size:11px;color:#bbbbbb;">KNFC Fried Chicken &bull; knfchead01@gmail.com</p>
+              <p style="margin:10px 0 0;font-size:11px;color:#cccccc;">
+                &copy; 2025 KNFC Fried Chicken &nbsp;&bull;&nbsp; knfcs.com
+              </p>
             </td>
           </tr>
 
         </table>
-        <!-- /Email card -->
 
       </td>
     </tr>
@@ -313,18 +314,18 @@ def send_otp_email(email: str, otp: str, purpose: str) -> bool:
 
     try:
         msg = EmailMultiAlternatives(
-            subject   = subject,
-            body      = text_body,
-            from_email= from_email,
-            to        = [email],
+            subject    = subject,
+            body       = text_body,
+            from_email = from_email,
+            to         = [email],
+            reply_to   = ["no-reply@knfcs.com"],
         )
         msg.attach_alternative(html_body, "text/html")
-        # Anti-spam headers: mark as transactional, not bulk marketing
         msg.extra_headers = {
-            "X-Mailer":         "KNFC-Django-Mailer/1.0",
-            "X-Priority":       "1",
-            "Precedence":       "transactional",
-            "Auto-Submitted":   "auto-generated",
+            "X-Mailer":       "KNFC-Django-Mailer/1.0",
+            "X-Priority":     "1",
+            "Precedence":     "transactional",
+            "Auto-Submitted": "auto-generated",
         }
         msg.send(fail_silently=False)
         logger.info("OTP email sent → %s [%s]", email, purpose)
