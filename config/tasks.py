@@ -1,13 +1,12 @@
 """
 config/tasks.py — System-level Celery tasks
 
-Celery worker = Render 'worker' type → never spins down due to inactivity.
-Used to keep Render free-tier 'web' services alive by pinging them every
-12 minutes (Render's idle cutoff is 15 minutes).
+Celery now runs inside the Django web dyno (start.sh).
+ping_backend is removed — a service cannot keep itself alive via self-ping.
+ping_whatsapp keeps the WhatsApp service alive (it's a separate web service).
 
-Self-pings from within the same container do NOT count as inbound traffic
-on Render — only external pings prevent spin-down. The Celery worker is
-the external pinger for both knfc-backend and knfc-whatsapp.
+External keep-alive for this backend: use cron-job.org to ping
+/api/v1/branches/ every 10 minutes.
 """
 
 import logging
@@ -16,19 +15,6 @@ from celery import shared_task
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
-
-
-@shared_task(name="config.tasks.ping_backend")
-def ping_backend():
-    """Keep knfc-backend (Django) awake on Render free tier."""
-    url = getattr(settings, "BACKEND_URL", "").rstrip("/")
-    if not url:
-        return
-    try:
-        r = requests.get(f"{url}/api/v1/branches/", timeout=10)
-        logger.info("keep-alive [backend] %s → %s", url, r.status_code)
-    except Exception as e:
-        logger.warning("keep-alive [backend] failed: %s", e)
 
 
 @shared_task(name="config.tasks.ping_whatsapp")
