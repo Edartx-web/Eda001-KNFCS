@@ -1,8 +1,13 @@
 """
 config/tasks.py — System-level Celery tasks
 
-ping_backend: keeps the Render free-tier web service warm by hitting
-the health endpoint every 12 minutes (Celery worker never sleeps).
+Celery worker = Render 'worker' type → never spins down due to inactivity.
+Used to keep Render free-tier 'web' services alive by pinging them every
+12 minutes (Render's idle cutoff is 15 minutes).
+
+Self-pings from within the same container do NOT count as inbound traffic
+on Render — only external pings prevent spin-down. The Celery worker is
+the external pinger for both knfc-backend and knfc-whatsapp.
 """
 
 import logging
@@ -15,13 +20,25 @@ logger = logging.getLogger(__name__)
 
 @shared_task(name="config.tasks.ping_backend")
 def ping_backend():
-    """Ping own health endpoint to prevent Render free-tier cold starts."""
-    backend_url = getattr(settings, "BACKEND_URL", "").rstrip("/")
-    if not backend_url:
+    """Keep knfc-backend (Django) awake on Render free tier."""
+    url = getattr(settings, "BACKEND_URL", "").rstrip("/")
+    if not url:
         return
-
     try:
-        r = requests.get(f"{backend_url}/api/v1/branches/", timeout=10)
-        logger.info("keep-alive ping → %s (%s)", backend_url, r.status_code)
+        r = requests.get(f"{url}/api/v1/branches/", timeout=10)
+        logger.info("keep-alive [backend] %s → %s", url, r.status_code)
     except Exception as e:
-        logger.warning("keep-alive ping failed: %s", e)
+        logger.warning("keep-alive [backend] failed: %s", e)
+
+
+@shared_task(name="config.tasks.ping_whatsapp")
+def ping_whatsapp():
+    """Keep knfc-whatsapp (Baileys Node.js) awake on Render free tier."""
+    url = getattr(settings, "WHATSAPP_SERVICE_URL", "").rstrip("/")
+    if not url:
+        return
+    try:
+        r = requests.get(f"{url}/health", timeout=10)
+        logger.info("keep-alive [whatsapp] %s → %s", url, r.status_code)
+    except Exception as e:
+        logger.warning("keep-alive [whatsapp] failed: %s", e)
