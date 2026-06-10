@@ -36,19 +36,23 @@ function _haversineKm(lat1, lon1, lat2, lon2) {
 
 function _pickNearest(list, lat, lon) {
   const withCoords = list.filter(b => b.latitude != null && b.longitude != null);
-  if (!withCoords.length) return list[0];
-  return withCoords.reduce((best, b) => {
-    const d  = _haversineKm(lat, lon, Number(b.latitude),    Number(b.longitude));
-    const bd = _haversineKm(lat, lon, Number(best.latitude), Number(best.longitude));
-    return d < bd ? b : best;
-  });
+  if (!withCoords.length) return { ...list[0], _dist: null };
+  let best = null, bestDist = Infinity;
+  for (const b of withCoords) {
+    const d = _haversineKm(lat, lon, Number(b.latitude), Number(b.longitude));
+    if (d < bestDist) { bestDist = d; best = b; }
+  }
+  return best ? { ...best, _dist: bestDist } : { ...list[0], _dist: null };
 }
 
 const AuthContext = createContext(null);
 
 const BRANCH_KEY        = "knfc_selected_branch";
-const BRANCHES_CACHE    = "knfc_branches_cache";   // last-known branch list (survives 429s)
-const SUGGESTION_KEY    = "knfc_branch_suggestion_dismissed"; // date when last dismissed
+const BRANCHES_CACHE    = "knfc_branches_cache";
+const SUGGESTION_KEY    = "knfc_branch_suggestion_dismissed";
+// true  = branch was auto-detected (GPS can silently update it again)
+// false = user manually picked a branch (GPS only suggests, never auto-switches)
+const BRANCH_AUTO_KEY   = "knfc_branch_auto";
 
 /* Read cached branch list — used as instant fallback when API fails */
 function _cachedBranches() {
@@ -91,24 +95,45 @@ export function AuthProvider({ children }) {
       const saveBranchFromList = (list) => {
         if (!list.length) { setLoading(false); return; }
 
-        // ── 1. Set first branch RIGHT NOW — zero waiting, page renders immediately ──
-        const defaultBranch = list[0];
-        setSelectedBranch(defaultBranch);
-        localStorage.setItem(BRANCH_KEY,  JSON.stringify(defaultBranch));
-        localStorage.setItem("branch_id", defaultBranch.id);
-        setLoading(false);   // ← page is live here
+        const _persist = (branch, isAuto) => {
+          setSelectedBranch(branch);
+          localStorage.setItem(BRANCH_KEY,      JSON.stringify(branch));
+          localStorage.setItem("branch_id",     branch.id);
+          localStorage.setItem(BRANCH_AUTO_KEY, isAuto ? "1" : "0");
+          setLoading(false);
+        };
 
-        // ── 2. Background browser-GPS (only if multiple branches exist) ──
-        // Non-blocking: asks for location permission AFTER page has loaded.
-        // If a nearer branch is found, the NearestBranchBanner suggests switching.
+        // ── 1. Show list[0] instantly — page is live with zero wait ──────────
+        _persist(list[0], true);
+
         if (list.length <= 1 || !navigator?.geolocation) return;
+
+        // ── 2. GPS runs in background (non-blocking) ─────────────────────────
+        // Auto-switch window: 3 s. If GPS responds within 3 s, silently switch
+        // to the nearest branch (first visit — user hasn't started browsing yet).
+        // After 3 s the user may be actively browsing list[0]; show banner instead.
+        let autoSwitchOpen = true;
+        const autoSwitchTimer = setTimeout(() => { autoSwitchOpen = false; }, 3000);
+
         navigator.geolocation.getCurrentPosition(
           pos => {
+            clearTimeout(autoSwitchTimer);
             const nearest = _pickNearest(list, pos.coords.latitude, pos.coords.longitude);
-            if (nearest?.id && nearest.id !== defaultBranch.id) setSuggestedBranch(nearest);
+            if (!nearest?.id || nearest.id === list[0].id) return;
+
+            if (autoSwitchOpen) {
+              // GPS was fast — auto-set nearest silently (no banner, no reload)
+              setSelectedBranch(nearest);
+              localStorage.setItem(BRANCH_KEY,      JSON.stringify(nearest));
+              localStorage.setItem("branch_id",     nearest.id);
+              localStorage.setItem(BRANCH_AUTO_KEY, "1");
+            } else {
+              // GPS was slow — user may be browsing list[0] already, show banner
+              setSuggestedBranch(nearest);
+            }
           },
-          () => { /* denied — default branch is fine */ },
-          { timeout: 5000, maximumAge: 300000 },
+          () => { clearTimeout(autoSwitchTimer); /* denied — list[0] is fine */ },
+          { timeout: 8000, maximumAge: 300000 },
         );
       };
 
@@ -152,33 +177,33 @@ export function AuthProvider({ children }) {
 
   /* ── Detect nearest branch after customer login (non-blocking) ───── */
   const _detectNearestAfterLogin = useCallback((currentBranch) => {
-    // Only run for customers; skip if suggestion was already dismissed today
-    const dismissed = localStorage.getItem(SUGGESTION_KEY);
-    const today     = new Date().toISOString().slice(0, 10);
-    if (dismissed === today) return;
+    const dismissed   = localStorage.getItem(SUGGESTION_KEY);
+    const today       = new Date().toISOString().slice(0, 10);
+    const wasAutoSet  = localStorage.getItem(BRANCH_AUTO_KEY) === "1";
+    if (dismissed === today && !wasAutoSet) return;
 
     getPublicBranches()
       .then(res => {
         const list = (res.data?.branches || []).filter(b => b.is_active !== false);
-        if (!list.length) return;
-
-        const suggest = (branch) => {
-          // Only suggest if it's actually different from the current branch
-          if (!branch || branch.id === currentBranch?.id) return;
-          setSuggestedBranch(branch);
-        };
-
-        if (!navigator?.geolocation) {
-          // No geo — default branch is list[0], no suggestion needed
-          return;
-        }
+        if (!list.length || !navigator?.geolocation) return;
 
         navigator.geolocation.getCurrentPosition(
           pos => {
             const nearest = _pickNearest(list, pos.coords.latitude, pos.coords.longitude);
-            suggest(nearest);
+            if (!nearest?.id || nearest.id === currentBranch?.id) return;
+
+            if (wasAutoSet) {
+              // Branch was auto-detected last time — silently update to nearest
+              setSelectedBranch(nearest);
+              localStorage.setItem(BRANCH_KEY,      JSON.stringify(nearest));
+              localStorage.setItem("branch_id",     nearest.id);
+              localStorage.setItem(BRANCH_AUTO_KEY, "1");
+            } else {
+              // User manually chose this branch — only suggest via banner
+              setSuggestedBranch(nearest);
+            }
           },
-          () => { /* permission denied — don't suggest */ },
+          () => {},
           { timeout: 6000, maximumAge: 300000 },
         );
       })
@@ -188,14 +213,13 @@ export function AuthProvider({ children }) {
   /* ── Branch selection (customers) ────────────────────────────────── */
   const selectBranch = useCallback((branch) => {
     setSelectedBranch(branch);
-    localStorage.setItem(BRANCH_KEY,  JSON.stringify(branch));
-    localStorage.setItem("branch_id", branch.id);  // used by all API BID() helpers
-    // Sync cartStore so buildOrderPayload always has branch_id
+    localStorage.setItem(BRANCH_KEY,      JSON.stringify(branch));
+    localStorage.setItem("branch_id",     branch.id);
+    localStorage.setItem(BRANCH_AUTO_KEY, "0"); // user made an explicit choice
     try {
       const { default: useCartStore } = require("../store/cartStore");
       useCartStore.getState().setBranch(branch.id);
     } catch {}
-    // Reload so all menu/offer/config fetches re-run with the new branch context
     window.location.reload();
   }, []);
 
@@ -204,6 +228,7 @@ export function AuthProvider({ children }) {
     setSuggestedBranch(null);
     localStorage.removeItem(BRANCH_KEY);
     localStorage.removeItem("branch_id");
+    localStorage.removeItem(BRANCH_AUTO_KEY);
   }, []);
 
   const dismissBranchSuggestion = useCallback(() => {
