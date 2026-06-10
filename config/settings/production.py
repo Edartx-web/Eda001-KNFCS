@@ -61,31 +61,19 @@ CSRF_COOKIE_SECURE             = True
 X_FRAME_OPTIONS                = "DENY"
 
 # ── Database ──────────────────────────────────────────────────────────────────
-# Render provides DATABASE_URL; fallback to individual vars for self-hosted.
-_db_ssl = config("DB_SSL_REQUIRE", default=False, cast=bool)
-_database_url = config("DATABASE_URL", default="")
-
-if _database_url:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            _database_url,
-            conn_max_age=0,   # Supabase session pooler: release connection after each request
-            ssl_require=True,
-        )
+# Individual vars avoid URL-encoding issues with special characters in passwords.
+DATABASES = {
+    "default": {
+        "ENGINE":       "django.db.backends.postgresql",
+        "NAME":         config("DB_NAME",     default="postgres"),
+        "USER":         config("DB_USER"),
+        "PASSWORD":     config("DB_PASSWORD"),
+        "HOST":         config("DB_HOST"),
+        "PORT":         config("DB_PORT",     default="5432"),
+        "CONN_MAX_AGE": 0,
+        "OPTIONS":      {"sslmode": "require"},
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE":      "django.db.backends.postgresql",
-            "NAME":        config("DB_NAME"),
-            "USER":        config("DB_USER"),
-            "PASSWORD":    config("DB_PASSWORD"),
-            "HOST":        config("DB_HOST"),
-            "PORT":        config("DB_PORT", default="5432"),
-            "CONN_MAX_AGE": 60,
-            **({"OPTIONS": {"sslmode": "require"}} if _db_ssl else {}),
-        }
-    }
+}
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Production URLs:
