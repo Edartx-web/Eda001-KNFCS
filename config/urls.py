@@ -8,8 +8,13 @@ from django.urls import path, include, re_path
 from django.views.static import serve
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
+
+def health(request):
+    return JsonResponse({"ok": True})
 
 urlpatterns = [
+    path("health/",              health),
     path("admin/",               admin.site.urls),
 
     # Phase 1 — Auth & Branches
