@@ -17,7 +17,7 @@ services:
     region: singapore
     buildCommand: "./build.sh"
     startCommand: "./start.sh"
-    healthCheckPath: /api/v1/branches/
+    healthCheckPath: /health/
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings.production
