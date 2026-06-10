@@ -43,31 +43,48 @@ def err(msg, code=400):
 # ── Caption builder ───────────────────────────────────────────────────────────
 
 def build_offer_caption(offer, intro="", site_url=""):
-    """Auto-generate WhatsApp-formatted caption from a DailyOffer instance."""
-    lines = []
+    """Build a professional WhatsApp broadcast caption from a DailyOffer instance."""
+    divider = "━━━━━━━━━━━━━━━━━━━━━━"
+    lines   = []
+
+    # Opening hook
     if intro:
         lines.append(intro)
-        lines.append("")
-    lines.append(f"{offer.emoji or '🔥'} *{offer.name}*")
+    else:
+        lines.append("🍗 *KNFC Fried Chicken* — Special Offer Alert!")
+    lines.append(divider)
+    lines.append("")
+
+    # Offer headline
+    emoji = offer.emoji or "🔥"
+    lines.append(f"{emoji} *{offer.name}*")
     if offer.tagline:
-        lines.append(offer.tagline)
+        lines.append(f"_{offer.tagline}_")
     lines.append("")
+
+    # Pricing block
     if offer.discount_percentage:
-        lines.append(f"💰 *{offer.discount_percentage:.0f}% OFF*")
+        lines.append(f"🏷  *{offer.discount_percentage:.0f}% OFF*")
     elif offer.discount_flat:
-        lines.append(f"💰 *₹{offer.discount_flat:.0f} OFF*")
+        lines.append(f"🏷  *₹{offer.discount_flat:.0f} OFF*")
+
     if offer.original_price and offer.offer_price:
-        lines.append(f"~₹{offer.original_price:.0f}~ → *₹{offer.offer_price:.0f}*")
+        lines.append(f"💸  ~₹{offer.original_price:.0f}~ → *₹{offer.offer_price:.0f}*")
     elif offer.offer_price:
-        lines.append(f"Only *₹{offer.offer_price:.0f}*")
+        lines.append(f"💸  Only *₹{offer.offer_price:.0f}*")
+
+    # Coupon
     if offer.coupon_code:
-        lines.append(f"Code: *{offer.coupon_code}*")
-    lines.append("")
-    if site_url:
-        lines.append(f"View offer: {site_url.rstrip('/')}/offers/{offer.pk}")
         lines.append("")
-    lines.append("Order now at KNFC 🍗")
-    lines.append("_KNFC Fried Chicken_")
+        lines.append(f"🎟  Use Code: *{offer.coupon_code}*")
+        lines.append(f"_Copy the code and apply at checkout_")
+
+    lines.append("")
+    lines.append(divider)
+    lines.append("✅  *Limited time* — place your order before it runs out!")
+    lines.append("")
+    lines.append("_KNFC Fried Chicken — knfcs.com_")
+
     return "\n".join(lines)
 
 

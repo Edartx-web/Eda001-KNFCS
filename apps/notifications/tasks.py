@@ -76,7 +76,10 @@ def _send_batch(broadcast_id, phone_batch, batch_index, total_batches):
             payload = {"phone": phone, "image_url": broadcast.image_url, "caption": broadcast.message}
         if site_url:
             payload["button_url"]  = f"{site_url}/offers"
-            payload["button_text"] = "Order Now 🍗"
+            payload["button_text"] = "Order Now"
+        # Pass coupon code so the Node service can add a Copy Code button
+        if broadcast.offer and getattr(broadcast.offer, "coupon_code", None):
+            payload["coupon_code"] = broadcast.offer.coupon_code
         try:
             r = req_lib.post(
                 f"{wa_url}/send-message",

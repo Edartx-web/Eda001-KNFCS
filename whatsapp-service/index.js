@@ -387,9 +387,62 @@ app.post("/send-otp", requireKey, async (req, res) => {
   }
 });
 
+/**
+ * Build a professional broadcast WhatsApp message.
+ *
+ * Buttons (interactive nativeFlowMessage):
+ *   1. cta_url  → "Order Now"  (always present when button_url given)
+ *   2. cta_copy → "Copy Code"  (only when coupon_code given)
+ *
+ * Falls back to plain text if the interactive send fails.
+ */
+function buildBroadcastMessage(bodyText, footer, button_url, button_text, coupon_code) {
+  const buttons = [];
+
+  if (button_url) {
+    buttons.push({
+      name: "cta_url",
+      buttonParamsJson: JSON.stringify({
+        display_text: button_text || "Order Now",
+        url:          button_url,
+        merchant_url: button_url,
+      }),
+    });
+  }
+
+  if (coupon_code) {
+    buttons.push({
+      name: "cta_copy",
+      buttonParamsJson: JSON.stringify({
+        display_text: `Copy Code: ${coupon_code}`,
+        copy_code:    coupon_code,
+      }),
+    });
+  }
+
+  const interactive = buttons.length > 0
+    ? {
+        viewOnceMessage: {
+          message: {
+            interactiveMessage: {
+              body:   { text: bodyText },
+              footer: { text: footer },
+              nativeFlowMessage: { buttons },
+            },
+          },
+        },
+      }
+    : null;
+
+  const plainText = { text: bodyText + (footer ? `\n\n_${footer}_` : "") };
+
+  return { interactive, plainText };
+}
+
+
 /** Send a broadcast message via the broadcast session */
 app.post("/send-message", requireKey, async (req, res) => {
-  const { phone, text, image_url, caption, button_url, button_text } = req.body;
+  const { phone, text, image_url, caption, button_url, button_text, coupon_code } = req.body;
   if (!phone)
     return res.status(400).json({ error: "phone is required" });
 
@@ -398,15 +451,30 @@ app.post("/send-message", requireKey, async (req, res) => {
 
   const jid      = toJid(phone);
   const bodyText = caption || text || "";
-  const fullText = button_url
-    ? `${bodyText}\n\n👉 ${button_text || "Order Now"}: ${button_url}`
-    : bodyText;
+  const footer   = "KNFC Fried Chicken — knfcs.com";
+  const { interactive, plainText } = buildBroadcastMessage(
+    bodyText, footer, button_url, button_text, coupon_code
+  );
 
   try {
     if (image_url) {
-      await sessions.broadcast.sendMessage(jid, { image: { url: image_url }, caption: fullText });
+      // Image messages can't carry interactive buttons — embed CTA in caption
+      const ctaLine = button_url ? `\n\n👉 *${button_text || "Order Now"}:* ${button_url}` : "";
+      const copyLine = coupon_code ? `\n🎟 *Copy Code:* ${coupon_code}` : "";
+      await sessions.broadcast.sendMessage(jid, {
+        image:   { url: image_url },
+        caption: bodyText + ctaLine + copyLine,
+      });
+    } else if (interactive) {
+      // Text broadcast — interactive buttons
+      try {
+        await sessions.broadcast.sendMessage(jid, interactive);
+      } catch (interactiveErr) {
+        logger.warn(`[broadcast] Interactive failed (${interactiveErr.message}), falling back to plain text`);
+        await sessions.broadcast.sendMessage(jid, plainText);
+      }
     } else {
-      await sessions.broadcast.sendMessage(jid, { text: fullText });
+      await sessions.broadcast.sendMessage(jid, plainText);
     }
     logger.info(`[broadcast] Sent → ${phone}`);
     res.json({ ok: true });
