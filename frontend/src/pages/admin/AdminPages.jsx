@@ -1623,7 +1623,7 @@ function BranchPaymentsPanel({ branchId }) {
 ═══════════════════════════════════════════════════════════════════════════ */
 export function BranchDashboard() {
   const { user } = useAuth();
-  const { loading: pageLoading } = usePageLoader(900);
+  const { loading: pageLoading } = usePageLoader();
   const statsRef = useRef(null);
   const [ToastEl, showToast] = useToast();
 
@@ -5196,7 +5196,7 @@ function SANotificationBell() {
 }
 
 export function SuperAdminDashboard() {
-  const { loading: pageLoading } = usePageLoader(1000);
+  const { loading: pageLoading } = usePageLoader();
   const statsRef = useRef(null);
   const [ToastEl, showToast] = useToast();
 

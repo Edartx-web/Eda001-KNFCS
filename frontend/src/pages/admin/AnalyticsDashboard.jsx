@@ -176,7 +176,7 @@ function SplitBar({ dineIn, pickup }) {
 /* ─── Main page ─────────────────────────────────────────────────────── */
 export default function AnalyticsDashboard() {
   const { user }   = useAuth();
-  const { loading: pageLoading } = usePageLoader(800);
+  const { loading: pageLoading } = usePageLoader();
   const pageRef    = useRef(null);
   const isSuperAdmin = user?.role === "super_admin";
 

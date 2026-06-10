@@ -386,7 +386,7 @@ export default function CartPage() {
   usePageProtection();   // block copy/screenshot/print on checkout page
 
   const navigate       = useNavigate();
-  const { loading: pageLoading } = usePageLoader(700);
+  const { loading: pageLoading } = usePageLoader();
 
   const items            = useCartStore(s => s.items);
   const orderType        = useCartStore(s => s.orderType);

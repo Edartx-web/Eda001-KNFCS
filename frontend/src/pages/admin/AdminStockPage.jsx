@@ -23,7 +23,7 @@ const carryoverKey = (branchId) => `knfc_carryover_decided_${branchId}_${new Dat
 
 export default function AdminStockPage() {
   const { user } = useAuth();
-  const { loading: pageLoading } = usePageLoader(800);
+  const { loading: pageLoading } = usePageLoader();
   const headerRef = useRef(null);
   const isSuperAdmin = user?.role === "super_admin";
   const isAdmin      = user?.role === "branch_admin" || isSuperAdmin;

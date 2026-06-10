@@ -104,7 +104,7 @@ export default function ProductDetailPage() {
   const addBtnRef  = useRef(null);
   const heroRef    = useRef(null);
   const addAreaRef = useRef(null);
-  const { loading: pageLoading } = usePageLoader(900);
+  const { loading: pageLoading } = usePageLoader();
 
   const [item,       setItem]       = useState(null);
   const [allCats,    setAllCats]    = useState([]);

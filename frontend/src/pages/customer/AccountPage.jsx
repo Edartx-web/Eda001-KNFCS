@@ -47,7 +47,7 @@ export default function AccountPage() {
   const navigate  = useNavigate();
   const { user, logout } = useAuth();
   const addItem   = useCartStore(s => s.addItem);
-  const { loading: pageLoading } = usePageLoader(800);
+  const { loading: pageLoading } = usePageLoader();
   const pageRef   = useRef(null);
   const heroRef   = useRef(null);
 

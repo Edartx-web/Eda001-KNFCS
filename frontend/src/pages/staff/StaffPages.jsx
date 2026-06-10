@@ -683,7 +683,7 @@ function DutyPromptModal({ user, onConfirm, onDismiss }) {
 export function QueuePage() {
   const { user }   = useAuth();
   const listRef    = useRef(null);
-  const { loading: pageLoading } = usePageLoader(800);
+  const { loading: pageLoading } = usePageLoader();
 
   const [tab,         setTab]         = useState("queue");
   const [queue,       setQueue]       = useState([]);
@@ -1168,7 +1168,7 @@ export function QueuePage() {
    STOCK PAGE (standalone /staff/stock route)
 ══════════════════════════════════════════════════════════════════════ */
 export function StockPage() {
-  const { loading: pageLoading } = usePageLoader(800);
+  const { loading: pageLoading } = usePageLoader();
   const { user } = useAuth();
   const isAdmin  = user?.role === "branch_admin" || user?.role === "super_admin";
   const [stock,      setStock]      = useState([]);
@@ -1337,7 +1337,7 @@ export function StockPage() {
 ══════════════════════════════════════════════════════════════════════ */
 export function NewOrderPage() {
   const navigate = useNavigate();
-  const { loading: pageLoading } = usePageLoader(800);
+  const { loading: pageLoading } = usePageLoader();
 
   const [items,        setItems]        = useState([]);
   const [stockMap,     setStockMap]     = useState({});  // menu_item_id → remaining_stock
