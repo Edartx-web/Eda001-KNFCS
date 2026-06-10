@@ -28,6 +28,8 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  generateWAMessageFromContent,
+  proto,
 } = baileysPkg;
 import { Boom }            from "@hapi/boom";
 import express             from "express";
@@ -177,6 +179,43 @@ function requireKey(req, res, next) {
   next();
 }
 
+/**
+ * Send an interactive WhatsApp message (body + footer + native flow buttons).
+ *
+ * Uses generateWAMessageFromContent + proto so the buttons actually render
+ * on the recipient's device. Falls back to plain text if proto send fails.
+ *
+ * @param {object} sock    - Baileys socket (otp or broadcast session)
+ * @param {string} jid     - recipient JID
+ * @param {string} body    - message body text
+ * @param {string} footer  - small footer text shown below buttons
+ * @param {Array}  buttons - array of { name, buttonParamsJson } button objects
+ * @param {string} [plainFallback] - plain text to send if interactive fails
+ */
+async function sendInteractive(sock, jid, body, footer, buttons, plainFallback) {
+  try {
+    const msg = generateWAMessageFromContent(
+      jid,
+      proto.Message.fromObject({
+        interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+          body:   proto.Message.InteractiveMessage.Body.fromObject({ text: body }),
+          footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: footer }),
+          nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+            buttons,
+          }),
+        }),
+      }),
+      { userJid: sock.user?.id }
+    );
+    await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
+    logger.debug(`[interactive] Sent to ${jid}`);
+  } catch (err) {
+    logger.warn(`[interactive] Failed (${err.message}), falling back to plain text`);
+    const fallback = plainFallback || body + (footer ? `\n\n_${footer}_` : "");
+    await sock.sendMessage(jid, { text: fallback });
+  }
+}
+
 /** Notify Django when a session disconnects so it can email the admin */
 async function alertDjangoDC(sessionName) {
   try {
@@ -312,51 +351,34 @@ app.post("/logout/:session", requireKey, async (req, res) => {
  * templateButtons / buttonsMessage are intentionally NOT used —
  * WhatsApp blocks those from unofficial clients since 2023.
  */
-function buildOtpMessage(otp, expiry_minutes, site_url = "https://knfcs.com") {
-  const body =
+function otpButtons(otp, site_url) {
+  return [
+    {
+      name: "cta_copy",
+      buttonParamsJson: JSON.stringify({
+        display_text: "Copy OTP Code",
+        copy_code:    otp,
+      }),
+    },
+    {
+      name: "cta_url",
+      buttonParamsJson: JSON.stringify({
+        display_text: "Open KNFC",
+        url:          site_url,
+        merchant_url: site_url,
+      }),
+    },
+  ];
+}
+
+function otpBody(otp, expiry_minutes) {
+  return (
     `Dear User,\n\n` +
     `We received a request to access your account. Please use the following OTP to complete your login:\n\n` +
     `🔑  *${otp}*\n\n` +
     `This code will expire in *${expiry_minutes} minutes*.\n\n` +
-    `If you did not initiate this request, please disregard this message and contact support if necessary.`;
-
-  const footer = "Regards, KNFC Fried Chicken";
-
-  const interactive = {
-    viewOnceMessage: {
-      message: {
-        interactiveMessage: {
-          body:   { text: body },
-          footer: { text: footer },
-          nativeFlowMessage: {
-            buttons: [
-              {
-                name: "cta_url",
-                buttonParamsJson: JSON.stringify({
-                  display_text: "Open KNFC",
-                  url:          site_url,
-                  merchant_url: site_url,
-                }),
-              },
-              {
-                name: "cta_copy",
-                buttonParamsJson: JSON.stringify({
-                  display_text: "Copy OTP",
-                  copy_code:    otp,
-                }),
-              },
-            ],
-          },
-        },
-      },
-    },
-  };
-
-  const plainText = {
-    text: body + `\n\n_${footer}_`,
-  };
-
-  return { interactive, plainText };
+    `If you did not initiate this request, please disregard this message and contact support if necessary.`
+  );
 }
 
 /** Send OTP message via the otp session */
@@ -368,17 +390,14 @@ app.post("/send-otp", requireKey, async (req, res) => {
   if (state.otp.status !== "connected")
     return res.status(503).json({ error: "OTP WhatsApp not connected", status: state.otp.status });
 
-  const jid          = toJid(phone);
-  const site_url     = process.env.SITE_URL || "https://knfcs.com";
-  const { interactive, plainText } = buildOtpMessage(otp, expiry_minutes, site_url);
+  const jid      = toJid(phone);
+  const site_url = process.env.SITE_URL || "https://knfcs.com";
+  const body     = otpBody(otp, expiry_minutes);
+  const footer   = "Regards, KNFC Fried Chicken";
+  const buttons  = otpButtons(otp, site_url);
 
   try {
-    try {
-      await sessions.otp.sendMessage(jid, interactive);
-    } catch (interactiveErr) {
-      logger.warn(`[otp] Interactive message failed (${interactiveErr.message}), falling back to plain text`);
-      await sessions.otp.sendMessage(jid, plainText);
-    }
+    await sendInteractive(sessions.otp, jid, body, footer, buttons);
     logger.info(`[otp] Sent OTP → ${phone}`);
     res.json({ ok: true });
   } catch (e) {
@@ -386,59 +405,6 @@ app.post("/send-otp", requireKey, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
-/**
- * Build a professional broadcast WhatsApp message.
- *
- * Buttons (interactive nativeFlowMessage):
- *   1. cta_url  → "Order Now"  (always present when button_url given)
- *   2. cta_copy → "Copy Code"  (only when coupon_code given)
- *
- * Falls back to plain text if the interactive send fails.
- */
-function buildBroadcastMessage(bodyText, footer, button_url, button_text, coupon_code) {
-  const buttons = [];
-
-  if (button_url) {
-    buttons.push({
-      name: "cta_url",
-      buttonParamsJson: JSON.stringify({
-        display_text: button_text || "Order Now",
-        url:          button_url,
-        merchant_url: button_url,
-      }),
-    });
-  }
-
-  if (coupon_code) {
-    buttons.push({
-      name: "cta_copy",
-      buttonParamsJson: JSON.stringify({
-        display_text: `Copy Code: ${coupon_code}`,
-        copy_code:    coupon_code,
-      }),
-    });
-  }
-
-  const interactive = buttons.length > 0
-    ? {
-        viewOnceMessage: {
-          message: {
-            interactiveMessage: {
-              body:   { text: bodyText },
-              footer: { text: footer },
-              nativeFlowMessage: { buttons },
-            },
-          },
-        },
-      }
-    : null;
-
-  const plainText = { text: bodyText + (footer ? `\n\n_${footer}_` : "") };
-
-  return { interactive, plainText };
-}
-
 
 /** Send a broadcast message via the broadcast session */
 app.post("/send-message", requireKey, async (req, res) => {
@@ -452,29 +418,44 @@ app.post("/send-message", requireKey, async (req, res) => {
   const jid      = toJid(phone);
   const bodyText = caption || text || "";
   const footer   = "KNFC Fried Chicken — knfcs.com";
-  const { interactive, plainText } = buildBroadcastMessage(
-    bodyText, footer, button_url, button_text, coupon_code
-  );
 
   try {
     if (image_url) {
-      // Image messages can't carry interactive buttons — embed CTA in caption
-      const ctaLine = button_url ? `\n\n👉 *${button_text || "Order Now"}:* ${button_url}` : "";
-      const copyLine = coupon_code ? `\n🎟 *Copy Code:* ${coupon_code}` : "";
+      // WhatsApp does not allow interactive buttons on image messages —
+      // embed the CTA link and coupon code directly in the caption.
+      const ctaLine  = button_url  ? `\n\n👉 *${button_text || "Order Now"}:* ${button_url}` : "";
+      const copyLine = coupon_code ? `\n🎟 *Coupon Code:* ${coupon_code}` : "";
       await sessions.broadcast.sendMessage(jid, {
         image:   { url: image_url },
         caption: bodyText + ctaLine + copyLine,
       });
-    } else if (interactive) {
-      // Text broadcast — interactive buttons
-      try {
-        await sessions.broadcast.sendMessage(jid, interactive);
-      } catch (interactiveErr) {
-        logger.warn(`[broadcast] Interactive failed (${interactiveErr.message}), falling back to plain text`);
-        await sessions.broadcast.sendMessage(jid, plainText);
-      }
     } else {
-      await sessions.broadcast.sendMessage(jid, plainText);
+      // Text broadcast — build interactive buttons
+      const buttons = [];
+      if (coupon_code) {
+        buttons.push({
+          name: "cta_copy",
+          buttonParamsJson: JSON.stringify({
+            display_text: `Copy Code: ${coupon_code}`,
+            copy_code:    coupon_code,
+          }),
+        });
+      }
+      if (button_url) {
+        buttons.push({
+          name: "cta_url",
+          buttonParamsJson: JSON.stringify({
+            display_text: button_text || "Order Now",
+            url:          button_url,
+            merchant_url: button_url,
+          }),
+        });
+      }
+      if (buttons.length > 0) {
+        await sendInteractive(sessions.broadcast, jid, bodyText, footer, buttons);
+      } else {
+        await sessions.broadcast.sendMessage(jid, { text: bodyText + `\n\n_${footer}_` });
+      }
     }
     logger.info(`[broadcast] Sent → ${phone}`);
     res.json({ ok: true });
