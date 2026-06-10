@@ -283,12 +283,17 @@ function NotFound() {
   );
 }
 
+/* ── Suspense fallback — dark background so no white/blank flash ─────── */
+const PageFallback = () => (
+  <div style={{ minHeight: "100vh", background: "#0C0807" }} />
+);
+
 /* ── Route convenience wrappers ─────────────────────────────────────── */
 // P — role-gated with error boundary
 const P = ({ roles, C }) => (
   <RequireAuth roles={roles}>
     <ErrorBoundary>
-      <Suspense fallback={null}>
+      <Suspense fallback={<PageFallback />}>
         <PageTransition><C /></PageTransition>
       </Suspense>
     </ErrorBoundary>
@@ -299,7 +304,7 @@ const P = ({ roles, C }) => (
 const PG = ({ C }) => (
   <BranchGate>
     <ErrorBoundary>
-      <Suspense fallback={null}>
+      <Suspense fallback={<PageFallback />}>
         <PageTransition><C /></PageTransition>
       </Suspense>
     </ErrorBoundary>
@@ -311,7 +316,7 @@ const PC = ({ C }) => (
   <RequireCustomer>
     <BranchGate>
       <ErrorBoundary>
-        <Suspense fallback={null}>
+        <Suspense fallback={<PageFallback />}>
           <PageTransition><C /></PageTransition>
         </Suspense>
       </ErrorBoundary>
@@ -324,7 +329,7 @@ const PA = ({ roles, C }) => (
   <RequireAuth roles={roles}>
     <MustChangePasswordGate>
       <ErrorBoundary>
-        <Suspense fallback={null}>
+        <Suspense fallback={<PageFallback />}>
           <PageTransition><C /></PageTransition>
         </Suspense>
       </ErrorBoundary>
