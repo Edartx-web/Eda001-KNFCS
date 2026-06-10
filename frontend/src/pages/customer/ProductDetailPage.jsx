@@ -19,6 +19,10 @@ import { getItemDetail, getCategories, toggleFavourite, submitReview } from "../
 import { formatPrice, formatUnit, formatCalories } from "../../utils/format";
 import { DIETARY_DOT, SPICE_DOTS } from "../../utils/constants";
 import useCartStore from "../../store/cartStore";
+import { getSwipeList } from "../../store/swipeStore";
+
+const haptic = (ms = 8) => { try { navigator?.vibrate?.(ms); } catch {} };
+const SWIPE_HINT_KEY = "knfc_swipe_hint_done";
 
 /* ─── Icons ──────────────────────────────────────────────────────────── */
 const Ic = {
@@ -101,10 +105,12 @@ export default function ProductDetailPage() {
   const navigate         = useNavigate();
   const [searchParams]   = useSearchParams();
   const branchIdFromUrl  = searchParams.get("b") || localStorage.getItem("branch_id") || "";
-  const addBtnRef  = useRef(null);
-  const heroRef    = useRef(null);
-  const addAreaRef = useRef(null);
+  const addBtnRef   = useRef(null);
+  const heroRef     = useRef(null);
+  const addAreaRef  = useRef(null);
+  const touchStartX = useRef(null);
   const { loading: pageLoading } = usePageLoader();
+  const [showSwipeHint, setShowSwipeHint] = useState(() => !localStorage.getItem(SWIPE_HINT_KEY));
 
   const [item,       setItem]       = useState(null);
   const [allCats,    setAllCats]    = useState([]);
@@ -126,6 +132,37 @@ export default function ProductDetailPage() {
   const [submitting,   setSubmitting]   = useState(false);
 
   const addItem = useCartStore(s => s.addItem);
+
+  /* Swipe hint — auto-dismiss after 3.5 s */
+  useEffect(() => {
+    if (!showSwipeHint) return;
+    const t = setTimeout(() => {
+      setShowSwipeHint(false);
+      localStorage.setItem(SWIPE_HINT_KEY, "1");
+    }, 3500);
+    return () => clearTimeout(t);
+  }, [showSwipeHint]);
+
+  /* Touch swipe navigation */
+  const onTouchStart = useCallback(e => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const onTouchEnd = useCallback(e => {
+    if (touchStartX.current === null) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(delta) < 60) return;
+    const list = getSwipeList();
+    const idx  = list.findIndex(i => i.slug === slug);
+    if (idx === -1) return;
+    haptic(10);
+    if (delta < 0 && idx < list.length - 1) {
+      navigate(`/menu/product/${list[idx + 1].slug}?b=${branchIdFromUrl}`);
+    } else if (delta > 0 && idx > 0) {
+      navigate(`/menu/product/${list[idx - 1].slug}?b=${branchIdFromUrl}`);
+    }
+  }, [slug, branchIdFromUrl, navigate]);
 
   useEffect(() => {
     getCategories().then(r => setAllCats(r.data.categories || [])).catch(() => {});
@@ -186,6 +223,7 @@ export default function ProductDetailPage() {
 
   const handleAdd = () => {
     if (isOOS) return;
+    haptic(14);
     addItem(item, qty, selected, note);
     setAdded(true);
     setTimeout(() => setAdded(false), 1800);
@@ -220,11 +258,56 @@ export default function ProductDetailPage() {
     } finally { setSubmitting(false); }
   };
 
+  /* Swipe neighbour info for indicator dots */
+  const swipeList = getSwipeList();
+  const swipeIdx  = swipeList.findIndex(i => i.slug === slug);
+
   return (
     <AppLayout>
-      <div style={{ maxWidth:"1000px", margin:"0 auto" }}>
-        {/* category pills removed — navigation via back button */}
+      <style>{`
+        @keyframes swipe-hint-fade{0%{opacity:0;transform:translateY(8px)}15%{opacity:1;transform:translateY(0)}85%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(8px)}}
+      `}</style>
+      <div
+        style={{ maxWidth:"1000px", margin:"0 auto", position:"relative" }}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* ── SWIPE HINT — shown once ────────────────────────────────── */}
+        {showSwipeHint && swipeList.length > 1 && (
+          <div style={{
+            position:"fixed", bottom:"calc(80px + env(safe-area-inset-bottom,0px))", left:"50%",
+            transform:"translateX(-50%)", zIndex:500,
+            display:"flex", alignItems:"center", gap:"10px",
+            background:"rgba(0,0,0,.78)", backdropFilter:"blur(12px)",
+            color:"#fff", fontSize:".8125rem", fontWeight:600,
+            padding:"10px 20px", borderRadius:"var(--rf)",
+            boxShadow:"0 4px 24px rgba(0,0,0,.3)",
+            animation:"swipe-hint-fade 3.5s ease forwards",
+            pointerEvents:"none", whiteSpace:"nowrap",
+          }}>
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round"/></svg>
+            Swipe to browse items
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round"/></svg>
+          </div>
+        )}
 
+        {/* ── SWIPE POSITION DOTS — show when list has neighbours ─── */}
+        {swipeList.length > 1 && swipeIdx !== -1 && (
+          <div style={{ display:"flex", justifyContent:"center", gap:"5px", marginBottom:"var(--s3)" }}>
+            {swipeList.slice(Math.max(0, swipeIdx - 2), swipeIdx + 3).map((item, i) => {
+              const absIdx = Math.max(0, swipeIdx - 2) + i;
+              return (
+                <div key={absIdx} style={{
+                  width: absIdx === swipeIdx ? "22px" : "7px",
+                  height:"7px", borderRadius:"4px", transition:"all .25s",
+                  background: absIdx === swipeIdx ? "var(--brand)" : "var(--bd2)",
+                }}/>
+              );
+            })}
+          </div>
+        )}
+
+        {/* category pills removed — navigation via back button */}
         <div className="dp-grid">
 
           {/* ── LEFT: HERO ──────────────────────────────────────────── */}
