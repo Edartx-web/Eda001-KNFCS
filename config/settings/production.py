@@ -70,8 +70,13 @@ DATABASES = {
         "PASSWORD":     config("DB_PASSWORD"),
         "HOST":         config("DB_HOST"),
         "PORT":         config("DB_PORT",     default="5432"),
-        "CONN_MAX_AGE": 0,
-        "OPTIONS":      {"sslmode": "require"},
+        # Reuse DB connections for 60 s instead of opening a new one per request.
+        # Saves ~50-100 ms on every API call (cross-region Supabase connection cost).
+        "CONN_MAX_AGE": 60,
+        "OPTIONS": {
+            "sslmode":        "require",
+            "connect_timeout": 5,
+        },
     }
 }
 
