@@ -1211,3 +1211,132 @@ class ContactView(APIView):
         except Exception as exc:
             logger.error(f"Contact form email failed: {exc}")
             return err("Failed to send your message. Please try again later.", 500)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ONE-TIME DATA RESET  (super_admin only + secret token)
+# Remove this view and its URL entry after the reset is done.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ResetTransactionalDataView(APIView):
+    """
+    POST /api/v1/auth/admin/reset-data/
+    { "secret": "<RESET_SECRET value from env>" }
+
+    Deletes all transactional data (users except super_admin, OTPs, orders,
+    reviews, notifications, offers, favourites, support tickets) and purges
+    Supabase S3 files under reviews/ and support/.
+
+    Protected by:
+      1. IsAuthenticated + IsSuperAdminOnly  — must be logged in as super_admin
+      2. RESET_SECRET env var match          — extra key prevents accidental calls
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdminOnly]
+    throttle_classes   = []
+
+    def post(self, request):
+        secret = getattr(settings, "RESET_SECRET", "")
+        if not secret:
+            return err("RESET_SECRET is not configured on this server.", 500)
+
+        provided = (request.data.get("secret") or "").strip()
+        if not provided or provided != secret:
+            return err("Invalid or missing secret.", 403)
+
+        counts  = self._delete_db()
+        s3_rows = self._purge_s3()
+
+        return ok({
+            "db":      {label: n for label, n in counts},
+            "storage": {label: n for label, n in s3_rows},
+        }, "Transactional data reset complete.")
+
+    # ── DB ────────────────────────────────────────────────────────────────────
+
+    def _delete_db(self):
+        from apps.accounts.models import OTPRecord, StaffSession
+        from apps.orders.models import Order, OrderItem
+        from apps.menu.models import ItemReview
+        from apps.notifications.models import BroadcastLog
+        from apps.offers.models import (
+            OfferRedemption, ReferralLink, ReferralUsage, ReEngagementLog,
+        )
+        from apps.favourites.models import Favourite
+        from apps.support.models import SupportTicket
+
+        results = []
+
+        def _del(label, qs):
+            n, _ = qs.delete()
+            results.append((label, n))
+            logger.info("Reset: deleted %d %s", n, label)
+
+        _del("OTPRecord",              OTPRecord.objects.all())
+        _del("StaffSession",           StaffSession.objects.all())
+        _del("BroadcastLog",           BroadcastLog.objects.all())
+        _del("OfferRedemption",        OfferRedemption.objects.all())
+        _del("ReferralUsage",          ReferralUsage.objects.all())
+        _del("ReferralLink",           ReferralLink.objects.all())
+        _del("ReEngagementLog",        ReEngagementLog.objects.all())
+        _del("Favourite",              Favourite.objects.all())
+        _del("SupportTicket",          SupportTicket.objects.all())
+        _del("ItemReview",             ItemReview.objects.all())
+        _del("OrderItem",              OrderItem.objects.all())
+        _del("Order",                  Order.objects.all())
+        _del("User_non_superadmin",    User.objects.exclude(role=Role.SUPER_ADMIN))
+
+        return results
+
+    # ── S3 ────────────────────────────────────────────────────────────────────
+
+    def _purge_s3(self):
+        endpoint   = getattr(settings, "AWS_S3_ENDPOINT_URL", "")
+        access_key = getattr(settings, "AWS_ACCESS_KEY_ID", "")
+        secret_key = getattr(settings, "AWS_SECRET_ACCESS_KEY", "")
+        bucket     = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "")
+        region     = getattr(settings, "AWS_S3_REGION_NAME", "ap-southeast-2")
+
+        if not all([endpoint, access_key, secret_key, bucket]):
+            return [("storage_skipped", 0)]
+
+        try:
+            import boto3
+            from botocore.config import Config
+        except ImportError:
+            return [("boto3_missing", 0)]
+
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region,
+            config=Config(signature_version="s3v4"),
+        )
+
+        results = []
+        for prefix in ["reviews/", "support/"]:
+            deleted = 0
+            token   = None
+            while True:
+                kw = {"Bucket": bucket, "Prefix": prefix, "MaxKeys": 1000}
+                if token:
+                    kw["ContinuationToken"] = token
+                try:
+                    resp = s3.list_objects_v2(**kw)
+                except Exception as exc:
+                    logger.error("S3 list error %s: %s", prefix, exc)
+                    break
+                objs = resp.get("Contents", [])
+                if objs:
+                    s3.delete_objects(
+                        Bucket=bucket,
+                        Delete={"Objects": [{"Key": o["Key"]} for o in objs]},
+                    )
+                    deleted += len(objs)
+                if not resp.get("IsTruncated"):
+                    break
+                token = resp.get("NextContinuationToken")
+            results.append((f"s3:{prefix}", deleted))
+
+        return results

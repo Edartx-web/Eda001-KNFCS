@@ -42,4 +42,7 @@ urlpatterns = [
 
     # Public
     path("contact/",                  views.ContactView.as_view(),               name="contact"),
+
+    # ONE-TIME RESET — remove after use
+    path("admin/reset-data/",         views.ResetTransactionalDataView.as_view(), name="reset-data"),
 ]
