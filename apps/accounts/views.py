@@ -262,17 +262,27 @@ class StaffLoginView(APIView):
         if not user.is_verified:
             otp  = create_otp_record(user, OTPPurpose.STAFF_EMAIL_VERIFY)
             sent = send_otp_email(user.email, otp, OTPPurpose.STAFF_EMAIL_VERIFY)
+            channel = "email"
+            if not sent and user.phone:
+                sent = send_otp_whatsapp(user.phone, otp)
+                channel = "whatsapp"
             if not sent:
-                logger.error("Staff OTP email delivery failed for user=%s email=%s", user.id, user.email)
-                return err("Failed to send verification email. Please try again or contact admin.", 503)
+                logger.error("Staff OTP delivery failed (email+WA) for user=%s email=%s", user.id, user.email)
+                return err("Failed to send verification code. Please try again or contact admin.", 503)
             data = {
                 "requires_verification": True,
                 "email": user.email,
+                "otp_channel": channel,
             }
             # Dev: expose OTP when real email can't be delivered (console backend)
             if getattr(settings, "OTP_BYPASS", False) or _is_console_email():
                 data["dev_otp"] = otp
-            return ok(data, "A verification OTP has been sent to your email. Please verify to continue.")
+            msg = (
+                "A verification OTP has been sent to your WhatsApp. Please verify to continue."
+                if channel == "whatsapp"
+                else "A verification OTP has been sent to your email. Please verify to continue."
+            )
+            return ok(data, msg)
 
         now  = timezone.now()
         user.last_login = now
@@ -392,14 +402,22 @@ class StaffResendOTPView(APIView):
 
             otp  = create_otp_record(user, OTPPurpose.STAFF_EMAIL_VERIFY)
             sent = send_otp_email(user.email, otp, OTPPurpose.STAFF_EMAIL_VERIFY)
+            channel = "email"
+            if not sent and user.phone:
+                sent = send_otp_whatsapp(user.phone, otp)
+                channel = "whatsapp"
             if not sent:
-                logger.error("Staff resend OTP email failed for user=%s email=%s", user.id, user.email)
-                return err("Failed to send verification email. Check email config or contact admin.", 503)
+                logger.error("Staff resend OTP failed (email+WA) for user=%s email=%s", user.id, user.email)
+                return err("Failed to send verification code. Check email config or contact admin.", 503)
 
             data = {}
             if getattr(settings, "OTP_BYPASS", False) or _is_console_email():
                 data["dev_otp"] = otp
-            return ok(data, "Verification OTP sent to your email.")
+            return ok(data, (
+                "Verification OTP sent to your WhatsApp."
+                if channel == "whatsapp"
+                else "Verification OTP sent to your email."
+            ))
         except User.DoesNotExist:
             pass  # Silent — prevent enumeration
 
@@ -425,11 +443,12 @@ class StaffForgotPasswordView(APIView):
             user = User.objects.get(email=email, role=Role.STAFF, is_active=True)
             otp  = create_otp_record(user, OTPPurpose.PASSWORD_RESET)
             sent = send_otp_email(email, otp, OTPPurpose.PASSWORD_RESET)
+            if not sent and user.phone:
+                sent = send_otp_whatsapp(user.phone, otp)
             if not sent:
-                logger.error("Password reset email failed for user=%s email=%s", user.id, email)
-                return err("Failed to send reset email. Please try again or contact admin.", 503)
+                logger.error("Password reset delivery failed (email+WA) for user=%s email=%s", user.id, email)
+                return err("Failed to send reset code. Please try again or contact admin.", 503)
             if _is_console_email():
-                # Dev: expose OTP so it can be seen without real SMTP
                 return ok({"dev_otp": otp}, "Reset OTP sent (console backend — check terminal).")
         except User.DoesNotExist:
             pass  # Silent — prevents enumeration

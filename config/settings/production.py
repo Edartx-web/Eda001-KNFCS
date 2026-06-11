@@ -147,7 +147,7 @@ if _supabase_s3_url:
     MEDIA_URL  = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
 
 # ── Email ─────────────────────────────────────────────────────────────────────
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_BACKEND = "utils.email_backend.IPv4EmailBackend"
 
 # ── OTP — real WhatsApp OTP in production ─────────────────────────────────────
 OTP_BYPASS = False

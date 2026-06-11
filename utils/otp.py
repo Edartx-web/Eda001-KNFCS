@@ -159,8 +159,8 @@ def send_otp_whatsapp(phone: str, otp: str) -> bool:
             return True
         # 503 = WhatsApp session still reconnecting (Render cold-start) — retry once
         if r.status_code == 503:
-            logger.warning(f"WhatsApp OTP 503 (cold-start?) → {phone}, retrying in 10 s")
-            time.sleep(10)
+            logger.warning(f"WhatsApp OTP 503 (cold-start?) → {phone}, retrying in 2 s")
+            time.sleep(2)
             r2 = _attempt()
             if r2.status_code == 200:
                 logger.info(f"WhatsApp OTP sent (retry) → {phone}")
