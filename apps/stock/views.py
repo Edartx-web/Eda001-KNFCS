@@ -95,7 +95,7 @@ class StockTopUpView(APIView):
     Staff, Branch Admin, Super Admin can add stock mid-day.
     Creates full audit log entry.
     """
-    permission_classes = [IsAdminOrAbove]
+    permission_classes = [IsStaffOrAbove]
 
     def post(self, request):
         # SuperAdmin can pass branch_id explicitly in body
