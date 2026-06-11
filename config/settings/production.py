@@ -152,6 +152,9 @@ EMAIL_BACKEND = "utils.email_backend.IPv4EmailBackend"
 # ── OTP — real WhatsApp OTP in production ─────────────────────────────────────
 OTP_BYPASS = False
 
+# ── One-time reset secret (set in Render env vars, delete after reset) ────────
+RESET_SECRET = config("RESET_SECRET", default="")
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOGGING = {
     "version": 1,
