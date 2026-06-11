@@ -56,11 +56,11 @@ const T = {
 /* ── Tab definitions per role ────────────────────────────────────────────── */
 const TABS = {
   customer: [
-    { key:"home",    path:"/menu",         label:"Home",     Icon:T.Home   },
-    { key:"offers",  path:"/offers",       label:"Offers",   Icon:T.Tag    },
-    { key:"cart",    path:"/cart",         label:"Order",    Icon:T.Cart, badge:true },
-    { key:"browse",  path:"/menu/all",      label:"Browse",   Icon:T.Grid   },
-    { key:"acct",    path:"/account",      label:"Account",  Icon:T.User   },
+    { key:"home",    path:"/menu",         label:"Home",    Icon:T.Home              },
+    { key:"browse",  path:"/menu/all",     label:"Browse",  Icon:T.Grid              },
+    { key:"cart",    path:"/cart",         label:"Order",   Icon:T.Cart, badge:true  },
+    { key:"offers",  path:"/offers",       label:"Offer",   Icon:T.Tag               },
+    { key:"acct",    path:"/account",      label:"Account", Icon:T.User              },
   ],
   staff: [
     { key:"queue",  path:"/staff/queue",     label:"Queue",     Icon:T.Queue },

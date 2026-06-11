@@ -19,6 +19,15 @@ import { getCategoryDetail, getCategories, getItems } from "../../api/menu";
 import { formatPrice, formatUnit } from "../../utils/format";
 import { SORT_OPTIONS, DIETARY_DOT } from "../../utils/constants";
 import useCartStore from "../../store/cartStore";
+import { setSwipeList } from "../../store/swipeStore";
+
+/* ─── Haptic ─────────────────────────────────────────────────────────── */
+const haptic = (ms = 8) => { try { navigator?.vibrate?.(ms); } catch {} };
+
+/* ─── Page-level session cache ──────────────────────────────────────── */
+const CACHE_TTL = 90_000;
+const _sc_get = k => { try { const r = sessionStorage.getItem(k); if (!r) return null; const { ts, d } = JSON.parse(r); return Date.now() - ts < CACHE_TTL ? d : null; } catch { return null; } };
+const _sc_set = (k, d) => { try { sessionStorage.setItem(k, JSON.stringify({ ts: Date.now(), d })); } catch {} };
 
 /* ─── Icon set ───────────────────────────────────────────────────────── */
 const Ic = {
@@ -111,6 +120,7 @@ const GridCard = memo(function GridCard({ item, navigate }) {
   const handleAdd = e => {
     e.stopPropagation();
     if (isOOS) return;
+    haptic(12);
     addItem(item);
     setAdded(true);
     setTimeout(() => setAdded(false), 1400);
@@ -197,10 +207,10 @@ const GridCard = memo(function GridCard({ item, navigate }) {
           {!isOOS && (
             inCart
               ? <div style={{ display:"flex", alignItems:"center", gap:"3px" }} onClick={e => e.stopPropagation()}>
-                  <button onClick={e => { e.stopPropagation(); updateQty(inCart._key, inCart.quantity - 1); }}
+                  <button onClick={e => { e.stopPropagation(); haptic(8); updateQty(inCart._key, inCart.quantity - 1); }}
                     style={{ width:"28px", height:"28px", borderRadius:"var(--r2)", background:"var(--bg2)", border:"1px solid var(--bd)", fontSize:"15px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>−</button>
                   <span style={{ fontSize:".875rem", fontWeight:800, minWidth:"18px", textAlign:"center" }}>{inCart.quantity}</span>
-                  <button ref={btnRef} onClick={e => { e.stopPropagation(); updateQty(inCart._key, inCart.quantity + 1); }}
+                  <button ref={btnRef} onClick={e => { e.stopPropagation(); haptic(12); updateQty(inCart._key, inCart.quantity + 1); }}
                     style={{ width:"28px", height:"28px", borderRadius:"var(--r2)", background:"var(--brand)", border:"none", fontSize:"15px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:700 }}>+</button>
                 </div>
               : <button ref={btnRef} onClick={handleAdd}
@@ -291,13 +301,13 @@ const ListCard = memo(function ListCard({ item, navigate }) {
           {!isOOS && (
             inCart
               ? <div style={{ display:"flex", alignItems:"center", gap:"6px" }} onClick={e => e.stopPropagation()}>
-                  <button onClick={e => { e.stopPropagation(); updateQty(inCart._key, inCart.quantity - 1); }}
+                  <button onClick={e => { e.stopPropagation(); haptic(8); updateQty(inCart._key, inCart.quantity - 1); }}
                     style={{ width:"30px", height:"30px", borderRadius:"var(--r2)", background:"var(--bg2)", border:"1px solid var(--bd)", fontSize:"16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>−</button>
                   <span style={{ fontWeight:800, minWidth:"18px", textAlign:"center" }}>{inCart.quantity}</span>
-                  <button onClick={e => { e.stopPropagation(); addItem(item); }}
+                  <button onClick={e => { e.stopPropagation(); haptic(12); addItem(item); }}
                     style={{ width:"30px", height:"30px", borderRadius:"var(--r2)", background:"var(--brand)", border:"none", color:"#fff", fontSize:"16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>+</button>
                 </div>
-              : <button onClick={e => { e.stopPropagation(); addItem(item); }}
+              : <button onClick={e => { e.stopPropagation(); haptic(12); addItem(item); }}
                   style={{ padding:"8px 18px", borderRadius:"var(--r3)", background:"var(--brand)", border:"none", color:"#fff", fontSize:".875rem", fontWeight:700, cursor:"pointer", fontFamily:"var(--ff-b)", boxShadow:"0 2px 10px rgba(232,82,26,.3)", transition:"background var(--d1) var(--ease)" }}
                   onMouseEnter={e => e.currentTarget.style.background="var(--brand-d)"}
                   onMouseLeave={e => e.currentTarget.style.background="var(--brand)"}>
@@ -347,6 +357,8 @@ export default function ProductListPage() {
   const [showSort,  setShowSort]  = useState(false);
   const [stickyBar, setStickyBar] = useState(false);
   const [activeSection, setActiveSection] = useState("all");
+  const [chipFilter,    setChipFilter]    = useState("all"); // AllMode: filter view to one category
+  const [catAnimKey,    setCatAnimKey]    = useState(0);     // increment to re-trigger animation
   const catBarRef   = useRef(null);
   const sectionRefs = useRef({});
 
@@ -358,8 +370,25 @@ export default function ProductListPage() {
   }, []);
 
   useEffect(() => {
+    const cacheKey = `plp:${slug}:${sort}:${isAllMode}:${sectionFilter}`;
+    const cached   = _sc_get(cacheKey);
+
+    const applyData = (list, cat) => {
+      if (cat) setCategory(cat);
+      setItems(list);
+      setFiltered(list);
+      setSwipeList(list);
+    };
+
+    if (cached) {
+      applyData(cached.items, cached.category);
+      isInitialLoad.current = false;
+      setLoading(false);
+      // silently re-fetch in background to keep cache fresh
+    }
+
     const load = async () => {
-      setLoading(true);
+      if (!cached) setLoading(true);
       try {
         const params = { sort };
         if (!isAllMode) params.category = slug;
@@ -369,10 +398,10 @@ export default function ProductListPage() {
           isAllMode ? Promise.resolve(null) : getCategoryDetail(slug).catch(() => null),
           getItems(params).catch(() => ({ data:{ items:[] } })),
         ]);
-        if (catR) setCategory(catR.data.category);
+        const cat  = catR?.data?.category || null;
         const list = itemR.data.items || [];
-        setItems(list);
-        setFiltered(list);
+        applyData(list, cat);
+        _sc_set(cacheKey, { items: list, category: cat });
       } finally {
         isInitialLoad.current = false;
         setLoading(false);
@@ -388,6 +417,7 @@ export default function ProductListPage() {
     if (diet === "veg")     list = list.filter(i => i.dietary_type === "veg" || i.dietary_type === "vegan");
     if (diet === "non_veg") list = list.filter(i => i.dietary_type === "non_veg");
     setFiltered(list);
+    setSwipeList(list);
   }, [searchQ, diet, items]);
 
   useEffect(() => {
@@ -453,10 +483,19 @@ export default function ProductListPage() {
     { key:"non_veg", label:"Non-veg" },
   ];
 
+  /* Compute what to render in AllMode based on chipFilter */
+  const visibleSections = chipFilter === "all"
+    ? [...sections, ...(otherItems.length > 0 ? [{ slug:"_other", name:"More", emoji:"🍴", items:otherItems }] : [])]
+    : sections.filter(s => s.slug === chipFilter);
+
   return (
     <AppLayout>
+      <style>{`
+        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        @keyframes cat-fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+      `}</style>
       {/* ── HERO ────────────────────────────────────────────────────── */}
-      <div ref={headerRef} style={{ position:"relative", height:"clamp(160px,28vw,280px)", borderRadius:"var(--r5)", overflow:"hidden", marginBottom:"var(--s5)", background:cat.image?"var(--bg3)":`linear-gradient(135deg,${cat.gradient_from||"#1A0500"},${cat.gradient_to||"#2D1200"})` }}>
+      <div ref={headerRef} style={{ position:"relative", height:"clamp(96px,28vw,280px)", borderRadius:"var(--r5)", overflow:"hidden", marginBottom:"var(--s5)", background:cat.image?"var(--bg3)":`linear-gradient(135deg,${cat.gradient_from||"#1A0500"},${cat.gradient_to||"#2D1200"})` }}>
         {cat.image && <img loading="lazy" src={cat.image} alt={cat.name} style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}/>}
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(120deg,rgba(0,0,0,.85) 0%,rgba(0,0,0,.35) 60%,transparent 100%)" }}/>
 
@@ -495,29 +534,33 @@ export default function ProductListPage() {
             {/* "All" chip */}
             <button
               data-cat="all"
-              onClick={() => isAllMode ? window.scrollTo({top:0,behavior:"smooth"}) : navigate("/menu/all")}
+              onClick={() => {
+                if (isAllMode) { setChipFilter("all"); setActiveSection("all"); setCatAnimKey(k=>k+1); haptic(6); }
+                else navigate("/menu/all");
+              }}
               style={{ flexShrink:0, display:"flex", alignItems:"center", gap:"6px", padding:"7px 16px", borderRadius:"var(--rf)", border:"none", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".8125rem", fontWeight:700, transition:"all .2s", whiteSpace:"nowrap",
-                background: (!isAllMode || activeSection === "all") ? "var(--brand)" : "var(--bg2)",
-                color:      (!isAllMode || activeSection === "all") ? "#fff"         : "var(--t2)",
-                boxShadow:  (!isAllMode || activeSection === "all") ? "0 2px 10px rgba(232,82,26,.4)" : "none",
+                background: (!isAllMode || chipFilter === "all") ? "var(--brand)" : "var(--bg2)",
+                color:      (!isAllMode || chipFilter === "all") ? "#fff"         : "var(--t2)",
+                boxShadow:  (!isAllMode || chipFilter === "all") ? "0 2px 10px rgba(232,82,26,.4)" : "none",
               }}>
               🍽 All
             </button>
 
             {allCats.map(cat => {
-              const isActive = isAllMode ? activeSection === cat.slug : slug === cat.slug;
+              const isActive = isAllMode ? chipFilter === cat.slug : slug === cat.slug;
               return (
                 <button
                   key={cat.id || cat.slug}
                   data-cat={cat.slug}
                   onClick={() => {
                     if (isAllMode) {
-                      const el = sectionRefs.current[cat.slug];
-                      if (el) { const y = el.getBoundingClientRect().top + window.scrollY - 120; window.scrollTo({top:y,behavior:"smooth"}); }
+                      haptic(8);
+                      setChipFilter(cat.slug);
+                      setActiveSection(cat.slug);
+                      setCatAnimKey(k => k + 1);
                     } else {
                       navigate(`/menu/${cat.slug}`);
                     }
-                    setActiveSection(cat.slug);
                   }}
                   style={{ flexShrink:0, display:"flex", alignItems:"center", gap:"6px", padding:"7px 14px", borderRadius:"var(--rf)", border:"none", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".8125rem", fontWeight:isActive?700:500, transition:"all .2s", whiteSpace:"nowrap",
                     background: isActive ? "var(--brand)" : "var(--bg2)",
@@ -625,10 +668,10 @@ export default function ProductListPage() {
           <p style={{ fontSize:".9375rem", color:"var(--t2)", marginBottom:"var(--s5)" }}>Try a different search or filter</p>
           <button onClick={() => { setSearchQ(""); setDiet("all"); }} className="btn btn-p">Clear filters</button>
         </div>
-      ) : isAllMode && (sections.length > 0 || loading) ? (
+      ) : isAllMode && (visibleSections.length > 0 || loading) ? (
         /* ALL MODE — grouped by category with section headers */
-        <div ref={gridRef}>
-          {[...sections, ...(otherItems.length > 0 ? [{ slug:"_other", name:"More", emoji:"🍴", items:otherItems }] : [])].map(section => (
+        <div key={catAnimKey} ref={gridRef} style={{ animation:"cat-fade-in .28s ease-out" }}>
+          {visibleSections.map(section => (
             <div key={section.slug} style={{ marginBottom:"var(--s10)" }}>
               {/* Section header */}
               <div
@@ -644,11 +687,13 @@ export default function ProductListPage() {
                   <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:800, color:"var(--t1)", margin:0, lineHeight:1.2 }}>{section.name}</h2>
                   <span style={{ fontSize:".75rem", color:"var(--t3)", fontWeight:500 }}>{section.items.length} item{section.items.length !== 1 ? "s" : ""}</span>
                 </div>
-                {/* Scroll anchor pill */}
-                <button onClick={() => { setActiveSection(section.slug); catBarRef.current?.querySelector(`[data-cat="${section.slug}"]`)?.scrollIntoView({behavior:"smooth",inline:"center"}); }}
-                  style={{ marginLeft:"auto", padding:"4px 12px", borderRadius:"var(--rf)", border:"1px solid var(--bd)", background:"var(--bg2)", color:"var(--t3)", fontSize:".6875rem", fontWeight:600, cursor:"pointer", fontFamily:"var(--ff-b)" }}>
-                  ↑ Top
-                </button>
+                {/* Back-to-all pill — only visible when a chip filter is active */}
+                {chipFilter !== "all" && (
+                  <button onClick={() => { haptic(6); setChipFilter("all"); setActiveSection("all"); setCatAnimKey(k=>k+1); }}
+                    style={{ marginLeft:"auto", padding:"4px 12px", borderRadius:"var(--rf)", border:"1px solid var(--brand)", background:"var(--brand-tint)", color:"var(--brand)", fontSize:".6875rem", fontWeight:600, cursor:"pointer", fontFamily:"var(--ff-b)" }}>
+                    ← All
+                  </button>
+                )}
               </div>
               {/* Items grid or list */}
               {viewMode === "grid" ? (
