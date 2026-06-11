@@ -48,6 +48,7 @@ class BranchListCreateView(APIView):
             return Response({"success": False, "errors": s.errors}, status=400)
 
         branch = s.save()
+        cache.delete("branches:public")
 
         # Auto-generate QR code linking to the menu with this branch selected
         try:
@@ -95,6 +96,7 @@ class BranchDetailView(APIView):
         if not s.is_valid():
             return Response({"success": False, "errors": s.errors}, status=400)
         s.save()
+        cache.delete("branches:public")
         return ok({"branch": s.data}, "Branch updated.")
 
     def delete(self, request, pk):
@@ -108,6 +110,7 @@ class BranchDetailView(APIView):
         name = branch.name
         branch.is_active = False
         branch.save(update_fields=["is_active"])
+        cache.delete("branches:public")
         return ok({"message": f"Branch '{name}' has been deactivated."}, code=200)
 
 
@@ -122,7 +125,12 @@ class PublicBranchListView(APIView):
     throttle_classes    = []   # No rate-limiting — this endpoint must always respond
 
     def get(self, request):
-        from rest_framework.permissions import AllowAny
+        cached = cache.get("branches:public")
+        if cached is not None:
+            resp = Response(cached)
+            resp["Cache-Control"] = "public, max-age=120, stale-while-revalidate=30"
+            return resp
+
         qs = Branch.objects.filter(is_active=True).order_by("name").values(
             "id", "name", "address", "phone", "email",
             "latitude", "longitude",
@@ -131,11 +139,11 @@ class PublicBranchListView(APIView):
             "enable_pickup", "enable_dine_in", "pickup_upi_only",
         )
         branches = list(qs)
-        return Response({
-            "success":  True,
-            "branches": branches,
-            "count":    len(branches),
-        })
+        payload = {"success": True, "branches": branches, "count": len(branches)}
+        cache.set("branches:public", payload, 120)
+        resp = Response(payload)
+        resp["Cache-Control"] = "public, max-age=120, stale-while-revalidate=30"
+        return resp
 
 
 class BranchOperatingHoursView(APIView):
@@ -599,6 +607,12 @@ class SiteConfigView(APIView):
         return []
 
     def get(self, request):
+        cached = cache.get("site:config")
+        if cached is not None:
+            resp = Response(cached)
+            resp["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
+            return resp
+
         from apps.branches.site_config import SiteConfig
         cfg = SiteConfig.get()
         login_image_url = None
@@ -616,7 +630,7 @@ class SiteConfigView(APIView):
             except Exception:
                 about_image_url = None
 
-        return Response({"success": True, "config": {
+        payload = {"success": True, "config": {
             "loyalty_enabled":        cfg.loyalty_enabled,
             "loyalty_earn_rate":      float(cfg.loyalty_earn_rate),
             "loyalty_redeem_rate":    float(cfg.loyalty_redeem_rate),
@@ -658,7 +672,11 @@ class SiteConfigView(APIView):
             # Footer
             "footer_show_map":        cfg.footer_show_map,
             "footer_map_query":       cfg.footer_map_query or "KNFC+Fried+Chicken",
-        }})
+        }}
+        cache.set("site:config", payload, 300)
+        resp = Response(payload)
+        resp["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
+        return resp
 
     def patch(self, request):
         from apps.branches.site_config import SiteConfig
@@ -689,6 +707,7 @@ class SiteConfigView(APIView):
             cfg.about_image.delete(save=False)
             cfg.about_image = None
         cfg.save()
+        cache.delete("site:config")
         return Response({"success": True, "message": "Settings saved."})
 
 

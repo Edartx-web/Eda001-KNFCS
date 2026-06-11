@@ -165,3 +165,23 @@ services:
       - key: NODE_VERSION
         value: "20.11.0"
 
+  # ── Keep-alive cron — prevents Render free-tier cold starts ──────────────────
+  # Pings both services every 14 minutes so they never spin down.
+  # Render free tier idles after 15 minutes of no traffic.
+- type: cron
+  name: knfc-keepalive
+  runtime: node
+  plan: free
+  region: singapore
+  schedule: "*/14 * * * *"
+  buildCommand: "echo ok"
+  startCommand: >
+    node -e "
+      const https = require('https');
+      const urls = [
+        'https://knfc-backend.onrender.com/health/',
+        'https://knfc-whatsapp.onrender.com/health'
+      ];
+      urls.forEach(url => https.get(url, r => console.log(url, r.statusCode)).on('error', e => console.error(url, e.message)));
+    "
+
