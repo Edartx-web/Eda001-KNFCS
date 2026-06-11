@@ -2129,15 +2129,17 @@ function SuperAdminStockTab({ branches }) {
 }
 
 function StockRefillPanel({ branches }) {
-  const [branchId,     setBranchId]     = useState(branches[0]?.id || "");
-  const [stock,        setStock]        = useState([]);
-  const [menuItems,    setMenuItems]    = useState([]);
-  const [alertCount,   setAlertCount]   = useState(0);
-  const [loading,      setLoading]      = useState(false);
-  const [topUpItem,    setTopUpItem]    = useState(null);
-  const [showOpening,  setShowOpening]  = useState(false);
-  const [search,       setSearch]       = useState("");
-  const [acknowledged, setAcknowledged] = useState(new Set());
+  const [branchId,       setBranchId]       = useState(branches[0]?.id || "");
+  const [stock,          setStock]          = useState([]);
+  const [menuItems,      setMenuItems]      = useState([]);
+  const [alertCount,     setAlertCount]     = useState(0);
+  const [loading,        setLoading]        = useState(false);
+  const [topUpItem,      setTopUpItem]      = useState(null);
+  const [showOpening,    setShowOpening]    = useState(false);
+  const [search,         setSearch]         = useState("");
+  const [acknowledged,   setAcknowledged]   = useState(new Set());
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetting,      setResetting]      = useState(false);
 
   useEffect(() => {
     if (!branchId && branches.length) setBranchId(branches[0].id);
@@ -2162,6 +2164,17 @@ function StockRefillPanel({ branches }) {
   }, [branchId]);
 
   useEffect(() => { setAcknowledged(new Set()); }, [branchId]);
+
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      await axiosClient.post("/stock/reset/", { branch_id: branchId, reason: "Reset by SuperAdmin" });
+      setShowResetModal(false);
+      await loadStock();
+    } catch (e) {
+      alert(e.response?.data?.error || "Reset failed.");
+    } finally { setResetting(false); }
+  };
 
   const filtered = search
     ? stock.filter(i => i.menu_item_name.toLowerCase().includes(search.toLowerCase()))
@@ -2196,6 +2209,13 @@ function StockRefillPanel({ branches }) {
           style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", borderRadius:"var(--radius-sm)", border:`1.5px solid ${showOpening?"var(--brand)":"var(--bd)"}`, background:showOpening?"var(--brand-tint)":"var(--bg2)", cursor:"pointer", fontSize:".875rem", fontWeight:700, color:showOpening?"var(--brand)":"var(--t2)", fontFamily:"var(--ff-b)", transition:"all 160ms" }}>
           <IcSun /> {showOpening ? "Close" : "Set Opening Stock"}
         </button>
+        {stock.length > 0 && (
+          <button onClick={() => setShowResetModal(true)}
+            style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", borderRadius:"var(--radius-sm)", border:"1.5px solid rgba(226,75,74,.25)", background:"rgba(226,75,74,.04)", cursor:"pointer", fontSize:".875rem", fontWeight:700, color:"var(--err)", fontFamily:"var(--ff-b)" }}>
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" strokeLinecap="round"/></svg>
+            Reset to Zero
+          </button>
+        )}
       </div>
 
       {/* Stats mini-row */}
@@ -2253,6 +2273,32 @@ function StockRefillPanel({ branches }) {
 
       {topUpItem && (
         <TopUpModal item={topUpItem} onClose={() => setTopUpItem(null)} onDone={loadStock} />
+      )}
+
+      {/* Reset to Zero confirm modal */}
+      {showResetModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}
+          onClick={e => { if (e.target === e.currentTarget) setShowResetModal(false); }}>
+          <div style={{ background:"var(--bgc)", borderRadius:"var(--radius)", padding:28, maxWidth:420, width:"100%", boxShadow:"var(--sh-lg)" }}>
+            <h3 style={{ fontFamily:"var(--ff-d)", fontSize:"1.125rem", fontWeight:900, margin:"0 0 8px", color:"var(--err)" }}>Reset all stock to zero?</h3>
+            <p style={{ fontSize:".875rem", color:"var(--t2)", margin:"0 0 20px", lineHeight:1.6 }}>
+              This will set <strong>all items</strong> in the selected branch to <strong>0 remaining stock</strong> and create an audit log entry for each.
+            </p>
+            <p style={{ fontSize:".8125rem", color:"var(--t3)", margin:"0 0 20px" }}>
+              Will reset: <strong style={{ color:"var(--t1)" }}>{stock.length}</strong> items · Branch: <strong style={{ color:"var(--t1)" }}>{branches.find(b => b.id === branchId)?.name || branchId}</strong>
+            </p>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => setShowResetModal(false)} disabled={resetting}
+                style={{ flex:1, padding:"11px 0", borderRadius:"var(--r3)", border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".9375rem", fontWeight:600, color:"var(--t2)" }}>
+                Cancel
+              </button>
+              <button onClick={handleReset} disabled={resetting}
+                style={{ flex:1, padding:"11px 0", borderRadius:"var(--r3)", border:"none", background:"var(--err)", cursor:"pointer", fontFamily:"var(--ff-b)", fontSize:".9375rem", fontWeight:700, color:"#fff", opacity:resetting?.5:1 }}>
+                {resetting ? "Resetting…" : "Reset all to zero"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
