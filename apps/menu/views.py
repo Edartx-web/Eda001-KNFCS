@@ -256,14 +256,14 @@ class MenuItemDetailView(APIView):
         qs = MenuItem.objects.filter(
             _Q(branch_id=branch_id) | _Q(all_branches=True),
             slug=slug,
-        ).select_related("category").prefetch_related("customisations", "offers", "stock_records", "images")
+        ).select_related("category").prefetch_related("customisations", "offers", "stock_records", "gallery_images")
         item = qs.filter(branch_id=branch_id).first() or qs.first()
 
         # Fallback: branch_id may be stale (e.g. after DB migration).
         # Try finding the item by slug across any branch so the page loads.
         if not item:
             item = MenuItem.objects.filter(slug=slug).select_related("category").prefetch_related(
-                "customisations", "offers", "stock_records", "images"
+                "customisations", "offers", "stock_records", "gallery_images"
             ).first()
 
         if not item:
