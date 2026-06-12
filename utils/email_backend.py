@@ -25,7 +25,9 @@ class _SMTP_IPv4(smtplib.SMTP):
             raise OSError(f"Cannot resolve {host!r} to an IPv4 address")
         af, socktype, proto, _canonname, sa = results[0]
         logger.debug("SMTP IPv4: %s -> %s:%s", host, *sa)
-        self.sock = self._get_socket(af, socktype, proto)
+        # Use socket.socket() directly — NOT self._get_socket() which expects
+        # (host, port, timeout) and would interpret af/socktype/proto incorrectly.
+        self.sock = socket.socket(af, socktype, proto)
         if self.timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
             self.sock.settimeout(self.timeout)
         self.sock.connect(sa)
