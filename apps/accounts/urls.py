@@ -41,6 +41,9 @@ urlpatterns = [
     path("admin/forgot-password/",    views.AdminForgotPasswordView.as_view(),   name="admin-forgot-password"),
     path("admin/reset-password/",     views.AdminResetPasswordView.as_view(),    name="admin-reset-password"),
 
+    # SuperAdmin tools
+    path("admin/test-email/",         views.TestEmailView.as_view(),             name="test-email"),
+
     # Public
     path("contact/",                  views.ContactView.as_view(),               name="contact"),
 
