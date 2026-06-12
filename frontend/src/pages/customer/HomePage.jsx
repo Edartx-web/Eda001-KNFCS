@@ -666,6 +666,8 @@ export default function HomePage() {
   }, [authLoading]);
 
   const [loading,      setLoading]      = useState(true);
+  const [fetchError,   setFetchError]   = useState(false);
+  const [retryTick,    setRetryTick]    = useState(0);
   const [offers,       setOffers]       = useState([]);
   const [categories,   setCategories]   = useState([]);
   const [featured,     setFeatured]     = useState([]);
@@ -681,11 +683,13 @@ export default function HomePage() {
     if (!branchId) return;
 
     // Session-cache helpers — keep non-user data for 90 s so back-navigation is instant
+    // retryTick is included so the "Retry" button forces a re-fetch
     const CACHE_TTL = 90_000;
     const sc_get = (k) => { try { const r=sessionStorage.getItem(k); if(!r) return null; const {ts,d}=JSON.parse(r); return Date.now()-ts<CACHE_TTL?d:null; } catch { return null; } };
     const sc_set = (k,d) => { try { sessionStorage.setItem(k, JSON.stringify({ts:Date.now(),d})); } catch {} };
 
     setLoading(true);
+    setFetchError(false);
     (async () => {
       try {
         const cacheKey = `hp:${branchId}`;
@@ -725,6 +729,8 @@ export default function HomePage() {
             setNextOpenAt(cached.hours.next_open_at || null);
           } else { setShopOpen(true); }
           if (cached.siteConfig) setSiteConfig(cached.siteConfig);
+        } else {
+          setFetchError(true);
         }
 
         if (user) setFavourites(favR.data.favourites || []);
@@ -732,7 +738,7 @@ export default function HomePage() {
         try { const s=localStorage.getItem("active_order"); if(s){const parsed=JSON.parse(s); if(!parsed._uid||parsed._uid===user?.id) setActiveOrder(parsed);} } catch {}
       } finally { setLoading(false); }
     })();
-  }, [user, branchId]);
+  }, [user, branchId, retryTick]);
 
   useEffect(() => {
     if (loading||!pageRef.current) return;
@@ -767,6 +773,23 @@ export default function HomePage() {
   );
 
   if (loading) return <HomeSkeleton/>;
+
+  if (fetchError && categories.length === 0) return (
+    <AppLayout>
+      <div style={{ textAlign:"center", padding:"var(--s16) var(--s4)", maxWidth:400, margin:"0 auto" }}>
+        <div style={{ fontSize:"2.5rem", marginBottom:"var(--s4)" }}>🍗</div>
+        <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1.5rem", fontWeight:900, marginBottom:"var(--s3)" }}>
+          Menu couldn't load
+        </h2>
+        <p style={{ fontSize:".9375rem", color:"var(--t2)", marginBottom:"var(--s6)", lineHeight:1.6 }}>
+          We couldn't reach the server. Please check your connection and try again.
+        </p>
+        <button onClick={() => setRetryTick(t => t + 1)} className="btn btn-p btn-lg">
+          Retry
+        </button>
+      </div>
+    </AppLayout>
+  );
 
   const userPoints = user?.loyalty_points||0;
   const hour = new Date().getHours();

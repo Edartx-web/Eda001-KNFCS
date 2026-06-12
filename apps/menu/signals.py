@@ -19,7 +19,10 @@ def _bust(branch_id):
         cache.delete_pattern(f"menu:item_detail:{branch_id}:*")
         cache.delete_pattern(f"admin:menu:items:{branch_id}:*")
     except Exception:
-        pass
+        for sort in ("popular", "price_asc", "price_desc", "new"):
+            cache.delete(f"menu:items:{branch_id}::{sort}:true:")
+            cache.delete(f"menu:items:{branch_id}::{sort}:true:false")
+            cache.delete(f"admin:menu:items:{branch_id}::{sort}")
 
 
 @receiver([post_save, post_delete], sender=MenuItem)
