@@ -1192,6 +1192,41 @@ class AdminResetPasswordView(APIView):
         return ok(message="Password reset successful. Please log in with your new password.")
 
 
+class TestEmailView(APIView):
+    """
+    POST /api/v1/auth/admin/test-email/
+    { "to": "recipient@example.com" }
+    SuperAdmin only — sends a test email and reports success/failure with the
+    exact error so email config issues can be diagnosed without a staff login.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.accounts.models import Role
+        if request.user.role != Role.SUPER_ADMIN:
+            return err("SuperAdmin only.", 403)
+
+        to = (request.data.get("to") or "").strip()
+        if not to or "@" not in to:
+            return err("Provide a valid 'to' email address.")
+
+        from django.core.mail import send_mail
+        from django.conf import settings
+        try:
+            send_mail(
+                subject    = "KNFC Email Config Test",
+                message    = "This is a test email from KNFC admin. If you received this, email delivery is working correctly.",
+                from_email = getattr(settings, "DEFAULT_FROM_EMAIL", ""),
+                recipient_list = [to],
+                fail_silently  = False,
+            )
+            logger.info("Test email sent → %s by admin=%s", to, request.user.id)
+            return ok({"to": to}, f"Test email sent to {to}. Check inbox (and spam folder).")
+        except Exception as e:
+            logger.error("Test email failed → %s : %s", to, e)
+            return err(f"Email failed: {e}", 500)
+
+
 class ContactView(APIView):
     """
     POST /api/v1/auth/contact/

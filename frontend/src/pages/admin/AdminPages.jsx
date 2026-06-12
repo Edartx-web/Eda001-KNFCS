@@ -1022,6 +1022,48 @@ function ShopHoursPanel({ hours, isOpen, loading, branchId, onUpdated }) {
   );
 }
 
+/* ─── Test Email Panel (SuperAdmin only) ─────────────────────────────── */
+function TestEmailPanel() {
+  const [to, setTo]         = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult]   = useState(null); // { ok, msg }
+
+  const send = async () => {
+    if (!to || !to.includes("@")) return;
+    setSending(true); setResult(null);
+    try {
+      const r = await axiosClient.post("/auth/admin/test-email/", { to });
+      setResult({ ok: true, msg: r.data.message || "Sent!" });
+    } catch (e) {
+      setResult({ ok: false, msg: e?.response?.data?.error || "Send failed — check Render logs." });
+    } finally { setSending(false); }
+  };
+
+  return (
+    <div className="adm-card" style={{ marginTop: 24 }}>
+      <div className="adm-card-hdr"><div className="adm-card-title">Test Email Delivery</div></div>
+      <p style={{ fontSize: ".875rem", color: "var(--t3)", marginBottom: 12 }}>
+        Send a test email to verify SMTP / Gmail App Password is working correctly.
+      </p>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          type="email" value={to} onChange={e => setTo(e.target.value)}
+          placeholder="recipient@gmail.com"
+          style={{ flex: 1, padding: "8px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--bd)", background: "var(--bg2)", color: "var(--t1)", fontSize: ".875rem" }}
+        />
+        <button onClick={send} disabled={sending || !to} className="adm-btn adm-btn-primary adm-btn-sm">
+          {sending ? "Sending…" : "Send Test"}
+        </button>
+      </div>
+      {result && (
+        <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: "var(--radius-sm)", background: result.ok ? "rgba(29,158,117,.1)" : "rgba(220,38,38,.1)", color: result.ok ? "var(--ok)" : "var(--err)", fontSize: ".875rem", wordBreak: "break-all" }}>
+          {result.ok ? "✓ " : "✗ "}{result.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── QR Panel ───────────────────────────────────────────────────────── */
 function BranchQRPanel({ branchId, branchName }) {
   const [qrUrl, setQrUrl] = useState(null);
@@ -3440,6 +3482,9 @@ function SuperAdminSettingsTab() {
         {saveErr  && <span style={{ color:"var(--err)", fontWeight:600, fontSize:".875rem" }}>{saveErr}</span>}
         {!saveErr && !saved && <span style={{ fontSize:".8125rem", color:"var(--t4)" }}>Changes apply immediately to all users.</span>}
       </div>
+
+      {/* Email config test */}
+      <TestEmailPanel />
     </div>
     </SettingsCtx.Provider>
   );
