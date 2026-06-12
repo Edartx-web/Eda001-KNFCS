@@ -123,7 +123,6 @@ function RouteBar({ active }) {
       timerRef.current = setTimeout(() => setPhase(0), 500);
     }
     return () => clearTimeout(timerRef.current);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   if (phase === 0) return null;
@@ -227,7 +226,6 @@ function BranchGate({ children }) {
   const qrHandledRef = useRef(false);
 
   // Auto-select branch when arriving via QR code (?branch_id=<uuid>)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (qrHandledRef.current) return;
     const urlBranchId = searchParams.get("branch_id");
