@@ -1223,7 +1223,7 @@ class TestEmailView(APIView):
         try:
             send_mail(
                 subject        = "KNFC Email Config Test",
-                message        = "If you received this, SMTP delivery is working correctly.",
+                message        = "If you received this, Resend email delivery is working correctly.",
                 from_email     = cfg["FROM"],
                 recipient_list = [to],
                 fail_silently  = False,

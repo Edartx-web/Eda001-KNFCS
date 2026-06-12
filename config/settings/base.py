@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 
     # Third-party
+    "anymail",
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
@@ -175,7 +176,10 @@ EMAIL_BACKEND      = config("EMAIL_BACKEND", default="anymail.backends.resend.Em
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="KNFC <noreply@knfcs.com>")
 
 ANYMAIL = {
-    "RESEND_API_KEY": config("RESEND_API_KEY", default=""),
+    "RESEND_API_KEY":         config("RESEND_API_KEY", default=""),
+    "RESEND_API_URL":         "https://api.resend.com/",
+    "SEND_DEFAULTS":          {},
+    "IGNORE_UNSUPPORTED_FEATURES": True,
 }
 
 # Legacy SMTP vars — kept so existing env vars on Render don't error on boot.
