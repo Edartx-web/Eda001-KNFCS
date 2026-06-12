@@ -15,9 +15,7 @@ import AppLayout                       from "../../components/layout/AppLayout";
 import { useAuth }                     from "../../context/AuthContext";
 import useBranch                       from "../../hooks/useBranch";
 import useCartStore                    from "../../store/cartStore";
-import axiosClient                      from "../../api/axiosClient";
-import { getOffers }                   from "../../api/orders";
-import { getCategories, getFeatured, getFavourites, getHomeSections } from "../../api/menu";
+import { getHomeBundle, getFavourites } from "../../api/menu";
 import GoogleReviewBanner from "../../components/common/GoogleReviewBanner";
 import BranchSelector     from "../../components/common/BranchSelector";
 import { formatPrice, formatUnit, fixMediaUrl } from "../../utils/format";
@@ -693,37 +691,43 @@ export default function HomePage() {
         const cacheKey = `hp:${branchId}`;
         const cached   = sc_get(cacheKey);
 
-        // Fire ALL 7 requests in parallel — no sequential awaits
-        const [oR, cR, fR, secR, hoursR, cfgR, favR] = await Promise.all([
-          cached ? Promise.resolve({data:{offers:cached.offers}})   : getOffers().catch(()=>({data:{offers:[]}})),
-          cached ? Promise.resolve({data:{categories:cached.cats}}) : getCategories().catch(()=>({data:{categories:[]}})),
-          cached ? Promise.resolve({data:{featured:cached.feat,order_again:cached.oa}}) : getFeatured().catch(()=>({data:{featured:[],order_again:[]}})),
-          cached ? Promise.resolve({data:{sections:cached.sec}})    : getHomeSections().catch(()=>({data:{sections:{}}})),
-          axiosClient.get(`/branches/${branchId}/hours/`).catch(()=>null),
-          axiosClient.get("/branches/config/").catch(()=>null),
-          user ? getFavourites().catch(()=>({data:{favourites:[]}})) : Promise.resolve({data:{favourites:[]}}),
+        // 2 requests max (1 for guests) instead of 7 — bundle returns all public data
+        const [bundleR, favR] = await Promise.all([
+          cached
+            ? Promise.resolve(null)
+            : getHomeBundle().catch(() => null),
+          user
+            ? getFavourites().catch(() => ({data:{favourites:[]}}))
+            : Promise.resolve({data:{favourites:[]}}),
         ]);
 
-        const offers = oR.data.offers||[];
-        const cats   = cR.data.categories||[];
-        const feat   = fR.data.featured||[];
-        const oa     = fR.data.order_again||[];
-        const sec    = secR.data.sections||{};
+        if (bundleR?.data) {
+          const b      = bundleR.data;
+          const offers = b.offers      || [];
+          const cats   = b.categories  || [];
+          const feat   = b.featured    || [];
+          const oa     = b.order_again || [];
+          const sec    = b.sections    || {};
+          setOffers(offers); setCategories(cats); setFeatured(feat);
+          setOrderAgain(oa); setSectionItems(sec);
+          if (b.hours?.is_open_now !== undefined) {
+            setShopOpen(b.hours.is_open_now ?? true);
+            setNextOpenAt(b.hours.next_open_at || null);
+          } else { setShopOpen(true); }
+          if (b.site_config) setSiteConfig(b.site_config);
+          sc_set(cacheKey, { offers, cats, feat, oa, sec, hours: b.hours, siteConfig: b.site_config });
+        } else if (cached) {
+          setOffers(cached.offers || []); setCategories(cached.cats || []);
+          setFeatured(cached.feat || []); setOrderAgain(cached.oa || []);
+          setSectionItems(cached.sec || {});
+          if (cached.hours?.is_open_now !== undefined) {
+            setShopOpen(cached.hours.is_open_now ?? true);
+            setNextOpenAt(cached.hours.next_open_at || null);
+          } else { setShopOpen(true); }
+          if (cached.siteConfig) setSiteConfig(cached.siteConfig);
+        }
 
-        setOffers(offers);
-        setCategories(cats);
-        setFeatured(feat);
-        setOrderAgain(oa);
-        setSectionItems(sec);
-        if (!cached) sc_set(cacheKey, {offers,cats,feat,oa,sec});
-
-        if (hoursR?.data?.success) {
-          setShopOpen(hoursR.data.is_open_now??true);
-          setNextOpenAt(hoursR.data.next_open_at||null);
-        } else { setShopOpen(true); }
-
-        if (cfgR?.data) setSiteConfig(cfgR.data);
-        if (user) setFavourites(favR.data.favourites||[]);
+        if (user) setFavourites(favR.data.favourites || []);
 
         try { const s=localStorage.getItem("active_order"); if(s){const parsed=JSON.parse(s); if(!parsed._uid||parsed._uid===user?.id) setActiveOrder(parsed);} } catch {}
       } finally { setLoading(false); }

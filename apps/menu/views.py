@@ -46,18 +46,19 @@ def cached_ok(data, cache_key, ttl=60):
 
 def _bust_menu_cache(branch_id):
     """Clear all menu caches for a branch after admin creates/updates/deletes items."""
-    patterns = [
-        f"menu:items:{branch_id}:",
-        f"menu:categories:{branch_id}",
-        f"menu:home_sections:{branch_id}",
-        f"menu:featured:{branch_id}",
-    ]
-    for p in patterns:
-        cache.delete(p)
-    # Also bust wildcard item cache keys (different sort/category combos)
-    for sort in ("popular", "price_asc", "price_desc", "new"):
-        cache.delete(f"menu:items:{branch_id}::{sort}:true:")
-        cache.delete(f"menu:items:{branch_id}::{sort}:true:false")
+    cache.delete(f"menu:categories:{branch_id}")
+    cache.delete(f"menu:home_sections:{branch_id}")
+    cache.delete(f"menu:featured:{branch_id}")
+    cache.delete(f"menu:home_bundle:{branch_id}")
+    try:
+        cache.delete_pattern(f"menu:items:{branch_id}:*")
+        cache.delete_pattern(f"menu:cat_detail:{branch_id}:*")
+        cache.delete_pattern(f"menu:item_detail:{branch_id}:*")
+        cache.delete_pattern(f"admin:menu:items:{branch_id}:*")
+    except Exception:
+        for sort in ("popular", "price_asc", "price_desc", "new"):
+            cache.delete(f"menu:items:{branch_id}::{sort}:true:")
+            cache.delete(f"menu:items:{branch_id}::{sort}:true:false")
 
 
 def _bust_all_branch_caches():
@@ -98,6 +99,12 @@ class CategoryDetailView(APIView):
 
     def get(self, request, slug):
         branch_id = request.query_params.get("branch_id") or get_request_branch_id(request)
+
+        cache_key = f"menu:cat_detail:{branch_id}:{slug}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached_ok({"category": cached}, cache_key, ttl=120)
+
         from django.db.models import Q as _Q
         try:
             category = MenuCategory.objects.get(
@@ -108,8 +115,9 @@ class CategoryDetailView(APIView):
         except MenuCategory.DoesNotExist:
             return err("Category not found.", status.HTTP_404_NOT_FOUND)
 
-        serializer = MenuCategoryDetailSerializer(category, context={"request": request})
-        return ok({"category": serializer.data})
+        data = MenuCategoryDetailSerializer(category, context={"request": request}).data
+        cache.set(cache_key, data, 120)
+        return cached_ok({"category": data}, cache_key, ttl=120)
 
 
 class MenuItemListView(APIView):
@@ -238,18 +246,24 @@ class MenuItemDetailView(APIView):
 
     def get(self, request, slug):
         branch_id = request.query_params.get("branch_id") or get_request_branch_id(request)
+
+        cache_key = f"menu:item_detail:{branch_id}:{slug}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached_ok({"item": cached}, cache_key, ttl=90)
+
         from django.db.models import Q as _Q
-        # Prefer branch-specific item; fall back to all_branches copy
         qs = MenuItem.objects.filter(
             _Q(branch_id=branch_id) | _Q(all_branches=True),
             slug=slug,
-        )
+        ).select_related("category").prefetch_related("customisations", "offers", "stock_records", "images")
         item = qs.filter(branch_id=branch_id).first() or qs.first()
         if not item:
             return err("Item not found.", status.HTTP_404_NOT_FOUND)
 
-        serializer = MenuItemDetailSerializer(item, context={"request": request})
-        return ok({"item": serializer.data})
+        data = MenuItemDetailSerializer(item, context={"request": request}).data
+        cache.set(cache_key, data, 90)
+        return cached_ok({"item": data}, cache_key, ttl=90)
 
 
 class FeaturedItemsView(APIView):
@@ -410,6 +424,117 @@ class SubmitReviewView(APIView):
             {"message": "Review submitted. Thank you!", "created": created},
             code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class HomeBundleView(APIView):
+    """
+    GET /api/v1/menu/home-bundle/?branch_id=xxx
+    Returns all home-page data in a single request. On a warm Redis cache
+    this is just 6 Redis GETs + 1 HTTP response instead of 6 separate round trips.
+    """
+    permission_classes = [AllowAny]
+    _SECTION_FLAGS = ["is_hotdeals", "is_buckets", "is_combo", "is_chicken", "is_snacks", "is_cold_drinks"]
+
+    def _offers(self, request, branch_id):
+        key = f"offers:active:{branch_id}"
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        from apps.offers.models import DailyOffer
+        from apps.offers.serializers import DailyOfferSerializer
+        from django.utils import timezone as _tz
+        now = _tz.now()
+        qs = list(DailyOffer.objects.filter(
+            branch_id=branch_id, is_active=True,
+        ).filter(
+            Q(end_at__isnull=True) | Q(end_at__gt=now)
+        ).filter(start_at__lte=now).order_by("display_order", "-created_at")[:10])
+        data = DailyOfferSerializer(qs, many=True, context={"request": request}).data
+        cache.set(key, data, 60)
+        return data
+
+    def _categories(self, request, branch_id):
+        key = f"menu:categories:{branch_id}"
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        cats = MenuCategory.objects.filter(
+            Q(branch_id=branch_id) | Q(all_branches=True), is_active=True,
+        ).prefetch_related("items")
+        data = MenuCategoryListSerializer(cats, many=True, context={"request": request}).data
+        cache.set(key, data, 120)
+        return data
+
+    def _featured(self, request, branch_id):
+        key = f"menu:featured:{branch_id}"
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        featured = list(MenuItem.objects.filter(
+            Q(branch_id=branch_id) | Q(all_branches=True),
+            is_featured=True, is_available=True,
+        ).select_related("category").prefetch_related("offers", "stock_records")
+         .order_by("display_order")[:8])
+        data = MenuItemListSerializer(featured, many=True, context={"request": request}).data
+        cache.set(key, data, 90)
+        return data
+
+    def _sections(self, request, branch_id):
+        key = f"menu:home_sections:{branch_id}"
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        base_qs = MenuItem.objects.filter(
+            Q(branch_id=branch_id) | Q(all_branches=True), is_available=True,
+        ).select_related("category").prefetch_related("offers", "stock_records")
+        branch_item_names = list(
+            MenuItem.objects.filter(branch_id=branch_id, all_branches=False)
+            .values_list("name", flat=True)
+        )
+        if branch_item_names:
+            base_qs = base_qs.exclude(all_branches=True, name__in=branch_item_names)
+        sections = {}
+        for flag in self._SECTION_FLAGS:
+            items = list(base_qs.filter(**{flag: True}).order_by("display_order")[:10])
+            if items:
+                sections[flag] = MenuItemListSerializer(items, many=True, context={"request": request}).data
+        cache.set(key, sections, 60)
+        return sections
+
+    def _order_again(self, request, branch_id):
+        from apps.orders.models import Order, OrderStatus
+        last_orders = Order.objects.filter(
+            branch_id=branch_id, customer=request.user,
+            status=OrderStatus.COMPLETED,
+        ).prefetch_related(
+            "items__menu_item__category",
+            "items__menu_item__offers",
+            "items__menu_item__stock_records",
+        ).order_by("-created_at")[:3]
+        seen, items = set(), []
+        for order in last_orders:
+            for oi in order.items.all():
+                mi = oi.menu_item
+                if mi.id not in seen and mi.is_available:
+                    items.append(mi); seen.add(mi.id)
+                    if len(items) >= 6:
+                        break
+        return MenuItemListSerializer(items, many=True, context={"request": request}).data
+
+    def get(self, request):
+        branch_id = request.query_params.get("branch_id") or get_request_branch_id(request)
+        if not branch_id:
+            return err("branch_id is required.")
+
+        return cached_ok({
+            "offers":      self._offers(request, branch_id),
+            "categories":  self._categories(request, branch_id),
+            "featured":    self._featured(request, branch_id),
+            "order_again": self._order_again(request, branch_id) if request.user.is_authenticated else [],
+            "sections":    self._sections(request, branch_id),
+            "hours":       cache.get(f"branches:hours:{branch_id}") or {},
+            "site_config": cache.get("site:config") or {},
+        }, f"menu:home_bundle:{branch_id}", ttl=55)
 
 
 class FavouriteToggleView(APIView):
@@ -593,28 +718,29 @@ class AdminMenuItemListCreateView(APIView):
         from django.db.models import Q
         branch_id = get_request_branch_id(request)
 
+        cat   = request.query_params.get("category", "")
+        avail = request.query_params.get("available", "")
+        cache_key = f"admin:menu:items:{branch_id}:{cat}:{avail}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return ok({"items": cached, "total": len(cached)})
+
         qs = MenuItem.objects.filter(
             Q(branch_id=branch_id) | Q(all_branches=True)
         ).select_related("category").prefetch_related(
             "customisations", "offers", "stock_records"
         ).order_by("category__display_order", "display_order", "name").distinct()
 
-        # Optional filters
-        cat = request.query_params.get("category")
         if cat:
             qs = qs.filter(category__slug=cat)
-
-        avail = request.query_params.get("available")
         if avail == "true":
             qs = qs.filter(is_available=True)
         elif avail == "false":
             qs = qs.filter(is_available=False)
 
         items_data = MenuItemListSerializer(qs, many=True, context={"request": request}).data
-        return ok({
-            "items": items_data,
-            "total": len(items_data),
-        })
+        cache.set(cache_key, items_data, 30)
+        return ok({"items": items_data, "total": len(items_data)})
 
     def post(self, request):
         from apps.accounts.permissions import get_request_branch_id
