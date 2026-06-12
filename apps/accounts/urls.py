@@ -32,6 +32,7 @@ urlpatterns = [
     path("logout/",                   views.LogoutView.as_view(),              name="logout"),
     path("admin/staff-list/",         views.StaffListView.as_view(),           name="staff-list"),
     path("admin/staff-list/<uuid:pk>/", views.StaffDetailView.as_view(),       name="staff-detail"),
+    path("admin/staff-list/<uuid:pk>/force-verify/", views.ForceVerifyStaffView.as_view(), name="staff-force-verify"),
     path("sessions/",                 views.StaffSessionListView.as_view(),      name="staff-sessions"),
     path("ping/",                     views.StaffPingView.as_view(),             name="staff-ping"),
     path("admin/users/",              views.SuperAdminUserListView.as_view(),    name="superadmin-users"),

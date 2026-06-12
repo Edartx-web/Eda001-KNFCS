@@ -865,6 +865,35 @@ class StaffDetailView(APIView):
         return Response({"success": True, "message": f"{name}'s account has been deactivated."})
 
 
+class ForceVerifyStaffView(APIView):
+    """
+    POST /api/v1/auth/admin/staff-list/<pk>/force-verify/
+    Manually marks a staff account as verified so they can log in
+    without completing the email OTP flow (fallback when email is broken).
+    BranchAdmin: own branch staff only. SuperAdmin: any staff.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrAbove]
+
+    def post(self, request, pk):
+        from apps.accounts.models import Role
+        try:
+            staff = User.objects.get(id=pk, role=Role.STAFF)
+        except (User.DoesNotExist, ValueError):
+            return err("Staff not found.", 404)
+
+        if request.user.role == Role.BRANCH_ADMIN:
+            if str(staff.branch_id) != str(request.user.branch_id):
+                return err("Staff not found.", 404)
+
+        if staff.is_verified:
+            return ok({"name": staff.name}, "Staff account is already verified.")
+
+        staff.is_verified = True
+        staff.save(update_fields=["is_verified"])
+        logger.info("Staff force-verified by admin=%s → staff=%s", request.user.id, staff.id)
+        return ok({"name": staff.name}, f"{staff.name}'s account has been verified. They can now log in.")
+
+
 class LogoutView(APIView):
     """
     POST /api/v1/auth/logout/

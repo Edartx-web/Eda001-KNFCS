@@ -712,6 +712,17 @@ function StaffManager({ branchId, branches = [], isSuperAdmin }) {
     finally { setToggling(t => ({ ...t, [key]: false })); }
   };
 
+  const handleForceVerify = async (member) => {
+    const key = `${member.id}_force_verify`;
+    setToggling(t => ({ ...t, [key]: true }));
+    try {
+      await axiosClient.post(`/auth/admin/staff-list/${member.id}/force-verify/`);
+      showToast(`${member.name} verified — they can now log in.`);
+      load();
+    } catch { showToast("Verify failed. Please try again."); }
+    finally { setToggling(t => ({ ...t, [key]: false })); }
+  };
+
   const handleDeactivate = async () => {
     if (!confirm) return;
     try {
@@ -845,7 +856,17 @@ function StaffManager({ branchId, branches = [], isSuperAdmin }) {
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
+                {s.is_active && !s.is_verified && (
+                  <button
+                    onClick={() => handleForceVerify(s)}
+                    disabled={toggling[`${s.id}_force_verify`]}
+                    className="adm-btn adm-btn-sm adm-btn-primary"
+                    style={{ fontSize: ".6875rem", padding: "4px 10px", background: "#b45309", borderColor: "#b45309" }}
+                    title="Manually verify this staff account so they can log in without email OTP">
+                    {toggling[`${s.id}_force_verify`] ? "…" : "✓ Verify"}
+                  </button>
+                )}
                 {s.is_active ? (
                   <button
                     onClick={() => setConfirm(s)}
