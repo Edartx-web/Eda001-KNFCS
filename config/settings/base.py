@@ -166,30 +166,29 @@ WHATSAPP_SERVICE_URL  = config("WHATSAPP_SERVICE_URL",  default="http://127.0.0.
 WHATSAPP_INTERNAL_KEY = config("WHATSAPP_INTERNAL_KEY", default="knfc-wa-internal-key")
 
 # ── Email ─────────────────────────────────────────────────────────────────────
-# Primary SMTP — used for Staff OTP, BranchAdmin OTP, Password Reset
-# Port 465/SSL is more reliable than 587/TLS from cloud servers (Render).
-EMAIL_BACKEND       = "django.core.mail.backends.smtp.EmailBackend"
+# Render (and most cloud hosts) block outbound SMTP ports 465/587 at the
+# network level.  We use Resend's HTTP API (port 443) via django-anymail.
+# Sign up at resend.com → create API key → set RESEND_API_KEY env var.
+# Verify your sending domain (knfcs.com) in the Resend dashboard, then set
+# DEFAULT_FROM_EMAIL to e.g. "KNFC <noreply@knfcs.com>".
+EMAIL_BACKEND      = config("EMAIL_BACKEND", default="anymail.backends.resend.EmailBackend")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="KNFC <noreply@knfcs.com>")
+
+ANYMAIL = {
+    "RESEND_API_KEY": config("RESEND_API_KEY", default=""),
+}
+
+# Legacy SMTP vars — kept so existing env vars on Render don't error on boot.
+# Remove after Resend is confirmed working.
 EMAIL_HOST          = config("EMAIL_HOST",          default="smtp.gmail.com")
-EMAIL_PORT          = config("EMAIL_PORT",          default=465,  cast=int)
+EMAIL_PORT          = config("EMAIL_PORT",          default=465, cast=int)
 EMAIL_USE_TLS       = config("EMAIL_USE_TLS",       default=False, cast=bool)
 EMAIL_USE_SSL       = config("EMAIL_USE_SSL",       default=True,  cast=bool)
-EMAIL_TIMEOUT       = config("EMAIL_TIMEOUT",       default=15,   cast=int)
 EMAIL_HOST_USER     = config("EMAIL_HOST_USER",     default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-# DEFAULT_FROM_EMAIL must match EMAIL_HOST_USER for Gmail SMTP.
-DEFAULT_FROM_EMAIL = config(
-    "DEFAULT_FROM_EMAIL",
-    default=config("EMAIL_HOST_USER", default="noreply@knfc.com"),
-)
 
-# Secondary SMTP — Customer Support replies (CustomerSupportKNFC@gmail.com)
-# Used by: apps/support/ when replying to customer tickets.
-SUPPORT_EMAIL_HOST     = config("SUPPORT_EMAIL_HOST",     default=config("EMAIL_HOST",     default="smtp.gmail.com"))
-SUPPORT_EMAIL_PORT     = config("SUPPORT_EMAIL_PORT",     default=config("EMAIL_PORT",     default="587"), cast=int)
-SUPPORT_EMAIL_USE_TLS  = config("SUPPORT_EMAIL_USE_TLS",  default=True, cast=bool)
-SUPPORT_EMAIL_USER     = config("SUPPORT_EMAIL_USER",     default=config("EMAIL_HOST_USER", default=""))
-SUPPORT_EMAIL_PASSWORD = config("SUPPORT_EMAIL_PASSWORD", default=config("EMAIL_HOST_PASSWORD", default=""))
-SUPPORT_FROM_EMAIL     = config("SUPPORT_FROM_EMAIL",     default=config("SUPPORT_EMAIL_USER", default="support@knfc.com"))
+# Support email — also migrated to Resend; uses same backend.
+SUPPORT_FROM_EMAIL = config("SUPPORT_FROM_EMAIL", default="KNFC Support <support@knfcs.com>")
 
 # ── Redis / Celery / Channels ─────────────────────────────────────────────────
 REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/0")

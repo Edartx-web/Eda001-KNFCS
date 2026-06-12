@@ -1212,15 +1212,11 @@ class TestEmailView(APIView):
         if not to or "@" not in to:
             return err("Provide a valid 'to' email address.")
 
+        anymail = getattr(settings, "ANYMAIL", {})
         cfg = {
-            "BACKEND":  getattr(settings, "EMAIL_BACKEND",       "—"),
-            "HOST":     getattr(settings, "EMAIL_HOST",           "—"),
-            "PORT":     getattr(settings, "EMAIL_PORT",           "—"),
-            "TLS":      getattr(settings, "EMAIL_USE_TLS",        "—"),
-            "SSL":      getattr(settings, "EMAIL_USE_SSL",        "—"),
-            "USER":     getattr(settings, "EMAIL_HOST_USER",      "—"),
-            "FROM":     getattr(settings, "DEFAULT_FROM_EMAIL",   "—"),
-            "PASS_SET": bool(getattr(settings, "EMAIL_HOST_PASSWORD", "")),
+            "BACKEND":      getattr(settings, "EMAIL_BACKEND",     "—"),
+            "FROM":         getattr(settings, "DEFAULT_FROM_EMAIL", "—"),
+            "RESEND_KEY":   "set" if anymail.get("RESEND_API_KEY") else "MISSING",
         }
 
         from django.core.mail import send_mail

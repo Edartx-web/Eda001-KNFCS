@@ -1,10 +1,12 @@
 """
-utils/email_backend.py — thin diagnostic wrapper around Django's standard SMTP backend.
+utils/email_backend.py
 
-Previous versions tried to force IPv4 via connect()/socket overrides. All of those
-approaches broke in various ways. The standard Django EmailBackend is used directly;
-if IPv6 causes ENETUNREACH on a particular Render instance, set EMAIL_HOST to the
-numeric IPv4 address of smtp.gmail.com instead of the hostname.
+The primary email backend is now anymail.backends.resend.EmailBackend (HTTP API,
+port 443 — works on Render free tier where SMTP ports 465/587 are blocked).
+
+This file is kept only because some Render env vars still set
+EMAIL_BACKEND=utils.email_backend.IPv4EmailBackend.  It delegates entirely to
+Django's standard SMTP backend, but that path is no longer used in production.
 """
 import logging
 from django.core.mail.backends.smtp import EmailBackend as _Base
@@ -13,8 +15,5 @@ logger = logging.getLogger(__name__)
 
 
 class IPv4EmailBackend(_Base):
-    """
-    Drop-in alias kept so settings don't need changing.
-    Delegates entirely to Django's standard SMTP EmailBackend.
-    """
+    """Legacy alias — production uses anymail.backends.resend.EmailBackend."""
     pass
