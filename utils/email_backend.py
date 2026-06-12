@@ -1,19 +1,14 @@
 """
 utils/email_backend.py
 
-The primary email backend is now anymail.backends.resend.EmailBackend (HTTP API,
-port 443 — works on Render free tier where SMTP ports 465/587 are blocked).
-
-This file is kept only because some Render env vars still set
-EMAIL_BACKEND=utils.email_backend.IPv4EmailBackend.  It delegates entirely to
-Django's standard SMTP backend, but that path is no longer used in production.
+IPv4EmailBackend is kept as a named alias because the Render env var
+EMAIL_BACKEND=utils.email_backend.IPv4EmailBackend was set when the project
+used SMTP.  It now delegates to anymail's Resend backend (HTTP API, port 443)
+so the old env var still works without a Render config change.
 """
-import logging
-from django.core.mail.backends.smtp import EmailBackend as _Base
-
-logger = logging.getLogger(__name__)
+from anymail.backends.resend import EmailBackend as _Base
 
 
 class IPv4EmailBackend(_Base):
-    """Legacy alias — production uses anymail.backends.resend.EmailBackend."""
+    """Legacy name — delegates to anymail Resend HTTP backend."""
     pass
