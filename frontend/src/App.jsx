@@ -123,7 +123,6 @@ function RouteBar({ active }) {
       timerRef.current = setTimeout(() => setPhase(0), 500);
     }
     return () => clearTimeout(timerRef.current);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   if (phase === 0) return null;
@@ -246,7 +245,6 @@ function BranchGate({ children }) {
       if (cached.length) { applyBranch(cached); cleanUrl(); return; }
     } catch {}
 
-    // Cache empty — fetch, apply, then clean URL
     getPublicBranches()
       .then(res => {
         const list = res.data.branches || [];
@@ -255,7 +253,7 @@ function BranchGate({ children }) {
       })
       .catch(() => {})
       .finally(cleanUrl);
-  }, []);
+  }, []); // intentional empty deps — runs once on mount to handle QR branch_id param
 
   const handleSelected = useCallback((branch) => {
     selectBranch(branch);
