@@ -287,9 +287,10 @@ export default function ProductDetailPage() {
     <AppLayout>
       <style>{`
         @keyframes swipe-hint-fade{0%{opacity:0;transform:translateY(8px)}15%{opacity:1;transform:translateY(0)}85%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(8px)}}
+        @keyframes pdp-fade-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
       <div
-        style={{ maxWidth:"1000px", margin:"0 auto", position:"relative" }}
+        style={{ maxWidth:"1000px", margin:"0 auto", position:"relative", animation:"pdp-fade-in 0.35s ease both" }}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
