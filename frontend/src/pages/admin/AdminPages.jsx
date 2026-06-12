@@ -3503,7 +3503,7 @@ function SuperAdminExportTab({ branches }) {
 
 /* ─── Branch QR Modal ─────────────────────────────────────────────────── */
 function BranchQRModal({ branch, onClose }) {
-  const siteUrl = (localStorage.getItem("site_url") || window.location.origin) + `/?branch_id=${branch.id}`;
+  const siteUrl = (localStorage.getItem("site_url") || window.location.origin) + `/menu?branch_id=${branch.id}`;
   const qrUrl   = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(siteUrl)}&color=1A0500&bgcolor=FFFFFF&margin=2`;
 
   const download = () => {

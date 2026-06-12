@@ -10,7 +10,7 @@
  */
 
 import React, { Suspense, lazy, useState, useEffect, useRef, useCallback, Component } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import useBranch             from "./hooks/useBranch";
 import BranchSelector        from "./components/common/BranchSelector";
@@ -20,6 +20,7 @@ import AppLayout             from "./components/layout/AppLayout";
 import { CookieBanner, OfferPopup }  from "./components/common/CookieBanner";
 import NearestBranchBanner           from "./components/common/NearestBranchBanner";
 import { NotificationProvider } from "./components/common/NotificationSystem";
+import { getPublicBranches }   from "./api/auth";
 import "./styles/global.css";
 
 /* ── Auth pages — eager ──────────────────────────────────────────────── */
@@ -160,6 +161,15 @@ function RouteBar({ active }) {
   );
 }
 
+/* ── Scroll to top on every route change ────────────────────────────── */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [pathname]);
+  return null;
+}
+
 /* ── Page transition — content stays visible, only bar moves ─────────── */
 function PageTransition({ children }) {
   const location = useLocation();
@@ -212,14 +222,40 @@ function MustChangePasswordGate({ children }) {
 function BranchGate({ children }) {
   const { user, isLoading, selectBranch } = useAuth();
   const { hasBranch } = useBranch();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showPicker, setShowPicker] = useState(false);
+  const qrHandledRef = useRef(false);
 
+  // Auto-select branch when arriving via QR code (?branch_id=<uuid>)
   useEffect(() => {
-    if (isLoading) return;
-    if (user && user.role !== "customer") return;
-    // Only auto-show on cart page if still no branch selected
-    // For browsing, branch is auto-selected if single branch, or user can dismiss
-  }, [isLoading, user, hasBranch]);
+    if (qrHandledRef.current) return;
+    const urlBranchId = searchParams.get("branch_id");
+    if (!urlBranchId) return;
+    qrHandledRef.current = true;
+
+    const applyBranch = (list) => {
+      const found = list.find(b => b.id === urlBranchId);
+      if (found) selectBranch(found);
+    };
+
+    const cleanUrl = () =>
+      setSearchParams(prev => { const n = new URLSearchParams(prev); n.delete("branch_id"); return n; }, { replace: true });
+
+    try {
+      const cached = JSON.parse(localStorage.getItem("knfc_branches_cache") || "[]");
+      if (cached.length) { applyBranch(cached); cleanUrl(); return; }
+    } catch {}
+
+    // Cache empty — fetch, apply, then clean URL
+    getPublicBranches()
+      .then(res => {
+        const list = res.data.branches || [];
+        if (list.length) localStorage.setItem("knfc_branches_cache", JSON.stringify(list));
+        applyBranch(list);
+      })
+      .catch(() => {})
+      .finally(cleanUrl);
+  }, []);
 
   const handleSelected = useCallback((branch) => {
     selectBranch(branch);
@@ -239,10 +275,14 @@ function BranchGate({ children }) {
 /* ── Root redirect by role ──────────────────────────────────────────── */
 function RootRedirect() {
   const { user, isLoading } = useAuth();
+  const [searchParams] = useSearchParams();
   if (isLoading) return <KNCLoader visible />;
-  if (!user)     return <Navigate to="/menu" replace />;  // guests see menu by default
+  // Preserve branch_id from QR scan so BranchGate can pick it up on /menu
+  const branchParam = searchParams.get("branch_id");
+  const menuTarget  = branchParam ? `/menu?branch_id=${branchParam}` : "/menu";
+  if (!user) return <Navigate to={menuTarget} replace />;
   const HOME = {
-    customer:     "/menu",
+    customer:     menuTarget,
     staff:        "/staff/queue",
     branch_admin: "/admin/dashboard",
     super_admin:  "/superadmin/dashboard",
@@ -447,6 +487,7 @@ export default function App() {
       <AuthProvider>
         <SplashDismisser />
         <ZoomBlocker />
+        <ScrollToTop />
         <NotificationProvider />
         <div style={{ minHeight: "100vh" }}>
         <Routes>
