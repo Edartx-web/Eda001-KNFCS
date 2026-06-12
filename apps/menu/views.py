@@ -258,6 +258,14 @@ class MenuItemDetailView(APIView):
             slug=slug,
         ).select_related("category").prefetch_related("customisations", "offers", "stock_records", "images")
         item = qs.filter(branch_id=branch_id).first() or qs.first()
+
+        # Fallback: branch_id may be stale (e.g. after DB migration).
+        # Try finding the item by slug across any branch so the page loads.
+        if not item:
+            item = MenuItem.objects.filter(slug=slug).select_related("category").prefetch_related(
+                "customisations", "offers", "stock_records", "images"
+            ).first()
+
         if not item:
             return err("Item not found.", status.HTTP_404_NOT_FOUND)
 
