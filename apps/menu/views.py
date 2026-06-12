@@ -458,7 +458,7 @@ class HomeBundleView(APIView):
             branch_id=branch_id, is_active=True,
         ).filter(
             Q(end_at__isnull=True) | Q(end_at__gt=now)
-        ).filter(start_at__lte=now).order_by("display_order", "-created_at")[:10])
+        ).filter(start_at__lte=now).order_by("carousel_order", "-created_at")[:10])
         data = DailyOfferSerializer(qs, many=True, context={"request": request}).data
         cache.set(key, data, 60)
         return data
