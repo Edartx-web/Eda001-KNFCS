@@ -260,9 +260,11 @@ class MenuItemDetailView(APIView):
         item = qs.filter(branch_id=branch_id).first() or qs.first()
 
         # Fallback: branch_id may be stale (e.g. after DB migration).
-        # Try finding the item by slug across any branch so the page loads.
+        # Only match all_branches items — never leak another branch's private item.
         if not item:
-            item = MenuItem.objects.filter(slug=slug).select_related("category").prefetch_related(
+            item = MenuItem.objects.filter(
+                slug=slug, all_branches=True,
+            ).select_related("category").prefetch_related(
                 "customisations", "offers", "stock_records", "gallery_images"
             ).first()
 
