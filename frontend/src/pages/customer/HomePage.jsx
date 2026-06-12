@@ -15,9 +15,7 @@ import AppLayout                       from "../../components/layout/AppLayout";
 import { useAuth }                     from "../../context/AuthContext";
 import useBranch                       from "../../hooks/useBranch";
 import useCartStore                    from "../../store/cartStore";
-import axiosClient                      from "../../api/axiosClient";
-import { getOffers }                   from "../../api/orders";
-import { getCategories, getFeatured, getFavourites, getHomeSections } from "../../api/menu";
+import { getHomeBundle, getFavourites } from "../../api/menu";
 import GoogleReviewBanner from "../../components/common/GoogleReviewBanner";
 import BranchSelector     from "../../components/common/BranchSelector";
 import { formatPrice, formatUnit, fixMediaUrl } from "../../utils/format";
@@ -668,6 +666,8 @@ export default function HomePage() {
   }, [authLoading]);
 
   const [loading,      setLoading]      = useState(true);
+  const [fetchError,   setFetchError]   = useState(false);
+  const [retryTick,    setRetryTick]    = useState(0);
   const [offers,       setOffers]       = useState([]);
   const [categories,   setCategories]   = useState([]);
   const [featured,     setFeatured]     = useState([]);
@@ -683,52 +683,62 @@ export default function HomePage() {
     if (!branchId) return;
 
     // Session-cache helpers — keep non-user data for 90 s so back-navigation is instant
+    // retryTick is included so the "Retry" button forces a re-fetch
     const CACHE_TTL = 90_000;
     const sc_get = (k) => { try { const r=sessionStorage.getItem(k); if(!r) return null; const {ts,d}=JSON.parse(r); return Date.now()-ts<CACHE_TTL?d:null; } catch { return null; } };
     const sc_set = (k,d) => { try { sessionStorage.setItem(k, JSON.stringify({ts:Date.now(),d})); } catch {} };
 
     setLoading(true);
+    setFetchError(false);
     (async () => {
       try {
         const cacheKey = `hp:${branchId}`;
         const cached   = sc_get(cacheKey);
 
-        // Fire ALL 7 requests in parallel — no sequential awaits
-        const [oR, cR, fR, secR, hoursR, cfgR, favR] = await Promise.all([
-          cached ? Promise.resolve({data:{offers:cached.offers}})   : getOffers().catch(()=>({data:{offers:[]}})),
-          cached ? Promise.resolve({data:{categories:cached.cats}}) : getCategories().catch(()=>({data:{categories:[]}})),
-          cached ? Promise.resolve({data:{featured:cached.feat,order_again:cached.oa}}) : getFeatured().catch(()=>({data:{featured:[],order_again:[]}})),
-          cached ? Promise.resolve({data:{sections:cached.sec}})    : getHomeSections().catch(()=>({data:{sections:{}}})),
-          axiosClient.get(`/branches/${branchId}/hours/`).catch(()=>null),
-          axiosClient.get("/branches/config/").catch(()=>null),
-          user ? getFavourites().catch(()=>({data:{favourites:[]}})) : Promise.resolve({data:{favourites:[]}}),
+        // 2 requests max (1 for guests) instead of 7 — bundle returns all public data
+        const [bundleR, favR] = await Promise.all([
+          cached
+            ? Promise.resolve(null)
+            : getHomeBundle().catch(() => null),
+          user
+            ? getFavourites().catch(() => ({data:{favourites:[]}}))
+            : Promise.resolve({data:{favourites:[]}}),
         ]);
 
-        const offers = oR.data.offers||[];
-        const cats   = cR.data.categories||[];
-        const feat   = fR.data.featured||[];
-        const oa     = fR.data.order_again||[];
-        const sec    = secR.data.sections||{};
+        if (bundleR?.data) {
+          const b      = bundleR.data;
+          const offers = b.offers      || [];
+          const cats   = b.categories  || [];
+          const feat   = b.featured    || [];
+          const oa     = b.order_again || [];
+          const sec    = b.sections    || {};
+          setOffers(offers); setCategories(cats); setFeatured(feat);
+          setOrderAgain(oa); setSectionItems(sec);
+          if (b.hours?.is_open_now !== undefined) {
+            setShopOpen(b.hours.is_open_now ?? true);
+            setNextOpenAt(b.hours.next_open_at || null);
+          } else { setShopOpen(true); }
+          if (b.site_config) setSiteConfig(b.site_config);
+          sc_set(cacheKey, { offers, cats, feat, oa, sec, hours: b.hours, siteConfig: b.site_config });
+        } else if (cached) {
+          setOffers(cached.offers || []); setCategories(cached.cats || []);
+          setFeatured(cached.feat || []); setOrderAgain(cached.oa || []);
+          setSectionItems(cached.sec || {});
+          if (cached.hours?.is_open_now !== undefined) {
+            setShopOpen(cached.hours.is_open_now ?? true);
+            setNextOpenAt(cached.hours.next_open_at || null);
+          } else { setShopOpen(true); }
+          if (cached.siteConfig) setSiteConfig(cached.siteConfig);
+        } else {
+          setFetchError(true);
+        }
 
-        setOffers(offers);
-        setCategories(cats);
-        setFeatured(feat);
-        setOrderAgain(oa);
-        setSectionItems(sec);
-        if (!cached) sc_set(cacheKey, {offers,cats,feat,oa,sec});
-
-        if (hoursR?.data?.success) {
-          setShopOpen(hoursR.data.is_open_now??true);
-          setNextOpenAt(hoursR.data.next_open_at||null);
-        } else { setShopOpen(true); }
-
-        if (cfgR?.data) setSiteConfig(cfgR.data);
-        if (user) setFavourites(favR.data.favourites||[]);
+        if (user) setFavourites(favR.data.favourites || []);
 
         try { const s=localStorage.getItem("active_order"); if(s){const parsed=JSON.parse(s); if(!parsed._uid||parsed._uid===user?.id) setActiveOrder(parsed);} } catch {}
       } finally { setLoading(false); }
     })();
-  }, [user, branchId]);
+  }, [user, branchId, retryTick]);
 
   useEffect(() => {
     if (loading||!pageRef.current) return;
@@ -763,6 +773,23 @@ export default function HomePage() {
   );
 
   if (loading) return <HomeSkeleton/>;
+
+  if (fetchError && categories.length === 0) return (
+    <AppLayout>
+      <div style={{ textAlign:"center", padding:"var(--s16) var(--s4)", maxWidth:400, margin:"0 auto" }}>
+        <div style={{ fontSize:"2.5rem", marginBottom:"var(--s4)" }}>🍗</div>
+        <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1.5rem", fontWeight:900, marginBottom:"var(--s3)" }}>
+          Menu couldn't load
+        </h2>
+        <p style={{ fontSize:".9375rem", color:"var(--t2)", marginBottom:"var(--s6)", lineHeight:1.6 }}>
+          We couldn't reach the server. Please check your connection and try again.
+        </p>
+        <button onClick={() => setRetryTick(t => t + 1)} className="btn btn-p btn-lg">
+          Retry
+        </button>
+      </div>
+    </AppLayout>
+  );
 
   const userPoints = user?.loyalty_points||0;
   const hour = new Date().getHours();

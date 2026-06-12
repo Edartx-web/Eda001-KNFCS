@@ -37,14 +37,7 @@ export default function KNCLoader({ visible = true, onDone, label = "" }) {
     gsap.set(ringInRef.current, { opacity: 0, scale: 0.6, rotation: 0 });
     gsap.set(glowRef.current, { opacity: 0, scale: 0.5 });
 
-    const tl = gsap.timeline({
-      onComplete: () => {
-        gsap.to(rootRef.current, {
-          opacity: 0, duration: 0.55, ease: "power2.in", delay: 0.2,
-          onComplete: () => { setHidden(true); onDone?.(); },
-        });
-      },
-    });
+    const tl = gsap.timeline();
 
     // Glow pulse in
     tl.to(glowRef.current, { opacity: 1, scale: 1, duration: 0.6, ease: "power2.out" }, 0);
@@ -60,9 +53,9 @@ export default function KNCLoader({ visible = true, onDone, label = "" }) {
     // Dots stagger in
     tl.to(dots, { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.35, ease: "back.out(2)" }, 0.55);
 
-    // Hold, then dots bounce
+    // Hold, then dots bounce continuously
     dots.forEach((dot, i) => {
-      tl.to(dot, { y: -6, duration: 0.22, ease: "power1.out", yoyo: true, repeat: 3 }, 0.9 + i * 0.12);
+      tl.to(dot, { y: -6, duration: 0.22, ease: "power1.out", yoyo: true, repeat: -1 }, 0.9 + i * 0.12);
     });
 
     // Continuous ring rotation (independent of timeline)
@@ -71,7 +64,7 @@ export default function KNCLoader({ visible = true, onDone, label = "" }) {
 
     return () => {
       tl.kill();
-      gsap.killTweensOf([ringOutRef.current, ringInRef.current]);
+      gsap.killTweensOf([ringOutRef.current, ringInRef.current, ...dotsRef.current.filter(Boolean)]);
     };
   }, [visible]);
 

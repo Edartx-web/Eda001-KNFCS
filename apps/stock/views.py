@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
+from django.core.cache import cache
 
 from apps.stock.models import StockRecord, StockLog, StockAlert, ChangeType
 from apps.accounts.permissions import IsStaffOrAbove, IsAdminOrAbove, get_request_branch_id
@@ -14,6 +15,9 @@ def ok(data, code=status.HTTP_200_OK):
 
 def err(msg, code=status.HTTP_400_BAD_REQUEST):
     return Response({"success": False, "error": msg}, status=code)
+
+def _bust_stock_cache(branch_id):
+    cache.delete(f"stock:dashboard:{branch_id}:{timezone.localdate()}")
 
 
 class StockDashboardView(APIView):
@@ -28,13 +32,17 @@ class StockDashboardView(APIView):
         branch_id = get_request_branch_id(request)
         today     = timezone.localdate()
 
+        cache_key = f"stock:dashboard:{branch_id}:{today}"
+        cached    = cache.get(cache_key)
+        if cached is not None:
+            return ok(cached)
+
         # Today's stock records indexed by menu_item_id
         records = StockRecord.objects.filter(
             branch_id=branch_id, date=today,
         ).select_related("menu_item")
         record_map = {str(r.menu_item_id): r for r in records}
 
-        # All menu items for this branch — include all_branches items
         from apps.menu.models import MenuItem
         from django.db.models import Q
         items = MenuItem.objects.filter(
@@ -46,47 +54,46 @@ class StockDashboardView(APIView):
         data = []
         for item in items:
             r = record_map.get(str(item.id))
-            # Prefer thumbnail; fallback to full image; fallback to None
             _img = item.image_thumb or item.image
             _image_url = request.build_absolute_uri(_img.url) if _img else None
             data.append({
-                "menu_item_id":       str(item.id),
-                "menu_item_name":     item.name,
-                "emoji":              item.emoji,
-                "image_url":          _image_url,
-                "category":           item.category.name,
+                "menu_item_id":        str(item.id),
+                "menu_item_name":      item.name,
+                "emoji":               item.emoji,
+                "image_url":           _image_url,
+                "category":            item.category.name,
                 "yesterday_remaining": r.yesterday_remaining if r else 0,
-                "new_stock_added":    r.new_stock_added    if r else 0,
-                "today_stock":        r.today_stock        if r else 0,
-                "used_stock":         r.used_stock         if r else 0,
-                "remaining_stock":    r.remaining_stock    if r else 0,
-                "status":             r.status             if r else "out",
-                "status_color":       r.status_color       if r else "#E24B4A",
-                "threshold":          item.low_stock_threshold,
-                "carries_over":       item.carries_over,
-                "has_record":         r is not None,
+                "new_stock_added":     r.new_stock_added     if r else 0,
+                "today_stock":         r.today_stock         if r else 0,
+                "used_stock":          r.used_stock          if r else 0,
+                "remaining_stock":     r.remaining_stock     if r else 0,
+                "status":              r.status              if r else "out",
+                "status_color":        r.status_color        if r else "#E24B4A",
+                "threshold":           item.low_stock_threshold,
+                "carries_over":        item.carries_over,
+                "has_record":          r is not None,
             })
 
-        alerts = StockAlert.objects.filter(
-            branch_id=branch_id, is_seen=False
-        ).count()
+        alerts = StockAlert.objects.filter(branch_id=branch_id, is_seen=False).count()
 
         from apps.stock.models import StockDailyLock
         lock = StockDailyLock.objects.filter(branch_id=branch_id, date=today).first()
 
-        return ok({
-            "stock":         data,
-            "date":          str(today),
-            "alert_count":   alerts,
-            "out_of_stock":  sum(1 for d in data if d["status"] == "out"),
-            "low_stock":     sum(1 for d in data if d["status"] in ("low", "critical")),
-            "is_locked":     lock is not None,
-            "lock_info":     {
+        result = {
+            "stock":        data,
+            "date":         str(today),
+            "alert_count":  alerts,
+            "out_of_stock": sum(1 for d in data if d["status"] == "out"),
+            "low_stock":    sum(1 for d in data if d["status"] in ("low", "critical")),
+            "is_locked":    lock is not None,
+            "lock_info": {
                 "locked_by": lock.locked_by.name if lock and lock.locked_by else "System",
                 "locked_at": lock.locked_at.isoformat() if lock else None,
                 "note":      lock.note if lock else "",
             } if lock else None,
-        })
+        }
+        cache.set(cache_key, result, 15)
+        return ok(result)
 
 
 class StockTopUpView(APIView):
@@ -180,10 +187,11 @@ class StockTopUpView(APIView):
             reason=reason or f"Top-up by {request.user.name}",
         )
 
+        _bust_stock_cache(branch_id)
         return ok({
-            "message":        f"Added {quantity} units successfully.",
+            "message":         f"Added {quantity} units successfully.",
             "remaining_stock": record.remaining_stock,
-            "today_stock":    record.today_stock,
+            "today_stock":     record.today_stock,
         })
 
 
@@ -515,9 +523,9 @@ class StockLockView(APIView):
             items_count=records.count(),
         )
 
-        # Log one entry per item for the lock event
-        for r in records:
-            StockLog.objects.create(
+        lock_reason = f"Stock locked by {request.user.name}" + (f": {note}" if note else "")
+        StockLog.objects.bulk_create([
+            StockLog(
                 branch_id=branch_id,
                 menu_item_id=r.menu_item_id,
                 stock_record=r,
@@ -527,9 +535,12 @@ class StockLockView(APIView):
                 qty_after=r.remaining_stock,
                 changed_by=request.user,
                 role_at_time=request.user.role,
-                reason=f"Stock locked by {request.user.name}" + (f": {note}" if note else ""),
+                reason=lock_reason,
             )
+            for r in records
+        ], ignore_conflicts=True)
 
+        _bust_stock_cache(branch_id)
         return ok({
             "message":         "Today's stock has been locked.",
             "locked_at":       lock.locked_at.isoformat(),
@@ -732,6 +743,7 @@ class StockRejectCarryoverView(APIView):
             reason=f"Carryover rejected by {request.user.name}",
         )
 
+        _bust_stock_cache(branch_id)
         return ok({
             "message":         f"Discarded {discarded} units of carryover.",
             "today_stock":     record.today_stock,
@@ -765,64 +777,66 @@ class StockBulkCarryoverView(APIView):
 
         from apps.menu.models import MenuItem
         from django.db.models import Q
-        items = MenuItem.objects.filter(
+
+        items = list(MenuItem.objects.filter(
             Q(branch_id=branch_id) | Q(all_branches=True),
             is_available=True,
-        ).distinct()
+        ).distinct())
+
+        item_ids = [item.id for item in items]
+        item_map = {item.id: item for item in items}
+
+        # Pre-fetch yesterday's and today's records in 2 queries instead of N each
+        yesterday_carry = {
+            str(r.menu_item_id): r.remaining_stock
+            for r in StockRecord.objects.filter(branch_id=branch_id, date=yesterday, menu_item_id__in=item_ids)
+        }
+        today_records = {
+            str(r.menu_item_id): r
+            for r in StockRecord.objects.filter(branch_id=branch_id, date=today, menu_item_id__in=item_ids)
+        }
 
         kept = discarded = skipped = 0
+        logs_to_create = []
 
         for item in items:
-            # Get yesterday's record
-            try:
-                prev = StockRecord.objects.get(branch_id=branch_id, menu_item=item, date=yesterday)
-                carry = prev.remaining_stock
-            except StockRecord.DoesNotExist:
-                carry = 0
-
+            carry = yesterday_carry.get(str(item.id), 0)
             if carry <= 0:
                 skipped += 1
                 continue
 
             if action == "keep":
-                record, created = StockRecord.objects.get_or_create(
-                    branch_id=branch_id, menu_item=item, date=today,
-                    defaults={
-                        "yesterday_remaining": carry,
-                        "new_stock_added":     0,
-                        "today_stock":         carry,
-                        "used_stock":          0,
-                        "remaining_stock":     carry,
-                    },
-                )
-                if not created:
+                record = today_records.get(str(item.id))
+                if record:
                     if record.yesterday_remaining == carry:
                         skipped += 1
                         continue
                     qty_before = record.remaining_stock
                     record.yesterday_remaining = carry
                     record.recompute()
+                    created = False
                 else:
+                    record = StockRecord.objects.create(
+                        branch_id=branch_id, menu_item=item, date=today,
+                        yesterday_remaining=carry, new_stock_added=0,
+                        today_stock=carry, used_stock=0, remaining_stock=carry,
+                    )
+                    today_records[str(item.id)] = record
                     qty_before = 0
+                    created = True
 
-                StockLog.objects.create(
-                    branch_id=branch_id, menu_item=item,
-                    stock_record=record,
+                logs_to_create.append(StockLog(
+                    branch_id=branch_id, menu_item=item, stock_record=record,
                     change_type=ChangeType.ROLLBACK,
-                    qty_before=qty_before, qty_changed=carry,
-                    qty_after=record.remaining_stock,
+                    qty_before=qty_before, qty_changed=carry, qty_after=record.remaining_stock,
                     changed_by=request.user, role_at_time=request.user.role,
                     reason=f"Bulk rollback of yesterday stock by {request.user.name}",
-                )
+                ))
                 kept += 1
 
             else:  # discard
-                try:
-                    record = StockRecord.objects.get(branch_id=branch_id, menu_item=item, date=today)
-                except StockRecord.DoesNotExist:
-                    skipped += 1
-                    continue
-                if record.yesterday_remaining == 0:
+                record = today_records.get(str(item.id))
+                if not record or record.yesterday_remaining == 0:
                     skipped += 1
                     continue
                 qty_before = record.remaining_stock
@@ -833,17 +847,19 @@ class StockBulkCarryoverView(APIView):
                     record.remaining_stock = 0
                     record.save(update_fields=["remaining_stock"])
 
-                StockLog.objects.create(
-                    branch_id=branch_id, menu_item=item,
-                    stock_record=record,
+                logs_to_create.append(StockLog(
+                    branch_id=branch_id, menu_item=item, stock_record=record,
                     change_type=ChangeType.MANUAL_CORRECTION,
-                    qty_before=qty_before, qty_changed=-discarded_qty,
-                    qty_after=record.remaining_stock,
+                    qty_before=qty_before, qty_changed=-discarded_qty, qty_after=record.remaining_stock,
                     changed_by=request.user, role_at_time=request.user.role,
                     reason=f"Bulk carryover discarded by {request.user.name}",
-                )
+                ))
                 discarded += 1
 
+        if logs_to_create:
+            StockLog.objects.bulk_create(logs_to_create, ignore_conflicts=True)
+
+        _bust_stock_cache(branch_id)
         verb = "rolled back" if action == "keep" else "discarded"
         return ok({
             "message": f"{verb.capitalize()} yesterday's stock for {kept + discarded} item(s). {skipped} had no carryover.",
@@ -923,6 +939,7 @@ class StockFullResetView(APIView):
             )
             reset_count += 1
 
+        _bust_stock_cache(branch_id)
         return ok({
             "message":     f"Reset {reset_count} stock record(s) to zero.",
             "reset_count": reset_count,
@@ -972,67 +989,64 @@ class StockBulkSetView(APIView):
         if not items.exists():
             return err("No available menu items found for this branch.")
 
+        items_list = list(items)
+        item_ids   = [i.id for i in items_list]
+
+        # Pre-fetch today's existing records in 1 query
+        existing = {
+            str(r.menu_item_id): r
+            for r in StockRecord.objects.filter(branch_id=branch_id, date=today, menu_item_id__in=item_ids)
+        }
+
         updated = created_count = 0
+        logs_to_create = []
+        items_to_restore = []
 
-        for item in items:
-            record, created = StockRecord.objects.get_or_create(
-                branch_id=branch_id,
-                menu_item=item,
-                date=today,
-                defaults={
-                    "yesterday_remaining": 0,
-                    "new_stock_added":     quantity,
-                    "today_stock":         quantity,
-                    "used_stock":          0,
-                    "remaining_stock":     quantity,
-                },
-            )
-
-            qty_before = record.remaining_stock if not created else 0
-
-            if not created:
-                # Overwrite today's stock entirely (opening set)
+        for item in items_list:
+            record = existing.get(str(item.id))
+            if record:
+                qty_before = record.remaining_stock
                 record.yesterday_remaining = 0
                 record.new_stock_added     = quantity
                 record.today_stock         = quantity
-                # Keep used_stock as-is so we don't erase actual usage today
                 record.remaining_stock     = max(0, quantity - record.used_stock)
                 record.save(update_fields=[
                     "yesterday_remaining", "new_stock_added",
                     "today_stock", "remaining_stock", "last_updated",
                 ])
+                updated += 1
+            else:
+                record = StockRecord.objects.create(
+                    branch_id=branch_id, menu_item=item, date=today,
+                    yesterday_remaining=0, new_stock_added=quantity,
+                    today_stock=quantity, used_stock=0, remaining_stock=quantity,
+                )
+                qty_before = 0
+                created_count += 1
 
             qty_after = record.remaining_stock
-
-            StockLog.objects.create(
-                branch_id=branch_id,
-                menu_item=item,
-                stock_record=record,
+            logs_to_create.append(StockLog(
+                branch_id=branch_id, menu_item=item, stock_record=record,
                 change_type=ChangeType.OPENING_SET,
-                qty_before=qty_before,
-                qty_changed=qty_after - qty_before,
-                qty_after=qty_after,
-                changed_by=request.user,
-                role_at_time=request.user.role,
+                qty_before=qty_before, qty_changed=qty_after - qty_before, qty_after=qty_after,
+                changed_by=request.user, role_at_time=request.user.role,
                 reason=f"Bulk stock set to {quantity} by {request.user.name}",
-            )
-
-            # Restore availability if item was out of stock
+            ))
             if not item.is_available and qty_after > 0:
-                item.is_available = True
-                item.save(update_fields=["is_available"])
+                items_to_restore.append(item.id)
 
-            if created:
-                created_count += 1
-            else:
-                updated += 1
+        StockLog.objects.bulk_create(logs_to_create, ignore_conflicts=True)
+        if items_to_restore:
+            from apps.menu.models import MenuItem as MI
+            MI.objects.filter(id__in=items_to_restore).update(is_available=True)
 
+        _bust_stock_cache(branch_id)
         return ok({
-            "message":  f"Set {quantity} units for {created_count + updated} item(s).",
-            "quantity": quantity,
+            "message":   f"Set {quantity} units for {created_count + updated} item(s).",
+            "quantity":  quantity,
             "items_set": created_count + updated,
-            "created":  created_count,
-            "updated":  updated,
+            "created":   created_count,
+            "updated":   updated,
         })
 
 

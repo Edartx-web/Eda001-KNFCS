@@ -70,11 +70,12 @@ DATABASES = {
         "PASSWORD":     config("DB_PASSWORD"),
         "HOST":         config("DB_HOST"),
         "PORT":         config("DB_PORT",     default="5432"),
-        # Reuse DB connections for 60 s instead of opening a new one per request.
-        # Saves ~50-100 ms on every API call (cross-region Supabase connection cost).
-        "CONN_MAX_AGE": 60,
+        # Session-mode pooler (port 5432) caps at 15 connections.
+        # With Hypercorn threads CONN_MAX_AGE=60 exceeds that limit.
+        # Transaction-mode pooler (port 6543) handles unlimited connections — use that instead.
+        "CONN_MAX_AGE": 0,
         "OPTIONS": {
-            "sslmode":        "require",
+            "sslmode":         "require",
             "connect_timeout": 5,
         },
     }
