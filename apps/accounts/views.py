@@ -1196,13 +1196,15 @@ class TestEmailView(APIView):
     """
     POST /api/v1/auth/admin/test-email/
     { "to": "recipient@example.com" }
-    SuperAdmin only — sends a test email and reports success/failure with the
-    exact error so email config issues can be diagnosed without a staff login.
+    SuperAdmin only. Sends a test email and returns the exact error + SMTP config
+    summary so problems can be diagnosed without needing Render log access.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        import traceback
         from apps.accounts.models import Role
+        from django.conf import settings
         if request.user.role != Role.SUPER_ADMIN:
             return err("SuperAdmin only.", 403)
 
@@ -1210,21 +1212,38 @@ class TestEmailView(APIView):
         if not to or "@" not in to:
             return err("Provide a valid 'to' email address.")
 
+        cfg = {
+            "BACKEND":  getattr(settings, "EMAIL_BACKEND",       "—"),
+            "HOST":     getattr(settings, "EMAIL_HOST",           "—"),
+            "PORT":     getattr(settings, "EMAIL_PORT",           "—"),
+            "TLS":      getattr(settings, "EMAIL_USE_TLS",        "—"),
+            "SSL":      getattr(settings, "EMAIL_USE_SSL",        "—"),
+            "USER":     getattr(settings, "EMAIL_HOST_USER",      "—"),
+            "FROM":     getattr(settings, "DEFAULT_FROM_EMAIL",   "—"),
+            "PASS_SET": bool(getattr(settings, "EMAIL_HOST_PASSWORD", "")),
+        }
+
         from django.core.mail import send_mail
-        from django.conf import settings
         try:
             send_mail(
-                subject    = "KNFC Email Config Test",
-                message    = "This is a test email from KNFC admin. If you received this, email delivery is working correctly.",
-                from_email = getattr(settings, "DEFAULT_FROM_EMAIL", ""),
+                subject        = "KNFC Email Config Test",
+                message        = "If you received this, SMTP delivery is working correctly.",
+                from_email     = cfg["FROM"],
                 recipient_list = [to],
                 fail_silently  = False,
             )
             logger.info("Test email sent → %s by admin=%s", to, request.user.id)
-            return ok({"to": to}, f"Test email sent to {to}. Check inbox (and spam folder).")
+            return ok({"to": to, "config": cfg},
+                      f"✓ Sent to {to} — check inbox and spam.")
         except Exception as e:
-            logger.error("Test email failed → %s : %s", to, e)
-            return err(f"Email failed: {e}", 500)
+            tb = traceback.format_exc()
+            logger.error("Test email FAILED → %s\nConfig: %s\n%s", to, cfg, tb)
+            return Response({
+                "success": False,
+                "error":  str(e),
+                "config": cfg,
+                "trace":  tb,
+            }, status=500)
 
 
 class ContactView(APIView):
