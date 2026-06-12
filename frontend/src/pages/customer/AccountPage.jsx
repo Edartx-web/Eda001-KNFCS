@@ -457,7 +457,7 @@ const handleCancelOrder = async (order) => {
               <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"var(--s3)" }}>
                 {favourites.map(item => (
                   <div key={item.id} style={{ background:"var(--bgc)", border:"1px solid var(--bd)", borderRadius:"var(--r4)", overflow:"hidden", position:"relative", cursor:"pointer", transition:"transform var(--d1) var(--ease), box-shadow var(--d1) var(--ease)" }}
-                    onClick={() => navigate(`/menu/product/${item.slug}`)}
+                    onClick={() => navigate(`/menu/product/${item.slug}?b=${localStorage.getItem("branch_id")||""}`)}
                     onMouseEnter={e => { e.currentTarget.style.transform="translateY(-3px)"; e.currentTarget.style.boxShadow="var(--sh-md)"; }}
                     onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="none"; }}>
                     <div style={{ aspectRatio:"4/3", background:item.image_url?"var(--bg3)":`linear-gradient(135deg,${item.gradient_from||"#1A0800"},${item.gradient_to||"#2D1200"})`, position:"relative", overflow:"hidden" }}>

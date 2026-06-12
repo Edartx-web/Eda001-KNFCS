@@ -122,7 +122,9 @@ export default function ProductDetailPage() {
   const [added,      setAdded]      = useState(false);
   const [imgErr,     setImgErr]     = useState(false);
   const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState(false);
+  const [error,      setError]      = useState(false);   // true = 404 not found
+  const [serverErr,  setServerErr]  = useState(false);  // true = 5xx / network
+  const [retryTick,  setRetryTick]  = useState(0);
   const [activeImg,  setActiveImg]  = useState(0);
   const [reviewOpen,   setReviewOpen]   = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -169,15 +171,20 @@ export default function ProductDetailPage() {
   }, []);
 
   useEffect(() => {
+    setError(false);
+    setServerErr(false);
     const load = async () => {
       try {
         const res = await getItemDetail(slug, branchIdFromUrl);
         setItem(res.data.item);
-      } catch { setError(true); }
+      } catch (e) {
+        if (e?.response?.status === 404) setError(true);
+        else setServerErr(true);
+      }
       finally { setLoading(false); }
     };
     load();
-  }, [slug, branchIdFromUrl]);
+  }, [slug, branchIdFromUrl, retryTick]);
 
   useEffect(() => {
     if (loading || !heroRef.current || typeof gsap === "undefined") return;
@@ -193,6 +200,20 @@ export default function ProductDetailPage() {
   }, [item]);
 
   if (pageLoading || loading) return <KNCLoader visible label="Loading product…"/>;
+
+  if (serverErr) return (
+    <AppLayout>
+      <div style={{ textAlign:"center", padding:"var(--s12) var(--s4)", maxWidth:"480px", margin:"0 auto" }}>
+        <div style={{ fontSize:"2.5rem", marginBottom:"var(--s4)" }}>🍗</div>
+        <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1.5rem", fontWeight:900, marginBottom:"var(--s3)" }}>Couldn't load item</h2>
+        <p style={{ fontSize:".9375rem", color:"var(--t2)", marginBottom:"var(--s6)" }}>Server took too long. Please try again.</p>
+        <div style={{ display:"flex", gap:"var(--s3)", justifyContent:"center" }}>
+          <button onClick={() => { setLoading(true); setRetryTick(t => t + 1); }} className="btn btn-p btn-lg">Retry</button>
+          <button onClick={() => navigate(-1)} className="btn btn-s btn-lg">← Go back</button>
+        </div>
+      </div>
+    </AppLayout>
+  );
 
   if (error || !item) return (
     <AppLayout>
