@@ -41,11 +41,9 @@ class IPv4EmailBackend(EmailBackend):
 
     Drop-in replacement for django.core.mail.backends.smtp.EmailBackend.
     Set EMAIL_BACKEND = 'utils.email_backend.IPv4EmailBackend' in settings.
+
+    Sets connection_class at class level — newer Django versions made it a
+    read-only property so instance assignment raises AttributeError.
     """
 
-    def open(self):
-        if self.connection:
-            return False
-        if not self.use_ssl:
-            self.connection_class = _SMTP_IPv4
-        return super().open()
+    connection_class = _SMTP_IPv4
