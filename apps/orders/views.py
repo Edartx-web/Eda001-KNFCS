@@ -948,10 +948,10 @@ class ExportOrdersCSVView(APIView):
         import datetime
         if date_from:
             try: qs = qs.filter(created_at__date__gte=datetime.date.fromisoformat(date_from))
-            except: pass
+            except ValueError: pass
         if date_to:
             try: qs = qs.filter(created_at__date__lte=datetime.date.fromisoformat(date_to))
-            except: pass
+            except ValueError: pass
 
         buf = io.StringIO()
         w   = csv.writer(buf)

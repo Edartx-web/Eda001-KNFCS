@@ -822,11 +822,13 @@ class StaffDetailView(APIView):
         if "is_active" in request.data:
             staff.is_active = bool(request.data["is_active"])
             updated.append("is_active")
-            # When deactivating, always force off-duty
+            # When deactivating, always force off-duty and close open sessions
             if not staff.is_active:
                 staff.is_on_duty = False
                 if "is_on_duty" not in updated:
                     updated.append("is_on_duty")
+                from apps.accounts.models import StaffSession
+                StaffSession.objects.filter(user=staff, logout_at__isnull=True).update(logout_at=timezone.now())
         if "is_on_duty" in request.data:
             # Cannot go on duty if inactive
             if not staff.is_active:
@@ -861,7 +863,10 @@ class StaffDetailView(APIView):
             return Response({"success": False, "error": "Staff not found."}, status=404)
         name = staff.name
         staff.is_active = False
-        staff.save(update_fields=["is_active"])
+        staff.is_on_duty = False
+        staff.save(update_fields=["is_active", "is_on_duty"])
+        from apps.accounts.models import StaffSession
+        StaffSession.objects.filter(user=staff, logout_at__isnull=True).update(logout_at=timezone.now())
         return Response({"success": True, "message": f"{name}'s account has been deactivated."})
 
 
