@@ -146,11 +146,12 @@ def _send_confirmation_email(ticket):
     try:
         from django.core.mail import send_mail
         from django.conf import settings
+        from_email = getattr(settings, "SUPPORT_FROM_EMAIL", settings.DEFAULT_FROM_EMAIL)
         send_mail(
             subject=f"We received your message — {ticket.subject}",
             message="",
             html_message=_confirmation_html(ticket),
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=from_email,
             recipient_list=[ticket.email],
             fail_silently=True,
         )
@@ -162,11 +163,12 @@ def _send_reply_email(ticket):
     try:
         from django.core.mail import send_mail
         from django.conf import settings
+        from_email = getattr(settings, "SUPPORT_FROM_EMAIL", settings.DEFAULT_FROM_EMAIL)
         send_mail(
             subject=f"Response to your support request — {ticket.subject}",
             message="",
             html_message=_reply_html(ticket),
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=from_email,
             recipient_list=[ticket.email],
             fail_silently=True,
         )

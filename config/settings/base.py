@@ -188,7 +188,9 @@ EMAIL_HOST_USER     = config("EMAIL_HOST_USER",     default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 
 # Support email — also migrated to Resend; uses same backend.
-SUPPORT_FROM_EMAIL = config("SUPPORT_FROM_EMAIL", default="KNFC Support <support@knfcs.com>")
+SUPPORT_FROM_EMAIL   = config("SUPPORT_FROM_EMAIL",   default="KNFC Support <support@knfcs.com>")
+# Where contact-form messages land (an inbox someone actually reads).
+CONTACT_INBOX_EMAIL  = config("CONTACT_INBOX_EMAIL",  default=config("DEFAULT_FROM_EMAIL", default="knfchead01@gmail.com"))
 
 # ── Redis / Celery / Channels ─────────────────────────────────────────────────
 REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/0")

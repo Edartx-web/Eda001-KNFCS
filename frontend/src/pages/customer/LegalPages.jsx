@@ -999,7 +999,7 @@ export function ContactPage() {
                 </button>
               </div>
               <p style={{ fontSize: ".75rem", color: "var(--t3)", margin: 0 }}>
-                Your message is sent directly to <strong>{contactEmail}</strong> via our server.
+                Your message goes directly to <strong>{contactEmail}</strong>. We respond within 1 business day.
               </p>
             </form>
           )}

@@ -1682,6 +1682,167 @@ function BranchPaymentsPanel({ branchId }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   USER GUIDE TAB
+═══════════════════════════════════════════════════════════════════════════ */
+function UserGuideTab({ role = "branch_admin" }) {
+  const isSA = role === "super_admin";
+  const [open, setOpen] = React.useState(null);
+
+  const sections = [
+    {
+      title: "Staff Management",
+      icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
+      items: [
+        { q: "How do I add a new staff member?", a: "Go to Staff tab → click Add Staff → enter their name and email. They will receive an OTP to verify their account before first login." },
+        { q: "Staff did not receive the verification email", a: "Open the staff list → find the staff member → click the amber Verify button next to their name. This bypasses email and activates their account instantly." },
+        { q: "How do I remove a staff member?", a: "Open Staff tab → find the staff member → click Deactivate. Their account is suspended immediately; they cannot log in." },
+        { q: "Staff forgot their PIN / OTP login", a: "Staff log in with their registered email — they receive a fresh OTP each time. If OTP email fails, use the Verify button in the staff list." },
+      ],
+    },
+    {
+      title: "Orders & Queue",
+      icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+      items: [
+        { q: "How does the order queue work?", a: "Staff open /staff/queue. New orders appear automatically in real time. Tap an order to expand it, then mark it Preparing → Ready → Completed as it progresses." },
+        { q: "How do I place a walk-in / POS order?", a: "From the staff queue page, tap + New Order at the top. Select items and choose Dine-in (with table number) or Pickup." },
+        { q: "Can I cancel an order?", a: "Yes — expand the order in the queue and tap Cancel. Cancellation is logged with your name and timestamp." },
+        { q: "What is the token number?", a: "Each order gets an auto-incrementing token shown on the customer's receipt. Call this number when the order is ready for pickup." },
+      ],
+    },
+    {
+      title: "Stock & Inventory",
+      icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>,
+      items: [
+        { q: "How do I update stock quantities?", a: "Go to Stock page → find the item → enter the new quantity and click Update. Each change is logged with who made it and when." },
+        { q: "What does the red alert mean?", a: "A red alert badge means one or more items are below the low-stock threshold. Click the alert to jump to the stock page." },
+        { q: "How do I mark an item as out of stock?", a: "Set its stock quantity to 0. The item will automatically show as unavailable on the customer menu." },
+        { q: "What is the refill panel?", a: "The Refill panel lets you quickly top up multiple items at once. Enter the amount added for each item and submit — all changes are logged together." },
+      ],
+    },
+    {
+      title: "Branch Hours & Status",
+      icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+      items: [
+        { q: "How do I set operating hours?", a: "Dashboard → Shop Hours panel → click Edit for any day → set opening and closing time. Toggle the day off to mark it as closed." },
+        { q: "How do I temporarily close the branch?", a: "Click Force close at the top right of your dashboard. This overrides the schedule and closes the branch immediately until you Force open again." },
+        { q: "Can I set a specific closure end time?", a: "Yes — when you Force close, you can set an override duration (e.g. close for 2 hours). The branch will reopen automatically at that time." },
+        { q: "How does Pickup vs Dine-in mode work?", a: "In the Order Modes panel on your dashboard you can enable or disable Pickup and Dine-in independently. Disabling Pickup hides that option from customers." },
+      ],
+    },
+    {
+      title: "Menu & Offers",
+      icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>,
+      items: [
+        { q: "How do I add a new menu item?", a: isSA ? "Go to Menu → Add Item. Set the name, price, category, and upload an image. Toggle All Branches to make it available everywhere." : "Menu changes are managed by SuperAdmin. Contact your SuperAdmin to add or edit menu items." },
+        { q: "How do I create an offer?", a: isSA ? "Go to Offers page → New Offer. Choose the offer type (flat discount, percentage, combo), set the start/end dates, and select which items it applies to." : "Offers are created by SuperAdmin. Your branch will automatically display active offers once they are published." },
+        { q: "How do I hide a menu item temporarily?", a: "In the Menu page, toggle the item's Available switch off. It disappears from the customer menu immediately without being deleted." },
+        { q: "What is the Featured toggle?", a: "Featured items appear in the 'Popular' / 'Featured' section on the home page. Turn it on for your best-sellers to increase visibility." },
+      ],
+    },
+    {
+      title: "QR Codes & Branches",
+      icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3"/></svg>,
+      items: [
+        { q: "How do I generate a branch QR code?", a: "Dashboard → scroll to Branch QR panel → click Download QR. The QR encodes your branch so customers who scan it are automatically set to your branch." },
+        { q: "What happens when a customer scans the QR?", a: "They are taken to the menu page with your branch pre-selected. They do not need to choose a branch manually — the QR handles it." },
+        { q: "Can I add a new branch?", a: isSA ? "SuperAdmin → Branches tab → Add Branch. Enter the branch name, address, and contact details. You can then assign a Branch Admin to it." : "Branch creation is handled by SuperAdmin. Contact your SuperAdmin to add a new branch." },
+      ],
+    },
+    ...(isSA ? [
+      {
+        title: "SuperAdmin: Users & Admins",
+        icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
+        items: [
+          { q: "How do I create a Branch Admin account?", a: "SuperAdmin → Staff tab → toggle to Branch Admin → Add Admin. Enter their name, email, and assign their branch. They receive a verification email." },
+          { q: "How do I view all customer accounts?", a: "SuperAdmin → Users tab. You can search by name or email, view order history, and deactivate accounts if needed." },
+          { q: "How do I view login history?", a: "SuperAdmin → Login Records tab. Shows all staff and admin logins with IP, device, and timestamp. Filter by role or date." },
+        ],
+      },
+      {
+        title: "SuperAdmin: Analytics & Reports",
+        icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+        items: [
+          { q: "How do I see revenue reports?", a: "SuperAdmin → Analytics tab. Choose a date range and filter by branch. You can see revenue, order count, popular items, and customer trends." },
+          { q: "How do I export data to Excel?", a: "SuperAdmin → Export tab. Choose what to export (orders, stock, staff, customers), pick a date range and branch, then click Download Excel." },
+          { q: "How do I view all support tickets?", a: "SuperAdmin → Support tab. All customer messages appear here. Click a ticket to expand it, type a reply, and click Send reply & resolve." },
+        ],
+      },
+      {
+        title: "SuperAdmin: Settings & Email",
+        icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
+        items: [
+          { q: "How do I update the site name, logo, or contact info?", a: "SuperAdmin → Settings → Site Configuration. Update name, tagline, contact email/phone/WhatsApp, and address. Click Save Settings." },
+          { q: "How do I test if emails are working?", a: "SuperAdmin → Settings → scroll to the bottom → Test Email panel. Enter any email address and click Send test. Check the result for success or error details." },
+          { q: "Email is not being delivered to staff", a: "Check Settings → Test Email first. If it fails, verify RESEND_API_KEY is set correctly in Render env vars. If staff email is the issue, use the Verify button in the Staff list to bypass email." },
+          { q: "How do I send a broadcast WhatsApp message?", a: "SuperAdmin → Broadcast page. Choose a message template or write a custom message, select the audience (all customers, branch-specific, inactive users), and send." },
+        ],
+      },
+    ] : []),
+  ];
+
+  return (
+    <div style={{ maxWidth: 760 }}>
+      <div style={{ marginBottom: 28 }}>
+        <h2 style={{ fontFamily: "var(--ff-d)", fontSize: "1.375rem", fontWeight: 900, color: "var(--t1)", margin: 0 }}>
+          User Guide
+        </h2>
+        <p style={{ color: "var(--t3)", fontSize: ".9rem", marginTop: 6 }}>
+          Answers to the most common questions for {isSA ? "Super Admins and Branch Admins" : "Branch Admins and staff"}.
+          Click any question to expand it.
+        </p>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {sections.map((sec, si) => (
+          <div key={si} style={{ background: "var(--bgc)", border: "1px solid var(--bd)", borderRadius: "var(--r4)", overflow: "hidden" }}>
+            {/* Section header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "var(--bg2)", borderBottom: "1px solid var(--bd)" }}>
+              <div style={{ width: 32, height: 32, borderRadius: "var(--r2)", background: "rgba(232,82,26,.10)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--brand)", flexShrink: 0 }}>
+                {sec.icon}
+              </div>
+              <span style={{ fontWeight: 800, fontSize: ".9375rem", color: "var(--t1)", fontFamily: "var(--ff-b)" }}>{sec.title}</span>
+            </div>
+
+            {/* Q&A items */}
+            <div>
+              {sec.items.map((item, ii) => {
+                const key = `${si}-${ii}`;
+                const isOpen = open === key;
+                return (
+                  <div key={ii} style={{ borderBottom: ii < sec.items.length - 1 ? "1px solid var(--bd)" : "none" }}>
+                    <button
+                      onClick={() => setOpen(isOpen ? null : key)}
+                      style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 18px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                    >
+                      <span style={{ fontWeight: 600, fontSize: ".9rem", color: "var(--t1)", fontFamily: "var(--ff-b)", lineHeight: 1.4 }}>{item.q}</span>
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0, transform: isOpen ? "rotate(180deg)" : "none", transition: "transform .2s", color: "var(--t3)" }}>
+                        <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                    {isOpen && (
+                      <div style={{ padding: "0 18px 16px 18px" }}>
+                        <p style={{ margin: 0, fontSize: ".875rem", color: "var(--t2)", lineHeight: 1.7, background: "var(--bg2)", borderRadius: "var(--r2)", padding: "12px 14px", borderLeft: "3px solid var(--brand)" }}>
+                          {item.a}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 24, padding: "16px 20px", background: "rgba(232,82,26,.06)", border: "1px solid rgba(232,82,26,.18)", borderRadius: "var(--r3)", fontSize: ".875rem", color: "var(--t2)", lineHeight: 1.6 }}>
+        <strong style={{ color: "var(--brand)" }}>Still need help?</strong> Submit a support ticket from the{" "}
+        <a href="/contact" style={{ color: "var(--brand)", fontWeight: 600 }}>Contact page</a> or ask your SuperAdmin directly.
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    BRANCH DASHBOARD
 ═══════════════════════════════════════════════════════════════════════════ */
 export function BranchDashboard() {
@@ -1755,7 +1916,7 @@ export function BranchDashboard() {
             <div>
               <div className="adm-eyebrow">{user?.branch_name || "Branch"}</div>
               <h1 className="adm-page-title">
-                {tab === "overview" ? "Dashboard" : tab === "staff" ? "Staff manager" : tab === "orders" ? "Orders" : tab === "tables" ? "Tables" : "Payments"}
+                {tab === "overview" ? "Dashboard" : tab === "staff" ? "Staff manager" : tab === "orders" ? "Orders" : tab === "tables" ? "Tables" : tab === "guide" ? "User Guide" : "Payments"}
               </h1>
               <p className="adm-page-sub">{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p>
             </div>
@@ -1816,6 +1977,7 @@ export function BranchDashboard() {
                       { label: "Stock",       desc: "Inventory & history",  icon: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>, isLink: true, to: "/admin/stock" },
                       { label: "Payments",    desc: "Bills & UPI / Cash",   icon: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>, onClick: () => setTab("payments") },
                       { label: "Tables",      desc: "Dine-in seat config",   icon: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="10" width="18" height="8" rx="2"/><path d="M7 10V6a5 5 0 0110 0v4"/><line x1="12" y1="18" x2="12" y2="22"/></svg>, onClick: () => setTab("tables") },
+                      { label: "User Guide",  desc: "Help & how-to",         icon: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="3" strokeLinecap="round"/></svg>, onClick: () => setTab("guide") },
                     ].map(a =>
                       a.isLink
                         ? <Link key={a.label} to={a.to} className="adm-action-btn">
@@ -1898,6 +2060,9 @@ export function BranchDashboard() {
           {tab === "tables" && (
             <BranchTablesManager branchId={user?.branch_id} />
           )}
+
+          {/* ── USER GUIDE ── */}
+          {tab === "guide" && <UserGuideTab role="branch_admin" />}
         </div>
       </div>
       {ToastEl}
@@ -5313,7 +5478,7 @@ export function SuperAdminDashboard() {
   const [ToastEl, showToast] = useToast();
 
   const location = useLocation();
-  const _INLINE_TABS = ["dashboard","branches","sa-orders","payments","users","stock","redemptions","export","staff","admins","login-records","reviews","offers","reports","settings"];
+  const _INLINE_TABS = ["dashboard","branches","sa-orders","payments","users","stock","redemptions","export","staff","admins","login-records","reviews","offers","reports","settings","guide"];
   const _urlSeg = location.pathname.replace(/^\/superadmin\/?/, "").split("/")[0];
 
   const [branches,     setBranches]     = useState([]);
@@ -5463,6 +5628,7 @@ export function SuperAdminDashboard() {
     { key:"broadcast", isLink:true, to:"/superadmin/broadcast", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" strokeLinecap="round"/></svg>, label:"Broadcast" },
     { key:"support",  icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>, label:"Support" },
     { key:"settings", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>, label:"Settings" },
+    { key:"guide",    icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="3" strokeLinecap="round"/></svg>, label:"User Guide" },
   ];
 
   if (pageLoading || loading) return <KNCLoader visible label="Loading dashboard…"/>;
@@ -5701,6 +5867,7 @@ export function SuperAdminDashboard() {
           {tab === "reports"        && <SuperAdminAnalyticsTab branches={branches}/>}
           {tab === "support"        && <SupportTicketsTab branches={branches}/>}
           {tab === "settings"       && <SuperAdminSettingsTab/>}
+          {tab === "guide"          && <UserGuideTab role="super_admin" />}
 
         </div>{/* /adm-content */}
         </div>{/* /adm-main */}

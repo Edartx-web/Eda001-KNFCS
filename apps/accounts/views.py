@@ -1246,11 +1246,11 @@ class ContactView(APIView):
     """
     POST /api/v1/auth/contact/
     { name, email, subject, message }
-    Public endpoint — sends the contact form message to the site inbox via SMTP.
+    Public endpoint — sends the contact form message to CONTACT_INBOX_EMAIL via Resend.
     """
     permission_classes     = [AllowAny]
     authentication_classes = []
-    throttle_classes   = []
+    throttle_classes       = []
 
     def post(self, request):
         name    = (request.data.get("name",    "") or "").strip()
@@ -1260,14 +1260,13 @@ class ContactView(APIView):
 
         if not name or not email or not message:
             return err("Name, email, and message are required.")
-
         if "@" not in email:
             return err("Please provide a valid email address.")
 
-        inbox = getattr(settings, "EMAIL_HOST_USER", None) or getattr(settings, "DEFAULT_FROM_EMAIL", "")
+        inbox = getattr(settings, "CONTACT_INBOX_EMAIL", "") or getattr(settings, "DEFAULT_FROM_EMAIL", "")
         if not inbox:
-            logger.error("ContactView: no recipient email configured (EMAIL_HOST_USER / DEFAULT_FROM_EMAIL).")
-            return err("Contact service is not configured. Please try again later.", 503)
+            logger.error("ContactView: CONTACT_INBOX_EMAIL not configured.")
+            return err("Contact service is temporarily unavailable. Please try again later.", 503)
 
         full_subject = f"[KNFC Contact] {subject or 'Website Enquiry'} — from {name}"
         body = (
@@ -1279,16 +1278,16 @@ class ContactView(APIView):
 
         try:
             send_mail(
-                subject       = full_subject,
-                message       = body,
-                from_email    = settings.DEFAULT_FROM_EMAIL,
-                recipient_list= [inbox],
-                fail_silently = False,
+                subject        = full_subject,
+                message        = body,
+                from_email     = settings.DEFAULT_FROM_EMAIL,
+                recipient_list = [inbox],
+                fail_silently  = False,
             )
-            logger.info(f"Contact form email sent from {email} → {inbox}")
+            logger.info("Contact form sent from %s → %s", email, inbox)
             return ok(message="Your message has been sent. We'll get back to you soon!")
         except Exception as exc:
-            logger.error(f"Contact form email failed: {exc}")
+            logger.error("Contact form email failed: %s", exc)
             return err("Failed to send your message. Please try again later.", 500)
 
 
