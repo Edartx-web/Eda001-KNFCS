@@ -268,7 +268,21 @@ function TrackRedirect() {
     const o = JSON.parse(localStorage.getItem("active_order") || "null");
     if (o?.id && (!o._uid || o._uid === user?.id)) return <Navigate to={`/order/track/${o.id}`} replace />;
   } catch {}
-  return <Navigate to="/menu" replace />;
+  // No active order — show a friendly prompt instead of silently redirecting
+  return (
+    <div style={{ minHeight:"70vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"var(--s4)", padding:"var(--s8) var(--s4)", textAlign:"center" }}>
+      <div style={{ fontSize:"3.5rem", lineHeight:1 }}>🍗</div>
+      <h2 style={{ fontFamily:"var(--ff-d)", fontSize:"1.75rem", fontWeight:900, margin:0 }}>No active order</h2>
+      <p style={{ fontSize:".9375rem", color:"var(--t2)", maxWidth:320, lineHeight:1.65, margin:0 }}>
+        You haven't placed an order yet. Browse the menu and place your first order to track it here.
+      </p>
+      <div style={{ display:"flex", gap:"var(--s3)", flexWrap:"wrap", justifyContent:"center" }}>
+        <a href="/menu" style={{ display:"inline-flex", alignItems:"center", gap:"6px", padding:"12px 24px", background:"var(--brand)", color:"#fff", borderRadius:"var(--rf)", fontWeight:700, fontSize:".9375rem", textDecoration:"none", fontFamily:"var(--ff-b)" }}>
+          Browse Menu →
+        </a>
+      </div>
+    </div>
+  );
 }
 
 /* ── 404 ─────────────────────────────────────────────────────────────── */
