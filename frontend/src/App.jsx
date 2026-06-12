@@ -227,6 +227,7 @@ function BranchGate({ children }) {
   const qrHandledRef = useRef(false);
 
   // Auto-select branch when arriving via QR code (?branch_id=<uuid>)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (qrHandledRef.current) return;
     const urlBranchId = searchParams.get("branch_id");
@@ -246,7 +247,6 @@ function BranchGate({ children }) {
       if (cached.length) { applyBranch(cached); cleanUrl(); return; }
     } catch {}
 
-    // Cache empty — fetch, apply, then clean URL
     getPublicBranches()
       .then(res => {
         const list = res.data.branches || [];
@@ -255,7 +255,7 @@ function BranchGate({ children }) {
       })
       .catch(() => {})
       .finally(cleanUrl);
-  }, []);
+  }, []); // intentional empty deps — runs once on mount to handle QR branch_id param
 
   const handleSelected = useCallback((branch) => {
     selectBranch(branch);
