@@ -7,7 +7,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { gsap } from "gsap";
 import AppLayout from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { useAuth } from "../../context/AuthContext";
 import axiosClient from "../../api/axiosClient";
 
@@ -263,7 +263,6 @@ function StaffRow({ member, isSuperAdmin, onToggle, onDeactivate, onTerminate, t
 export default function AdminStaffPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { loading: pageLoading } = usePageLoader();
   const isSuperAdmin = user?.role === "super_admin";
 
   const headerRef = useRef(null);
@@ -426,7 +425,7 @@ export default function AdminStaffPage() {
   const createStaffPath      = "/admin/staff/create";
   const createBranchAdminPath = "/superadmin/branch-admin/create";
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading staff…" />;
+  if (loading) return <KNCLoader visible label="Loading staff…" />;
 
   return (
     <AppLayout>

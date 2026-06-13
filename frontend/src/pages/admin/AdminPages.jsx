@@ -8,7 +8,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { gsap } from "gsap";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { useAuth } from "../../context/AuthContext";
 import Header from "../../components/layout/Header";
 import axiosClient from "../../api/axiosClient";
@@ -1847,7 +1847,6 @@ function UserGuideTab({ role = "branch_admin" }) {
 ═══════════════════════════════════════════════════════════════════════════ */
 export function BranchDashboard() {
   const { user } = useAuth();
-  const { loading: pageLoading } = usePageLoader();
   const statsRef = useRef(null);
   const [ToastEl, showToast] = useToast();
 
@@ -1902,7 +1901,7 @@ export function BranchDashboard() {
     gsap.fromTo(statsRef.current.children, { y: 12, opacity: 0 }, { y: 0, opacity: 1, stagger: .06, duration: .35, ease: "power2.out" });
   }, [loading]);
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading dashboard…" />;
+  if (loading) return <KNCLoader visible label="Loading dashboard…" />;
 
 
   return (
@@ -5473,7 +5472,6 @@ function SANotificationBell() {
 }
 
 export function SuperAdminDashboard() {
-  const { loading: pageLoading } = usePageLoader();
   const statsRef = useRef(null);
   const [ToastEl, showToast] = useToast();
 
@@ -5631,7 +5629,7 @@ export function SuperAdminDashboard() {
     { key:"guide",    icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="3" strokeLinecap="round"/></svg>, label:"User Guide" },
   ];
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading dashboard…"/>;
+  if (loading) return <KNCLoader visible label="Loading dashboard…"/>;
 
   return (
     <>

@@ -12,7 +12,7 @@ import useSEO from "../../hooks/useSEO";
 import { useNavigate, Link } from "react-router-dom";
 import { gsap } from "gsap";
 import AppLayout from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import useBranch from "../../hooks/useBranch";
 import axiosClient from "../../api/axiosClient";
 import { formatPrice, formatCountdown } from "../../utils/format";
@@ -244,7 +244,6 @@ export default function OffersPage() {
 
   const { branchName, branchId, hasBranch } = useBranch();
   const navigate = useNavigate();
-  const { loading: pageLoading } = usePageLoader();
   const [offers,  setOffers]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter,    setFilter]   = useState("all");
@@ -286,7 +285,7 @@ export default function OffersPage() {
     }
   }, [loading]);
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading offers…"/>;
+  if (loading) return <KNCLoader visible label="Loading offers…"/>;
 
   const now = Date.now();
   const visibleOffers = offers; // show all — including claimed so user can see their coupon

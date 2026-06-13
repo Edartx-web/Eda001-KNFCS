@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { gsap }              from "gsap";
 import AppLayout             from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { useAuth }           from "../../context/AuthContext";
 import { getBranches, createOffer, updateOffer, deleteOffer } from "../../api/auth";
 import { getOfferDetail }    from "../../api/orders";
@@ -1145,7 +1145,6 @@ function OfferCard({ offer, isSuperAdmin, onEdit, onDelete, onView, branches }) 
 ═══════════════════════════════════════════════════════════════════════ */
 export default function AdminOffersPage() {
   const { user }  = useAuth();
-  const { loading: pageLoading } = usePageLoader();
   const isSuperAdmin = user?.role === "super_admin";
 
   const [offers,       setOffers]       = useState([]);
@@ -1236,7 +1235,7 @@ export default function AdminOffersPage() {
     } catch { showToast("Delete failed."); setConfirm(null); }
   };
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading offers…" />;
+  if (loading) return <KNCLoader visible label="Loading offers…" />;
 
   const now = Date.now();
   const filtered = offers.filter(o => {

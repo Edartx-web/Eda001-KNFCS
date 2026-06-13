@@ -6,7 +6,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { gsap }                      from "gsap";
 import AppLayout                     from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader }  from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { useAuth }                   from "../../context/AuthContext";
 import axiosClient                   from "../../api/axiosClient";
 import {
@@ -23,7 +23,6 @@ const carryoverKey = (branchId) => `knfc_carryover_decided_${branchId}_${new Dat
 
 export default function AdminStockPage() {
   const { user } = useAuth();
-  const { loading: pageLoading } = usePageLoader();
   const headerRef = useRef(null);
   const isSuperAdmin = user?.role === "super_admin";
   const isAdmin      = user?.role === "branch_admin" || isSuperAdmin;
@@ -189,7 +188,7 @@ export default function AdminStockPage() {
     } finally { setResetting(false); }
   };
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading stock…" />;
+  if (loading) return <KNCLoader visible label="Loading stock…" />;
 
   const outCount  = stock.filter(s => s.status === "out").length;
   const lowCount  = stock.filter(s => s.status === "low" || s.status === "critical").length;

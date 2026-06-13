@@ -13,7 +13,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { gsap } from "gsap";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import AppLayout from "../../components/layout/AppLayout";
 import { placeOrder, getOfferDetail, redeemLoyaltyPoints } from "../../api/orders";
 import axiosClient from "../../api/axiosClient";
@@ -386,8 +386,6 @@ export default function CartPage() {
   usePageProtection();   // block copy/screenshot/print on checkout page
 
   const navigate       = useNavigate();
-  const { loading: pageLoading } = usePageLoader();
-
   const items            = useCartStore(s => s.items);
   const orderType        = useCartStore(s => s.orderType);
   const tableNumber      = useCartStore(s => s.tableNumber);
@@ -552,7 +550,6 @@ export default function CartPage() {
     } finally { setLoading(false); }
   };
 
-  if (pageLoading) return <KNCLoader visible label="Loading cart…"/>;
   if (!items.length) return <EmptyCart navigate={navigate}/>;
   // No branch selected at checkout — force picker
   if (!hasBranch) return (

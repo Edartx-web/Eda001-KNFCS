@@ -12,7 +12,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { gsap } from "gsap";
 import AppLayout from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { useAuth } from "../../context/AuthContext";
 import { getAnalytics } from "../../api/orders";
 import { formatPrice } from "../../utils/format";
@@ -176,7 +176,6 @@ function SplitBar({ dineIn, pickup }) {
 /* ─── Main page ─────────────────────────────────────────────────────── */
 export default function AnalyticsDashboard() {
   const { user }   = useAuth();
-  const { loading: pageLoading } = usePageLoader();
   const pageRef    = useRef(null);
   const isSuperAdmin = user?.role === "super_admin";
 
@@ -273,7 +272,7 @@ export default function AnalyticsDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading analytics…"/>;
+  if (loading) return <KNCLoader visible label="Loading analytics…"/>;
 
   return (
     <AppLayout>

@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate }   from "react-router-dom";
 import AppLayout         from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { useAuth }       from "../../context/AuthContext";
 import axiosClient       from "../../api/axiosClient";
 
@@ -174,13 +174,11 @@ function ChangePasswordForm() {
 export default function ProfilePage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const { loading: pageLoading } = usePageLoader();
   const [editingName, setEditingName] = useState(false);
   const [displayName, setDisplayName] = useState(user?.name || "");
 
   useEffect(() => { setDisplayName(user?.name || ""); }, [user?.name]);
 
-  if (pageLoading) return <KNCLoader visible label="Loading profile…" />;
   if (!user) { navigate("/"); return null; }
 
   const rc   = ROLE_COLOR[user.role] || ROLE_COLOR.staff;

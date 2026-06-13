@@ -15,7 +15,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { gsap } from "gsap";
 import AppLayout from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { searchItems, getCategories, getFeatured } from "../../api/menu";
 import { formatPrice } from "../../utils/format";
 import { DIETARY_DOT } from "../../utils/constants";

@@ -196,7 +196,7 @@ function PageTransition({ children }) {
 /* ── Role guard ─────────────────────────────────────────────────────── */
 function RequireAuth({ roles, children }) {
   const { user, isLoading } = useAuth();
-  if (isLoading) return <KNCLoader visible label="Loading…" />;
+  if (isLoading) return null; // splash covers first-load; page shows its own loader
   if (!user)     return <Navigate to="/" replace />;
   if (roles && !roles.includes(user.role)) {
     const HOME = {
@@ -291,7 +291,7 @@ function RootRedirect() {
 /* ── Require logged-in customer (redirects to login, not root) ───────── */
 function RequireCustomer({ children }) {
   const { user, isLoading } = useAuth();
-  if (isLoading) return <KNCLoader visible label="Loading…" />;
+  if (isLoading) return null; // splash covers first-load; page shows its own loader
   if (!user) return <Navigate to="/login/customer" replace />;
   if (user.role !== "customer") {
     const HOME = { staff:"/staff/queue", branch_admin:"/admin/dashboard", super_admin:"/superadmin/dashboard" };

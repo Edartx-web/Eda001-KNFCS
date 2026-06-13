@@ -14,7 +14,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { gsap }                       from "gsap";
 import AppLayout                      from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader }   from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import useCartStore                   from "../../store/cartStore";
 import { getOfferDetail }             from "../../api/orders";
 import { formatPrice, formatCountdown } from "../../utils/format";
@@ -53,8 +53,6 @@ export default function OfferDetailPage() {
   const heroRef   = useRef(null);
   const videoRef  = useRef(null);
   const ctaRef    = useRef(null);
-  const { loading: pageLoading } = usePageLoader();
-
   const [offer,        setOffer]        = useState(null);
   const [secs,         setSecs]         = useState(0);
   const [added,        setAdded]        = useState(false);
@@ -187,7 +185,7 @@ export default function OfferDetailPage() {
   const { h, m, s } = isLifetime ? { h:'∞', m:'∞', s:'∞' } : formatCountdown(secs || 0);
   const expired     = !isLifetime && secs === 0;
 
-  if (pageLoading || loading || !offer) return <KNCLoader visible label="Loading offer…" />;
+  if (loading || !offer) return <KNCLoader visible label="Loading offer…" />;
   // inject spin keyframe once
   if (typeof document !== "undefined" && !document.getElementById("od-spin-css")) {
     const s = document.createElement("style"); s.id = "od-spin-css";

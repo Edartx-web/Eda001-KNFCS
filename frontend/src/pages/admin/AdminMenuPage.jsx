@@ -20,7 +20,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { gsap } from "gsap";
 import AppLayout from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { useAuth } from "../../context/AuthContext";
 import {
   adminGetCategories, adminCreateCategory, adminUpdateCategory, adminDeleteCategory,
@@ -1353,8 +1353,6 @@ function ReviewsTab({ activeBranchId }) {
 ═══════════════════════════════════════════════════════════════════════ */
 export default function AdminMenuPage() {
   const { user } = useAuth();
-  const { loading: pageLoading } = usePageLoader();
-
   const isSuperAdmin = user?.role === "super_admin";
 
   // SuperAdmin selects which branch to manage
@@ -1419,7 +1417,7 @@ export default function AdminMenuPage() {
     setItems([]);
   };
 
-  if (pageLoading || branchesLoading) return <KNCLoader visible label="Loading menu manager…" />;
+  if (branchesLoading) return <KNCLoader visible label="Loading menu manager…" />;
 
   const TABS = [
     { key:"items",      label:`Items (${items.length})` },

@@ -8,7 +8,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Navigate, Link } from "react-router-dom";
 import { gsap } from "gsap";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import AppLayout from "../../components/layout/AppLayout";
 import { getOrderDetail } from "../../api/orders";
 import { submitReview }   from "../../api/menu";
@@ -388,7 +388,6 @@ export function OrderConfirmPage() {
   const navigate   = useNavigate();
   const tokenRef   = useRef(null);
   const cardsRef   = useRef(null);
-  const { loading: pageLoading } = usePageLoader();
   const { user }   = useAuth();
   const [order,      setOrder]      = useState(null);
   const [loaded,     setLoaded]     = useState(false);
@@ -451,7 +450,7 @@ export function OrderConfirmPage() {
     return () => clearInterval(t);
   }, [order?.status, id]);
 
-  if (pageLoading || !order) return <KNCLoader visible label="Confirming order…"/>;
+  if (!order) return <KNCLoader visible label="Confirming order…"/>;
 
   const pointsEarned = Math.round(parseFloat(order.total || 0) * 0.1);
 
@@ -565,7 +564,6 @@ export function OrderConfirmPage() {
 export function OrderTrackPage() {
   const { id }     = useParams();
   const navigate   = useNavigate();
-  const { loading: pageLoading } = usePageLoader();
   const { user }   = useAuth();
   const msgRef     = useRef(null);
   const stepRef    = useRef(null);
@@ -644,7 +642,6 @@ export function OrderTrackPage() {
     } finally { setSubmittingRating(false); }
   };
 
-  if (pageLoading) return <KNCLoader visible label="Loading order status…"/>;
   // Loaded but no order found (invalid/expired ID) → send to menu instead of blank screen
   if (loaded && !order) return <Navigate to="/menu" replace />;
   if (!order) return <KNCLoader visible label="Loading order status…"/>;

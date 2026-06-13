@@ -13,7 +13,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { gsap } from "gsap";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import AppLayout from "../../components/layout/AppLayout";
 import { getItemDetail, getCategories, toggleFavourite, submitReview } from "../../api/menu";
 import { formatPrice, formatUnit, formatCalories } from "../../utils/format";
@@ -109,7 +109,6 @@ export default function ProductDetailPage() {
   const heroRef     = useRef(null);
   const addAreaRef  = useRef(null);
   const touchStartX = useRef(null);
-  const { loading: pageLoading } = usePageLoader();
   const [showSwipeHint, setShowSwipeHint] = useState(() => !localStorage.getItem(SWIPE_HINT_KEY));
 
   const [item,       setItem]       = useState(null);
@@ -199,7 +198,7 @@ export default function ProductDetailPage() {
     return () => obs.disconnect();
   }, [item]);
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading product…"/>;
+  if (loading) return <KNCLoader visible label="Loading product…"/>;
 
   if (serverErr) return (
     <AppLayout>

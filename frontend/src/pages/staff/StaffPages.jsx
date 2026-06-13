@@ -15,7 +15,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { gsap } from "gsap";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import AppLayout from "../../components/layout/AppLayout";
 import { useAuth } from "../../context/AuthContext";
 import { notify } from "../../components/common/NotificationSystem";
@@ -683,7 +683,6 @@ function DutyPromptModal({ user, onConfirm, onDismiss }) {
 export function QueuePage() {
   const { user }   = useAuth();
   const listRef    = useRef(null);
-  const { loading: pageLoading } = usePageLoader();
 
   const [tab,         setTab]         = useState("queue");
   const [queue,       setQueue]       = useState([]);
@@ -907,7 +906,7 @@ export function QueuePage() {
 
   const handleAck = async () => { await ackAlerts(); setAlertCount(0); };
 
-  if (pageLoading || dataLoading) return <KNCLoader visible label="Loading queue…"/>;
+  if (dataLoading) return <KNCLoader visible label="Loading queue…"/>;
 
   const carriedOver = queue.filter(o => o.carried_over);
   const todayRev    = completed.reduce((s, o) => s + parseFloat(o.total || 0), 0);
@@ -1168,7 +1167,6 @@ export function QueuePage() {
    STOCK PAGE (standalone /staff/stock route)
 ══════════════════════════════════════════════════════════════════════ */
 export function StockPage() {
-  const { loading: pageLoading } = usePageLoader();
   const { user } = useAuth();
   const isAdmin  = user?.role === "branch_admin" || user?.role === "super_admin";
   const [stock,      setStock]      = useState([]);
@@ -1202,7 +1200,7 @@ export function StockPage() {
     } finally { setSubmitting(false); }
   };
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading stock…"/>;
+  if (loading) return <KNCLoader visible label="Loading stock…"/>;
 
   const QUICK = [5, 10, 20, 50];
 
@@ -1337,7 +1335,6 @@ export function StockPage() {
 ══════════════════════════════════════════════════════════════════════ */
 export function NewOrderPage() {
   const navigate = useNavigate();
-  const { loading: pageLoading } = usePageLoader();
 
   const [items,        setItems]        = useState([]);
   const [stockMap,     setStockMap]     = useState({});  // menu_item_id → remaining_stock
@@ -1430,7 +1427,7 @@ export function NewOrderPage() {
     } finally { setPlacing(false); }
   };
 
-  if (pageLoading || itemsLoading) return <KNCLoader visible label="New walk-in order…"/>;
+  if (itemsLoading) return <KNCLoader visible label="New walk-in order…"/>;
 
   return (
     <AppLayout>

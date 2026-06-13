@@ -452,11 +452,13 @@ export default function ProductListPage() {
     return () => observers.forEach(o => o.disconnect());
   }, [isAllMode, filtered]);
 
-  /* Auto-scroll active chip into centre of category bar */
+  /* Auto-scroll active chip into centre of category bar (horizontal only — never scrolls window) */
   useEffect(() => {
     if (!catBarRef.current || !activeSection) return;
-    const chip = catBarRef.current.querySelector(`[data-cat="${activeSection}"]`);
-    if (chip) chip.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    const bar  = catBarRef.current;
+    const chip = bar.querySelector(`[data-cat="${activeSection}"]`);
+    if (!chip) return;
+    bar.scrollLeft = chip.offsetLeft - bar.offsetWidth / 2 + chip.offsetWidth / 2;
   }, [activeSection]);
 
   const cat   = category || {};

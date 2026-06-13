@@ -12,7 +12,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { gsap } from "gsap";
 import AppLayout from "../../components/layout/AppLayout";
-import KNCLoader, { usePageLoader } from "../../components/common/KNCLoader";
+import KNCLoader from "../../components/common/KNCLoader";
 import { useAuth } from "../../context/AuthContext";
 import useCartStore from "../../store/cartStore";
 import { getMyOrders } from "../../api/orders";
@@ -47,7 +47,6 @@ export default function AccountPage() {
   const navigate  = useNavigate();
   const { user, logout } = useAuth();
   const addItem   = useCartStore(s => s.addItem);
-  const { loading: pageLoading } = usePageLoader();
   const pageRef   = useRef(null);
   const heroRef   = useRef(null);
 
@@ -133,7 +132,7 @@ const handleCancelOrder = async (order) => {
     }
   };
 
-  if (pageLoading || loading) return <KNCLoader visible label="Loading account…" />;
+  if (loading) return <KNCLoader visible label="Loading account…" />;
   const TABS = [
     { key:"orders",     label:"Orders",   count:orders.length     },
     { key:"favourites", label:"Saved",    count:favourites.length },
