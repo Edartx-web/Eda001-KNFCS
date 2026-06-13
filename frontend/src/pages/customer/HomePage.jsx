@@ -929,7 +929,7 @@ export default function HomePage() {
         {THEMED_SECTIONS.map(({flag,label,accent,filterParam}) => {
           const rawItems = sectionItems[flag];
           if (!rawItems?.length) return null;
-          const items = flag === "is_hotdeals" ? dailyShuffle(rawItems) : rawItems;
+          const items = dailyShuffle(rawItems);
           const secImg = siteConfig?.config?.home_section_images?.[flag] || {};
           // auto-fallback: use first item with an image as the section banner
           const autoImg = !secImg.image_url ? (items.find(i => i.image_url)?.image_url || null) : null;
