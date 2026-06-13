@@ -314,12 +314,12 @@ export default function AdminStockPage() {
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(310px,1fr))", gap:"var(--s4)" }}>
                 {stock.map(s => (
                   <StockCard
-                    key={s.menu_item_id}
+                    key={s.menu_item}
                     s={s}
                     branchId={effectiveBranchId}
                     onTopUp={setTopUpItem}
                     onReload={loadStock}
-                    isAcknowledged={acknowledged.has(s.menu_item_id)}
+                    isAcknowledged={acknowledged.has(s.menu_item)}
                     onAcknowledge={id => setAcknowledged(prev => new Set([...prev, id]))}
                     isLocked={isLocked}
                   />

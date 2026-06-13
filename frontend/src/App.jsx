@@ -10,7 +10,7 @@
  */
 
 import React, { Suspense, lazy, useState, useEffect, useRef, useCallback, Component } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import useBranch             from "./hooks/useBranch";
 import BranchSelector        from "./components/common/BranchSelector";
@@ -355,6 +355,12 @@ const P = ({ roles, C }) => (
   </RequireAuth>
 );
 
+// Redirect /menu/:slug → /menu/category/:slug (legacy / external links)
+const NavigateToCategorySlug = () => {
+  const { slug } = useParams();
+  return <Navigate to={`/menu/category/${slug}`} replace />;
+};
+
 // PG — Public customer page (no auth required — any visitor can browse)
 const PG = ({ C }) => (
   <BranchGate>
@@ -527,6 +533,7 @@ export default function App() {
           <Route path="/menu/category/:slug" element={<PG C={ProductListPage} />} />
           <Route path="/menu/item/:slug"     element={<PG C={ProductDetailPage} />} />
           <Route path="/menu/product/:slug"  element={<PG C={ProductDetailPage} />} />
+          <Route path="/menu/:slug"          element={<NavigateToCategorySlug />} />
           <Route path="/offers"              element={<PG C={OffersPage} />} />
           <Route path="/offers/:id"          element={<PG C={OfferDetailPage} />} />
           <Route path="/spin"                element={<PG C={SpinWheelPage} />} />

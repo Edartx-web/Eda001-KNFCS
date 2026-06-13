@@ -54,7 +54,7 @@ export function ThresholdCell({ item, onSaved, disabled }) {
   const save = async () => {
     setSaving(true);
     try {
-      await axiosClient.patch("/stock/threshold/", { menu_item_id: item.menu_item_id, low_stock_threshold: Number(val) });
+      await axiosClient.patch("/stock/threshold/", { menu_item_id: item.menu_item, low_stock_threshold: Number(val) });
       setEditing(false);
       onSaved();
     } catch {}
@@ -101,7 +101,7 @@ export function CarryoverToggle({ item, onSaved, disabled }) {
     const next = !on;
     setSaving(true);
     try {
-      await axiosClient.patch("/stock/carryover/", { menu_item_id: item.menu_item_id, carries_over: next });
+      await axiosClient.patch("/stock/carryover/", { menu_item_id: item.menu_item, carries_over: next });
       setOn(next);
       onSaved();
     } catch {}
@@ -126,7 +126,7 @@ export function CarryoverPrompt({ item, branchId, onDiscard, onKeep }) {
     setDiscarding(true);
     setError("");
     try {
-      const payload = { menu_item_id: item.menu_item_id };
+      const payload = { menu_item_id: item.menu_item };
       if (branchId) payload.branch_id = branchId;
       await rejectCarryover(payload);
       onDiscard();
@@ -171,7 +171,7 @@ export function RollbackButton({ item, branchId, onDone }) {
     setLoading(true);
     setError("");
     try {
-      const payload = { menu_item_id: item.menu_item_id };
+      const payload = { menu_item_id: item.menu_item };
       if (branchId) payload.branch_id = branchId;
       await rollbackStock(payload);
       setDone(true);
@@ -263,7 +263,7 @@ export function TopUpModal({ item, onClose, onDone }) {
     setSubmitting(true);
     setError("");
     try {
-      const payload = { menu_item_id: item.menu_item_id || item.id, quantity: q, is_opening: isOpening };
+      const payload = { menu_item_id: item.menu_item, quantity: q, is_opening: isOpening };
       if (item.branch_id) payload.branch_id = item.branch_id;
       await topUpStock(payload);
       setDone(true);
@@ -540,7 +540,7 @@ export function StockCard({ s, branchId, onTopUp, onReload, isAcknowledged, onAc
       {/* Carryover confirmation prompt */}
       {showCarryoverPrompt && (
         <div style={{ padding:"var(--s3) var(--s3) 0" }}>
-          <CarryoverPrompt item={s} branchId={branchId} onDiscard={onReload} onKeep={() => onAcknowledge(s.menu_item_id)} />
+          <CarryoverPrompt item={s} branchId={branchId} onDiscard={onReload} onKeep={() => onAcknowledge(s.menu_item)} />
         </div>
       )}
 
