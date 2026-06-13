@@ -105,7 +105,7 @@ export default function Footer() {
   return (
     <>
       {/* ── Desktop rich footer — customers only ─────────────────────── */}
-      <footer className="desk-footer" style={{ display: isCustomerRole ? undefined : "none" }}>
+      <footer className={`desk-footer${isCustomerRole ? "" : " desk-footer--hidden"}`}>
         <div className="desk-footer-inner">
           {/* ── Col 1: Brand + social icons ──────────────────────────── */}
           <div>
