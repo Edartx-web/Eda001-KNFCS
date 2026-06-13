@@ -134,6 +134,10 @@
   inset: 0;
   z-index: 1;
 }
+/* Hidden by default (desktop) — mobile breakpoint overrides to block */
+.mob-swiper {
+  display: none;
+}
 .auth-left-content {
   position: relative;
   z-index: 3;
