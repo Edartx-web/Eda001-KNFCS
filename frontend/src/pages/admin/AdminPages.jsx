@@ -247,9 +247,9 @@ const GLOBAL_CSS = `
   .adm-row:hover { background: var(--bg2, #f9fafb); }
 
   /* ── Staff grid header / row ── */
-  .staff-grid { display: grid; grid-template-columns: 1fr 120px 100px 90px 80px 60px; gap: 12px; align-items: center; padding: 12px 20px; }
-  @media (max-width: 900px) { .staff-grid { grid-template-columns: 1fr 90px 80px 60px; } .staff-col-userid, .staff-col-branch { display: none !important; } }
-  @media (max-width: 600px) { .staff-grid { grid-template-columns: 1fr 70px 52px; gap: 8px; } .staff-col-status { display: none !important; } }
+  .staff-grid { display: grid; grid-template-columns: 1fr 120px 100px 90px 80px 170px; gap: 12px; align-items: center; padding: 12px 20px; }
+  @media (max-width: 900px) { .staff-grid { grid-template-columns: 1fr 90px 80px 170px; } .staff-col-userid, .staff-col-branch { display: none !important; } }
+  @media (max-width: 600px) { .staff-grid { grid-template-columns: 1fr 52px 140px; gap: 8px; } .staff-col-status { display: none !important; } }
 
   /* ── Branch card ── */
   .adm-branch-card {
