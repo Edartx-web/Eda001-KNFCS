@@ -661,6 +661,7 @@ function StaffManager({ branchId, branches = [], isSuperAdmin }) {
   const [search, setSearch] = useState("");
   const [filterB, setFilterB] = useState(branchId || "");
   const [confirm, setConfirm] = useState(null);
+  const [terminateConfirm, setTerminateConfirm] = useState(null);
   const [toggling, setToggling] = useState({});
   const [ToastEl, showToast] = useToast();
   const listRef = useRef(null);
@@ -730,6 +731,18 @@ function StaffManager({ branchId, branches = [], isSuperAdmin }) {
       showToast(`${confirm.name} deactivated.`);
       setConfirm(null); load();
     } catch { showToast("Failed."); setConfirm(null); }
+  };
+
+  const handleTerminate = async () => {
+    if (!terminateConfirm) return;
+    try {
+      await axiosClient.delete(`/auth/admin/users/${terminateConfirm.id}/terminate/`);
+      showToast(`${terminateConfirm.name} permanently terminated.`);
+      setTerminateConfirm(null); load();
+    } catch (e) {
+      showToast(e.response?.data?.error || "Termination failed.");
+      setTerminateConfirm(null);
+    }
   };
 
   const filtered = staff.filter(s => {
@@ -884,6 +897,15 @@ function StaffManager({ branchId, branches = [], isSuperAdmin }) {
                     Activate
                   </button>
                 )}
+                {isSuperAdmin && (
+                  <button
+                    onClick={() => setTerminateConfirm(s)}
+                    className="adm-btn adm-btn-sm adm-btn-danger"
+                    style={{ fontSize: ".6875rem", padding: "4px 10px", background:"rgba(226,75,74,.12)", color:"var(--err)", borderColor:"rgba(226,75,74,.3)" }}
+                    title="Permanently remove all personal data">
+                    Terminate
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -901,6 +923,22 @@ function StaffManager({ branchId, branches = [], isSuperAdmin }) {
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={handleDeactivate} className="adm-btn adm-btn-primary" style={{ flex: 1, background: "var(--err)", justifyContent: "center" }}>Deactivate</button>
               <button onClick={() => setConfirm(null)} className="adm-btn adm-btn-ghost" style={{ flex: 1, justifyContent: "center" }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm terminate (SA only) */}
+      {terminateConfirm && (
+        <div className="adm-confirm" onClick={() => setTerminateConfirm(null)}>
+          <div className="adm-confirm-box" onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily:"var(--font-display)", fontSize:"1.0625rem", fontWeight:700, marginBottom:8, color:"var(--err)" }}>Permanently terminate account?</h3>
+            <p style={{ fontSize:".9375rem", color:"var(--t3)", marginBottom:12, lineHeight:1.6 }}>
+              <strong>{terminateConfirm.name}</strong> ({terminateConfirm.user_id_login}) — this will remove all personal data. Their work history is preserved but the identity is anonymised. <strong style={{ color:"var(--err)" }}>This cannot be undone.</strong>
+            </p>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={handleTerminate} className="adm-btn adm-btn-primary" style={{ flex:1, background:"var(--err)", justifyContent:"center" }}>Terminate permanently</button>
+              <button onClick={() => setTerminateConfirm(null)} className="adm-btn adm-btn-ghost" style={{ flex:1, justifyContent:"center" }}>Cancel</button>
             </div>
           </div>
         </div>
@@ -3280,6 +3318,17 @@ function SupportTicketsTab({ branches }) {
 }
 
 /* ── Settings Tab (SiteConfig — SuperAdmin only) ───────────────── */
+const SETTINGS_SECTIONS = [
+  { key:"loyalty",   label:"Loyalty",       icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> },
+  { key:"games",     label:"Games",         icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4"/><circle cx="16" cy="12" r=".5" fill="currentColor"/><circle cx="18" cy="10" r=".5" fill="currentColor"/></svg> },
+  { key:"login",     label:"Login Page",    icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg> },
+  { key:"home",      label:"Home & Ads",    icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+  { key:"marketing", label:"Marketing",     icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" strokeLinecap="round"/></svg> },
+  { key:"contact",   label:"Contact",       icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> },
+  { key:"about",     label:"About & More",  icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16" strokeWidth="3" strokeLinecap="round"/></svg> },
+  { key:"email",     label:"Email Test",    icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg> },
+];
+
 function SuperAdminSettingsTab() {
   const [cfg,       setCfg]       = useState(null);
   const [loading,   setLoading]   = useState(true);
@@ -3290,6 +3339,7 @@ function SuperAdminSettingsTab() {
   const [loginImg,  setLoginImg]  = useState(null);
   const [imgPreview,setImgPreview]= useState(null);
   const [clearImg,  setClearImg]  = useState(false);
+  const [section,   setSection]   = useState("loyalty");
 
   useEffect(() => {
     axiosClient.get("/branches/config/")
@@ -3350,17 +3400,31 @@ function SuperAdminSettingsTab() {
   return (
     <SettingsCtx.Provider value={{ form, set }}>
     <div className="stt-wrap">
+
+      {/* Section navigator */}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:24, paddingBottom:16, borderBottom:"1px solid var(--bd)" }}>
+        {SETTINGS_SECTIONS.map(s => (
+          <button key={s.key} type="button"
+            onClick={() => setSection(s.key)}
+            style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 14px", borderRadius:20, border:`1.5px solid ${section===s.key?"var(--brand)":"var(--bd)"}`, background:section===s.key?"var(--brand)":"var(--bg2)", color:section===s.key?"#fff":"var(--t2)", fontFamily:"var(--ff-b)", fontWeight:600, fontSize:".8125rem", cursor:"pointer", transition:"all 140ms", whiteSpace:"nowrap" }}>
+            <span style={{ opacity:section===s.key?1:.7 }}>{s.icon}</span>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
       {/* Loyalty */}
-      <SettingsSection title="Loyalty Programme">
+      {section === "loyalty" && <SettingsSection title="Loyalty Programme">
         <SettingsRow label="Enable loyalty points" help="Master switch — turns off all earning and redemption if disabled"><SettingsToggle k="loyalty_enabled"/></SettingsRow>
         <SettingsRow label="Earn rate" help="Points earned per ₹1 spent on each order"><SettingsNum k="loyalty_earn_rate" min={0} max={100} step={0.1} suffix="pts / ₹1"/></SettingsRow>
         <SettingsRow label="Redeem rate" help="₹ value of 1 loyalty point (e.g. 0.10 = 100 pts = ₹10)"><SettingsNum k="loyalty_redeem_rate" min={0} max={1} step={0.01} suffix="₹ / pt"/></SettingsRow>
         <SettingsRow label="Minimum to redeem" help="Minimum points required in one transaction"><SettingsNum k="loyalty_min_redeem" min={0} max={10000} suffix="pts"/></SettingsRow>
         <SettingsRow label="Redeem step" help="Points must be in multiples of this number"><SettingsNum k="loyalty_redeem_step" min={1} max={1000} suffix="pts"/></SettingsRow>
         <SettingsRow label="Max redeem %" help="Max % of order total payable by loyalty points"><SettingsNum k="loyalty_max_redeem_pct" min={0} max={100} suffix="%"/></SettingsRow>
-      </SettingsSection>
+      </SettingsSection>}
 
-      {/* Spin Wheel */}
+      {/* Games — Spin Wheel + Scratch Card */}
+      {section === "games" && <>
       <SettingsSection title="Spin-the-Wheel Game">
         <SettingsRow label="Enable spin wheel" help="Show spin wheel on customer Offers page"><SettingsToggle k="spin_enabled"/></SettingsRow>
         <SettingsRow label="Max spins per customer per day" help="0 = unlimited"><SettingsNum k="spin_max_uses" min={0} max={10}/></SettingsRow>
@@ -3421,9 +3485,10 @@ function SuperAdminSettingsTab() {
             className="stt-input stt-input--mono" style={{ fontWeight:700, textTransform:"uppercase" }}/>
         </SettingsRow>
       </SettingsSection>
+      </>}
 
       {/* Login Page */}
-      <SettingsSection title="Login Page Customisation">
+      {section === "login" && <SettingsSection title="Login Page Customisation">
         {/* Desktop hero video */}
         <SettingsRow label="Desktop hero video URL" help="URL of an MP4 video to play on the desktop login panel. Leave blank to use the built-in KNFC video. Paste a direct .mp4 link or upload below.">
           <VideoUploadField value={form.login_video_url || ""} onChange={v => set("login_video_url", v)} />
@@ -3458,23 +3523,23 @@ function SuperAdminSettingsTab() {
             onChange={v => set("login_slides", v)}
           />
         </SettingsRow>
-      </SettingsSection>
+      </SettingsSection>}
 
-      {/* Home Page Ads */}
-      {/* Home Section Images */}
+      {/* Home & Ads */}
+      {section === "home" && <>
       <HomeSectionImagesPanel form={form} set={set} />
-
       <HomeAdsPanel form={form} set={set} />
+      </>}
 
-      {/* Re-engagement default */}
-      <SettingsSection title="Re-engagement Offers">
+      {/* Re-engagement */}
+      {section === "marketing" && <SettingsSection title="Re-engagement Offers">
         <SettingsRow label="Default inactive days" help="Default 'inactive after X days' pre-filled when creating a Re-engage offer">
           <SettingsNum k="reengagement_default_days" min={1} max={365} suffix="days"/>
         </SettingsRow>
-      </SettingsSection>
+      </SettingsSection>}
 
       {/* Contact Us */}
-      <SettingsSection title="Contact &amp; Support">
+      {section === "contact" && <SettingsSection title="Contact &amp; Support">
         <SettingsRow label="Phone number" help="Shown on Contact page and footer">
           <input value={form.contact_phone ?? ""} onChange={e => set("contact_phone", e.target.value)}
             placeholder="+91 98765 43210" className="stt-input"/>
@@ -3492,9 +3557,10 @@ function SuperAdminSettingsTab() {
             placeholder="123 Main Street, City, State 600001" rows={3}
             className="stt-input stt-input--wide" style={{ resize:"vertical", fontFamily:"var(--ff-b)", lineHeight:1.6 }}/>
         </SettingsRow>
-      </SettingsSection>
+      </SettingsSection>}
 
-      {/* About Page */}
+      {/* About & More — About, Blog, Careers, Footer */}
+      {section === "about" && <>
       <SettingsSection title="About Page">
         <SettingsRow label="Headline" help="Main heading on the About page">
           <input value={form.about_headline ?? ""} onChange={e => set("about_headline", e.target.value)}
@@ -3627,7 +3693,6 @@ function SuperAdminSettingsTab() {
         </SettingsRow>
       </SettingsSection>
 
-      {/* Footer map */}
       <SettingsSection title="Footer">
         <SettingsRow label="Show map in footer" help="Display Google Maps embed in the desktop footer"><SettingsToggle k="footer_show_map"/></SettingsRow>
         <SettingsRow label="Map search query" help="Google Maps search term for the footer embed (e.g. KNFC+Fried+Chicken+Coimbatore)">
@@ -3635,20 +3700,23 @@ function SuperAdminSettingsTab() {
             placeholder="KNFC+Fried+Chicken" className="stt-input stt-input--wide"/>
         </SettingsRow>
       </SettingsSection>
+      </>}
 
-      {/* Save */}
-      <div className="stt-save-bar">
-        <button type="button" onClick={save} disabled={saving}
-          style={{ padding:"12px 32px", borderRadius:"var(--r3)", border:"none", background:"var(--brand)", color:"#fff", fontWeight:800, fontSize:"1rem", cursor:saving?"not-allowed":"pointer", fontFamily:"var(--ff-b)", boxShadow:"0 4px 16px rgba(232,82,26,.35)", opacity:saving?0.7:1 }}>
-          {saving ? "Saving…" : "Save settings"}
-        </button>
-        {saved    && <span style={{ color:"var(--ok)",  fontWeight:700, fontSize:".9375rem", display:"flex", alignItems:"center", gap:5 }}><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--ok)" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg> Saved!</span>}
-        {saveErr  && <span style={{ color:"var(--err)", fontWeight:600, fontSize:".875rem" }}>{saveErr}</span>}
-        {!saveErr && !saved && <span style={{ fontSize:".8125rem", color:"var(--t4)" }}>Changes apply immediately to all users.</span>}
-      </div>
+      {/* Email Test */}
+      {section === "email" && <TestEmailPanel />}
 
-      {/* Email config test */}
-      <TestEmailPanel />
+      {/* Save — always visible (saves all sections at once) */}
+      {section !== "email" && (
+        <div className="stt-save-bar" style={{ marginTop:32 }}>
+          <button type="button" onClick={save} disabled={saving}
+            style={{ padding:"12px 32px", borderRadius:"var(--r3)", border:"none", background:"var(--brand)", color:"#fff", fontWeight:800, fontSize:"1rem", cursor:saving?"not-allowed":"pointer", fontFamily:"var(--ff-b)", boxShadow:"0 4px 16px rgba(232,82,26,.35)", opacity:saving?0.7:1 }}>
+            {saving ? "Saving…" : "Save settings"}
+          </button>
+          {saved    && <span style={{ color:"var(--ok)",  fontWeight:700, fontSize:".9375rem", display:"flex", alignItems:"center", gap:5 }}><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--ok)" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round"/></svg> Saved!</span>}
+          {saveErr  && <span style={{ color:"var(--err)", fontWeight:600, fontSize:".875rem" }}>{saveErr}</span>}
+          {!saveErr && !saved && <span style={{ fontSize:".8125rem", color:"var(--t4)" }}>Changes apply immediately to all users.</span>}
+        </div>
+      )}
     </div>
     </SettingsCtx.Provider>
   );
@@ -4238,12 +4306,13 @@ function SuperAdminAnalyticsTab({ branches }) {
 
 /* ── BranchAdmin Users Tab ─────────────────────────────────────── */
 function BranchAdminUsersTab({ branches }) {
-  const [admins,   setAdmins]   = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState("");
-  const [confirm,  setConfirm]  = useState(null);
-  const [toggling, setToggling] = useState({});
-  const [ToastEl,  showToast]   = useToast();
+  const [admins,           setAdmins]           = useState([]);
+  const [loading,          setLoading]          = useState(true);
+  const [search,           setSearch]           = useState("");
+  const [confirm,          setConfirm]          = useState(null);
+  const [terminateConfirm, setTerminateConfirm] = useState(null);
+  const [toggling,         setToggling]         = useState({});
+  const [ToastEl,          showToast]           = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -4280,6 +4349,18 @@ function BranchAdminUsersTab({ branches }) {
       showToast(`${confirm.name} deactivated.`);
       setConfirm(null); load();
     } catch { showToast("Failed."); setConfirm(null); }
+  };
+
+  const handleTerminate = async () => {
+    if (!terminateConfirm) return;
+    try {
+      await axiosClient.delete(`/auth/admin/users/${terminateConfirm.id}/terminate/`);
+      showToast(`${terminateConfirm.name} permanently terminated.`);
+      setTerminateConfirm(null); load();
+    } catch (e) {
+      showToast(e.response?.data?.error || "Termination failed.");
+      setTerminateConfirm(null);
+    }
   };
 
   const filtered = admins.filter(u =>
@@ -4408,6 +4489,13 @@ function BranchAdminUsersTab({ branches }) {
                     Activate
                   </button>
                 )}
+                <button
+                  onClick={() => setTerminateConfirm(u)}
+                  className="adm-btn adm-btn-sm adm-btn-danger"
+                  style={{ fontSize:".6875rem", padding:"4px 10px", background:"rgba(226,75,74,.12)", color:"var(--err)", borderColor:"rgba(226,75,74,.3)" }}
+                  title="Permanently remove all personal data">
+                  Terminate
+                </button>
               </div>
             </div>
           ))}
@@ -4426,6 +4514,22 @@ function BranchAdminUsersTab({ branches }) {
             <div style={{ display:"flex", gap:8 }}>
               <button onClick={handleDeactivate} className="adm-btn adm-btn-primary" style={{ flex:1, background:"var(--err)", justifyContent:"center" }}>Deactivate</button>
               <button onClick={() => setConfirm(null)} className="adm-btn adm-btn-ghost" style={{ flex:1, justifyContent:"center" }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm terminate */}
+      {terminateConfirm && (
+        <div className="adm-confirm" onClick={() => setTerminateConfirm(null)}>
+          <div className="adm-confirm-box" onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily:"var(--font-display)", fontSize:"1.0625rem", fontWeight:700, marginBottom:8, color:"var(--err)" }}>Permanently terminate account?</h3>
+            <p style={{ fontSize:".9375rem", color:"var(--t3)", marginBottom:12, lineHeight:1.6 }}>
+              <strong>{terminateConfirm.name}</strong> ({terminateConfirm.email}) — all personal data will be removed. Their work history is preserved but identity is anonymised. <strong style={{ color:"var(--err)" }}>This cannot be undone.</strong>
+            </p>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={handleTerminate} className="adm-btn adm-btn-primary" style={{ flex:1, background:"var(--err)", justifyContent:"center" }}>Terminate permanently</button>
+              <button onClick={() => setTerminateConfirm(null)} className="adm-btn adm-btn-ghost" style={{ flex:1, justifyContent:"center" }}>Cancel</button>
             </div>
           </div>
         </div>
@@ -5474,6 +5578,8 @@ function SANotificationBell() {
 export function SuperAdminDashboard() {
   const statsRef = useRef(null);
   const [ToastEl, showToast] = useToast();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const location = useLocation();
   const _INLINE_TABS = ["dashboard","branches","sa-orders","payments","users","stock","redemptions","export","staff","admins","login-records","reviews","offers","reports","settings","guide"];
@@ -5483,6 +5589,7 @@ export function SuperAdminDashboard() {
   const [tab,          setTab]          = useState(_INLINE_TABS.includes(_urlSeg) ? _urlSeg : "dashboard");
   const [loading,      setLoading]      = useState(true);
   const [sidebarOpen,  setSidebarOpen]  = useState(false);
+  const [showTop,      setShowTop]      = useState(false);
 
   const [branchModal,     setBranchModal]     = useState(false);
   const [editingBranchId, setEditingBranchId] = useState(null); // null = create, UUID string = edit
@@ -5525,6 +5632,12 @@ export function SuperAdminDashboard() {
       );
     }
   }, [loading, tab]);
+
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 400);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const handleCreateBranch = async e => {
     e.preventDefault();
@@ -5607,24 +5720,37 @@ export function SuperAdminDashboard() {
   };
 
   const SA_TABS = [
+    { group:"Overview" },
     { key:"dashboard",     icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>, label:"Dashboard" },
+
+    { group:"Operations" },
     { key:"branches",      icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>, label:"Branches" },
     { key:"sa-orders",     icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>, label:"Orders" },
     { key:"payments",      icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>, label:"Payments" },
-    { key:"users",         icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>, label:"Users" },
     { key:"stock",         icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>, label:"Stock" },
-    { key:"redemptions",   icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>, label:"Redemptions" },
     { key:"export",        icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>, label:"Export" },
+
+    { group:"Users & Access" },
+    { key:"users",         icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>, label:"Users" },
     { key:"staff",          icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label:"Staff" },
     { key:"admins",         icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>, label:"Admins" },
     { key:"login-records",  icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>, label:"Login Records" },
-    { key:"reviews",        icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>, label:"Reviews" },
-    { key:"offers",  isLink:true, to:"/admin/offers", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>, label:"Offers" },
+    { key:"redemptions",   icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>, label:"Redemptions" },
+
+    { group:"Content" },
     { key:"menu",    isLink:true, to:"/admin/menu", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>, label:"Menu" },
-    { key:"reports", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:"Analytics" },
+    { key:"offers",  isLink:true, to:"/admin/offers", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>, label:"Offers" },
+    { key:"reviews",        icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>, label:"Reviews" },
+
+    { group:"Marketing" },
     { key:"whatsapp",  isLink:true, to:"/superadmin/whatsapp",  icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>, label:"WhatsApp" },
     { key:"broadcast", isLink:true, to:"/superadmin/broadcast", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" strokeLinecap="round"/></svg>, label:"Broadcast" },
     { key:"support",  icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>, label:"Support" },
+
+    { group:"Reports" },
+    { key:"reports", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:"Analytics" },
+
+    { group:"System" },
     { key:"settings", icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>, label:"Settings" },
     { key:"guide",    icon:<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="3" strokeLinecap="round"/></svg>, label:"User Guide" },
   ];
@@ -5649,25 +5775,41 @@ export function SuperAdminDashboard() {
             </div>
           </div>
           <nav className="adm-sidebar-nav">
-            {SA_TABS.map(t => t.isLink ? (
-              <Link key={t.key} to={t.to}
-                className="adm-sidebar-item"
-                style={{ textDecoration:"none" }}
-                onClick={() => setSidebarOpen(false)}>
-                <span className="adm-sidebar-icon">{t.icon}</span>
-                {t.label}
-                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft:"auto", opacity:.5 }}>
-                  <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </Link>
-            ) : (
-              <button key={t.key} type="button"
-                className={"adm-sidebar-item" + (tab===t.key ? " active" : "")}
-                onClick={() => { setTab(t.key); setSidebarOpen(false); window.scrollTo({ top:0, behavior:"instant" }); }}>
-                <span className="adm-sidebar-icon">{t.icon}</span>
-                {t.label}
-              </button>
-            ))}
+            {SA_TABS.map((t, i) => {
+              if (t.group) return (
+                <div key={`g${i}`} style={{ fontSize:".5625rem", fontWeight:800, letterSpacing:".09em", textTransform:"uppercase", color:"var(--t4)", padding:"14px 16px 4px", userSelect:"none" }}>{t.group}</div>
+              );
+              if (t.isLink) return (
+                <Link key={t.key} to={t.to}
+                  className="adm-sidebar-item"
+                  style={{ textDecoration:"none" }}
+                  onClick={() => setSidebarOpen(false)}>
+                  <span className="adm-sidebar-icon">{t.icon}</span>
+                  {t.label}
+                  <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft:"auto", opacity:.5 }}>
+                    <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </Link>
+              );
+              return (
+                <button key={t.key} type="button"
+                  className={"adm-sidebar-item" + (tab===t.key ? " active" : "")}
+                  onClick={() => { setTab(t.key); setSidebarOpen(false); window.scrollTo({ top:0, behavior:"instant" }); }}>
+                  <span className="adm-sidebar-icon">{t.icon}</span>
+                  {t.label}
+                </button>
+              );
+            })}
+            <div style={{ margin:"8px 12px 4px", borderTop:"1px solid var(--bd)" }}/>
+            <button type="button"
+              className="adm-sidebar-item"
+              style={{ color:"var(--err)" }}
+              onClick={async () => { setSidebarOpen(false); await logout(); navigate("/login/admin"); }}>
+              <span className="adm-sidebar-icon">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" strokeLinecap="round"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </span>
+              Sign out
+            </button>
           </nav>
         </aside>
 
@@ -5776,22 +5918,22 @@ export function SuperAdminDashboard() {
 
               {/* Quick actions */}
               <h2 style={{ fontFamily:"var(--font-display)", fontSize:"1rem", fontWeight:800, marginBottom:12, marginTop:20 }}>Quick actions</h2>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:8, marginBottom:24 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))", gap:8, marginBottom:24 }}>
                 {[
-                  { label:"Branches",    icon:"🏪", action:()=>setTab("branches")       },
-                  { label:"Orders",      icon:"📋", action:()=>setTab("sa-orders")      },
-                  { label:"Staff list",  icon:"👥", action:()=>setTab("staff")          },
-                  { label:"Admins",      icon:"🔑", action:()=>setTab("admins")         },
-                  { label:"Payments",    icon:"💳", action:()=>setTab("payments")       },
-                  { label:"Analytics",   icon:"📊", action:()=>setTab("reports")        },
-                  { label:"Reviews",     icon:"⭐", action:()=>setTab("reviews")        },
-                  { label:"Offers",      icon:"🏷",  action:()=>setTab("offers")         },
+                  { label:"Branches",   icon:<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>, action:()=>setTab("branches")  },
+                  { label:"Orders",     icon:<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>, action:()=>setTab("sa-orders") },
+                  { label:"Staff",      icon:<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, action:()=>setTab("staff")     },
+                  { label:"Admins",     icon:<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>, action:()=>setTab("admins")    },
+                  { label:"Payments",   icon:<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>, action:()=>setTab("payments")  },
+                  { label:"Analytics",  icon:<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, action:()=>setTab("reports")   },
+                  { label:"Reviews",    icon:<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>, action:()=>setTab("reviews")   },
+                  { label:"Offers",     icon:<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="3" strokeLinecap="round"/></svg>, action:()=>setTab("offers")    },
                 ].map(a => (
                   <button key={a.label} onClick={a.action}
-                    style={{ padding:"14px 12px", borderRadius:10, border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", textAlign:"left", transition:"all 160ms", display:"flex", flexDirection:"column", gap:6 }}
+                    style={{ padding:"14px 12px", borderRadius:10, border:"1px solid var(--bd)", background:"var(--bg2)", cursor:"pointer", textAlign:"left", transition:"all 160ms", display:"flex", flexDirection:"column", gap:8 }}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--brand)";e.currentTarget.style.background="var(--brand-tint, rgba(232,73,15,.05))";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--bd)";e.currentTarget.style.background="var(--bg2)";}}>
-                    <span style={{ fontSize:"1.25rem", lineHeight:1 }}>{a.icon}</span>
+                    <span style={{ display:"flex", color:"var(--brand)" }}>{a.icon}</span>
                     <span style={{ fontSize:".8125rem", fontWeight:700, color:"var(--t1)" }}>{a.label}</span>
                   </button>
                 ))}
@@ -5870,6 +6012,16 @@ export function SuperAdminDashboard() {
         </div>{/* /adm-content */}
         </div>{/* /adm-main */}
       </div>{/* /adm-shell--row */}
+
+      {/* Go-to-top button */}
+      {showTop && (
+        <button
+          onClick={() => window.scrollTo({ top:0, behavior:"smooth" })}
+          style={{ position:"fixed", bottom:24, right:24, zIndex:200, width:44, height:44, borderRadius:"50%", border:"1px solid var(--bd)", background:"var(--bg2)", color:"var(--t2)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 16px rgba(0,0,0,.15)", transition:"all 160ms" }}
+          title="Back to top">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 15l7-7 7 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+      )}
 
       {/* ── Create / Edit Branch Modal ── */}
       <Modal

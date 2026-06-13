@@ -523,7 +523,7 @@ export default function App() {
           <Route path="/menu"                element={<PG C={HomePage} />} />
           <Route path="/menu/search"         element={<PG C={SearchPage} />} />
           <Route path="/menu/browse"         element={<PG C={SearchPage} />} />
-          <Route path="/menu/all"            element={<PG C={ProductListPage} />} />
+          <Route path="/menu/all"            element={<Navigate to="/menu/search" replace />} />
           <Route path="/menu/category/:slug" element={<PG C={ProductListPage} />} />
           <Route path="/menu/item/:slug"     element={<PG C={ProductDetailPage} />} />
           <Route path="/menu/product/:slug"  element={<PG C={ProductDetailPage} />} />

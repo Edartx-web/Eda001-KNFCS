@@ -520,7 +520,7 @@ export default function Header() {
             {isAdminRole && user && (
               <button
                 className="hdr-admin-logout"
-                onClick={async () => { await logout(); navigate("/"); }}
+                onClick={async () => { const r = userRole; await logout(); navigate(r === "staff" ? "/login/staff" : r === "customer" ? "/login" : "/login/admin"); }}
                 title="Sign out"
                 style={{
                   width:"36px", height:"36px", borderRadius:"var(--r2)",
@@ -663,7 +663,7 @@ export default function Header() {
           {/* Logout button — shown for logged-in staff/admin/customer */}
           {user && (
             <button
-              onClick={async () => { setDrawer(false); await logout(); navigate("/"); }}
+              onClick={async () => { setDrawer(false); const r = userRole; await logout(); navigate(r === "staff" ? "/login/staff" : r === "customer" ? "/login" : "/login/admin"); }}
               style={{ width:"100%", padding:"10px", borderRadius:"var(--r3)", border:"1px solid var(--err-t)", background:"transparent", color:"var(--err)", fontSize:".875rem", fontWeight:700, cursor:"pointer", fontFamily:"var(--ff-b)", display:"flex", alignItems:"center", justifyContent:"center", gap:"var(--s2)", transition:"all var(--d1) var(--ease)", marginTop:"var(--s1)" }}
               onMouseEnter={e=>{e.currentTarget.style.background="var(--err-t)";}}
               onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
