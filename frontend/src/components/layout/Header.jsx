@@ -265,7 +265,7 @@ export default function Header() {
                   </span>
                 ))}
               </div>
-              <div style={{ fontSize:".5625rem", fontWeight:600, color:"var(--t2)", letterSpacing:".08em", textTransform:"uppercase", lineHeight:1, marginTop:"2px" }}>Fried Chicken</div>
+              <div className="hdr-logo-sub" style={{ fontSize:".5625rem", fontWeight:600, color:"var(--t2)", letterSpacing:".08em", textTransform:"uppercase", lineHeight:1, marginTop:"2px" }}>Fried Chicken</div>
             </div>
           </Link>
 

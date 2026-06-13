@@ -343,6 +343,7 @@ body.nav-open .mob-tabbar { display:none !important }
 /* Header nav classes */
 .hdr-logo       { display:flex; align-items:center; gap:var(--s2); flex-shrink:0 }
 .hdr-logo-mark  { width:36px; height:36px; border-radius:10px; background:var(--brand); display:flex; align-items:center; justify-content:center; box-shadow:var(--sh-br); flex-shrink:0 }
+.hdr-logo-sub   { display:none }   /* "Fried Chicken" subtitle — hidden mobile, shown ≥640px */
 .hdr-actions    { display:flex; align-items:center; gap:var(--s2); flex-shrink:0 }
 .hdr-spacer     { flex:1 }
 .hdr-nav        { display:none; align-items:center; gap:2px; margin-left:var(--s3) }
@@ -350,6 +351,11 @@ body.nav-open .mob-tabbar { display:none !important }
 .hdr-open-chip  { display:none }
 .cart-txt       { display:none }
 .hdr-hamburger  { display:flex; align-items:center; justify-content:center }
+/* Branch mob button: visible on mobile, hidden at desktop (chip takes over) */
+.hdr-branch-mob { display:flex }
+@media(min-width:1024px){ .hdr-branch-mob { display:none !important } }
+/* Show logo subtitle only on wider screens */
+@media(min-width:640px) { .hdr-logo-sub { display:block } }
 
 @media (min-width:1024px) {
   .page-wrap    { padding:var(--s8) var(--s8) }

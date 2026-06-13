@@ -17,7 +17,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.core.cache import cache
 
 from apps.menu.models import MenuCategory, MenuItem, ItemReview
@@ -232,7 +232,17 @@ class HomeSectionsView(APIView):
 
         sections = {}
         for flag in self.SECTION_FLAGS:
-            items = list(base_qs.filter(**{flag: True}).order_by("display_order")[: self.PAGE_SIZE])
+            items = list(
+                base_qs.filter(**{flag: True})
+                .annotate(
+                    order_count=Count(
+                        "order_items",
+                        filter=Q(order_items__order__branch_id=branch_id),
+                        distinct=True,
+                    )
+                )
+                .order_by("-order_count", "display_order")[: self.PAGE_SIZE]
+            )
             if items:
                 sections[flag] = MenuItemListSerializer(items, many=True, context={"request": request}).data
 
@@ -296,8 +306,14 @@ class FeaturedItemsView(APIView):
                 Q(branch_id=branch_id) | Q(all_branches=True),
                 is_featured=True,
                 is_available=True,
+            ).annotate(
+                order_count=Count(
+                    "order_items",
+                    filter=Q(order_items__order__branch_id=branch_id),
+                    distinct=True,
+                )
             ).select_related("category").prefetch_related("offers", "stock_records")
-             .order_by("display_order")[:8])
+             .order_by("-order_count", "display_order")[:8])
             feat_cached = MenuItemListSerializer(featured, many=True, context={"request": request}).data
             cache.set(feat_cache_key, feat_cached, 90)
 
@@ -483,8 +499,14 @@ class HomeBundleView(APIView):
         featured = list(MenuItem.objects.filter(
             Q(branch_id=branch_id) | Q(all_branches=True),
             is_featured=True, is_available=True,
+        ).annotate(
+            order_count=Count(
+                "order_items",
+                filter=Q(order_items__order__branch_id=branch_id),
+                distinct=True,
+            )
         ).select_related("category").prefetch_related("offers", "stock_records")
-         .order_by("display_order")[:8])
+         .order_by("-order_count", "display_order")[:8])
         data = MenuItemListSerializer(featured, many=True, context={"request": request}).data
         cache.set(key, data, 90)
         return data
@@ -505,7 +527,17 @@ class HomeBundleView(APIView):
             base_qs = base_qs.exclude(all_branches=True, name__in=branch_item_names)
         sections = {}
         for flag in self._SECTION_FLAGS:
-            items = list(base_qs.filter(**{flag: True}).order_by("display_order")[:10])
+            items = list(
+                base_qs.filter(**{flag: True})
+                .annotate(
+                    order_count=Count(
+                        "order_items",
+                        filter=Q(order_items__order__branch_id=branch_id),
+                        distinct=True,
+                    )
+                )
+                .order_by("-order_count", "display_order")[:10]
+            )
             if items:
                 sections[flag] = MenuItemListSerializer(items, many=True, context={"request": request}).data
         cache.set(key, sections, 60)

@@ -42,6 +42,24 @@ const Ic = {
 };
 
 /* ── helpers ──────────────────────────────────────────────────────────────── */
+
+// Seeded daily shuffle — order changes once per day, consistent within the day.
+// Top-3 items (most ordered) are kept in place; the rest are shuffled.
+function dailyShuffle(arr) {
+  if (!arr?.length) return arr || [];
+  let h = 0;
+  const seed = new Date().toDateString(); // e.g. "Sat Jun 14 2026" — changes daily
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  const top  = arr.slice(0, 3);               // keep top 3 (most ordered) in place
+  const rest = [...arr.slice(3)];
+  for (let i = rest.length - 1; i > 0; i--) {
+    h = (Math.imul(1664525, h) + 1013904223) | 0;
+    const j = Math.abs(h) % (i + 1);
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+  return [...top, ...rest];
+}
+
 function formatNextOpen(isoStr) {
   if (!isoStr) return null;
   const d   = new Date(isoStr);
@@ -878,9 +896,10 @@ export default function HomePage() {
             </div>
             <div className="home-section-row">
               {(() => {
-                const n = Math.min(featured.length, 8);
+                const shuffled = dailyShuffle(featured);
+                const n = Math.min(shuffled.length, 8);
                 const show = Math.floor(n / 4) * 4 || Math.min(n, 4);
-                return featured.slice(0, show).map((item,i) => <ProductCard key={item.id} item={item} rank={i+1}/>);
+                return shuffled.slice(0, show).map((item,i) => <ProductCard key={item.id} item={item} rank={i+1}/>);
               })()}
             </div>
           </section>
@@ -908,8 +927,9 @@ export default function HomePage() {
 
         {/* 12. THEMED SECTIONS */}
         {THEMED_SECTIONS.map(({flag,label,accent,filterParam}) => {
-          const items = sectionItems[flag];
-          if (!items?.length) return null;
+          const rawItems = sectionItems[flag];
+          if (!rawItems?.length) return null;
+          const items = flag === "is_hotdeals" ? dailyShuffle(rawItems) : rawItems;
           const secImg = siteConfig?.config?.home_section_images?.[flag] || {};
           // auto-fallback: use first item with an image as the section banner
           const autoImg = !secImg.image_url ? (items.find(i => i.image_url)?.image_url || null) : null;
