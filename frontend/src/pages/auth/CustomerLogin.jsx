@@ -44,14 +44,24 @@ const FlameIcon = () => (
 );
 
 /* ─── Flip Logo ───────────────────────────────────────────────── */
-function FlipLogo() {
-  const [flipped, setFlipped] = React.useState(false);
+const FLIP_ICONS = [
+  { src:"/icons/chicken.svg",  bg:"linear-gradient(135deg,#2d0e00 0%,#7a2e00 60%,#E8521A 100%)" },
+  { src:"/icons/burger.svg",   bg:"linear-gradient(135deg,#1a0030 0%,#4a0080 60%,#8800ee 100%)" },
+  { src:"/icons/fries.svg",    bg:"linear-gradient(135deg,#1a1000 0%,#4a3000 60%,#c87800 100%)" },
+  { src:"/icons/colddrink.svg",bg:"linear-gradient(135deg,#001020 0%,#003060 60%,#0066cc 100%)" },
+];
 
-  // Auto-flip every 2.8 s
+function FlipLogo() {
+  const [count, setCount] = React.useState(0);
+
+  // Increment every 2.8 s — odd count = flipped to back, even = front
   React.useEffect(() => {
-    const t = setInterval(() => setFlipped(f => !f), 2800);
+    const t = setInterval(() => setCount(c => c + 1), 2800);
     return () => clearInterval(t);
   }, []);
+
+  const flipped  = count % 2 === 1;
+  const iconData = FLIP_ICONS[Math.floor(count / 2) % FLIP_ICONS.length];
 
   return (
     <>
@@ -90,21 +100,18 @@ function FlipLogo() {
               style={{ objectFit:"contain", borderRadius:"12px" }}/>
           </div>
 
-          {/* Back — Fried Chicken SVG */}
+          {/* Back — cycles through food icons on each flip */}
           <div className="flip-face flip-face-back" style={{
-            background: "linear-gradient(135deg,#2d0e00 0%,#7a2e00 60%,#E8521A 100%)",
+            background: iconData.bg,
             animation: "knfc-glow-pulse 2.8s ease-in-out infinite",
             padding: "10px",
           }}>
             <img
-              src="/assets/fried-chicken.svg"
-              alt="Fried Chicken"
+              src={iconData.src}
+              alt=""
               width="68"
               height="68"
-              style={{
-                objectFit: "contain",
-                filter: "brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%)",
-              }}
+              style={{ objectFit:"contain" }}
             />
           </div>
         </div>
@@ -114,10 +121,10 @@ function FlipLogo() {
 }
 
 const BRAND_DATA = [
-  { char: "K", icon: <DrumstickIcon /> },
-  { char: "N", icon: <BurgerIcon /> },
-  { char: "F", icon: <DrinkIcon /> },
-  { char: "C", icon: <FriesIcon /> },
+  { char: "K", icon: <img src="/icons/chicken.svg"   alt="" width="22" height="22" style={{ objectFit:"contain", display:"block" }} /> },
+  { char: "N", icon: <img src="/icons/burger.svg"    alt="" width="22" height="22" style={{ objectFit:"contain", display:"block" }} /> },
+  { char: "F", icon: <img src="/icons/colddrink.svg" alt="" width="22" height="22" style={{ objectFit:"contain", display:"block" }} /> },
+  { char: "C", icon: <img src="/icons/fries.svg"     alt="" width="22" height="22" style={{ objectFit:"contain", display:"block" }} /> },
 ];
 
 const PHONE_CODE = "+91";

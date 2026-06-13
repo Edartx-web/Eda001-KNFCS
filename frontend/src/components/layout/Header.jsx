@@ -44,8 +44,13 @@ const NAV = {
   super_admin:  [], // SuperAdmin uses sidebar navigation inside SuperAdminDashboard
 };
 
-/* ── Logo: one-letter-at-a-time emoji flip (K→🍗 N→🍔 F→🥤 C→🌶️) ──────── */
-const LETTER_EMOJIS = ["🍗","🍔","🥤","🌶️"];
+/* ── Logo: one-letter-at-a-time icon flip (K→Chicken N→Burger F→Colddrink C→Fries) */
+const LETTER_ICONS = [
+  "/icons/chicken.svg",    // K
+  "/icons/burger.svg",     // N
+  "/icons/colddrink.svg",  // F
+  "/icons/fries.svg",      // C
+];
 
 /* ── Icons ──────────────────────────────────────────────────────────────── */
 const LogoIcon = () => <img src="/KNFC-logo.svg" alt="KNFC" width="44" height="44" style={{ objectFit:"contain", borderRadius:"10px", boxShadow:"0 0 0 2px rgba(232,82,26,.22), 0 2px 10px rgba(232,82,26,.18)" }} />;
@@ -260,7 +265,11 @@ export default function Header() {
                       <span style={{
                         position:"absolute", left:0, top:0, pointerEvents:"none",
                         animation:"letterFlipIn .25s ease forwards",
-                      }}>{LETTER_EMOJIS[i]}</span>
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                      }}>
+                        <img src={LETTER_ICONS[i]} alt="" width="18" height="18"
+                          style={{ objectFit:"contain", display:"block" }} />
+                      </span>
                     )}
                   </span>
                 ))}
