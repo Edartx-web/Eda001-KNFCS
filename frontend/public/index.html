@@ -3,31 +3,36 @@
   <head>
     <meta charset="utf-8" />
 
-    <!-- ── Viewport: lock zoom on all browsers ───────────────────────── -->
+    <!-- ── Viewport: lock zoom on all browsers, safe-area for notches ──── -->
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0, minimum-scale=1.0,
                    maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
-    <!-- ── Primary SEO ───────────────────────────────────────────────── -->
+    <!-- ── Color scheme (macOS dark mode aware) ─────────────────────────── -->
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
+
+    <!-- ── Primary SEO ───────────────────────────────────────────────────── -->
     <title>KNFC Fried Chicken — Fresh, Crispy &amp; Delivered Hot</title>
     <meta name="description"
-          content="KNFC Fried Chicken — India's crispiest fried chicken. Order online for delivery, takeaway or dine-in. Fresh chicken, bold flavours, hot &amp; fast. Order now!" />
+          content="KNFC Fried Chicken — India's crispiest fried chicken. Order online for delivery, takeaway or dine-in. Fresh chicken, bold flavours, hot &amp; fast. Best fried chicken near you!" />
     <meta name="keywords"
-          content="KNFC, KNFC Fried Chicken, fried chicken, crispy chicken, chicken order online, chicken delivery, best fried chicken India, KFC alternative, fried chicken near me" />
+          content="KNFC, KNFC Fried Chicken, KNFC chicken, KNFC order online, KNFC menu, knfcs.com, fried chicken, crispy chicken, chicken order online, chicken delivery, best fried chicken India, fried chicken near me, chicken burger, chicken snacks, chicken combo, cold drinks, KFC alternative, fast food India, Indian fried chicken, crispy chicken burger, chicken takeaway, chicken dine in" />
     <meta name="author"        content="KNFC Fried Chicken" />
     <meta name="robots"        content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
     <meta name="googlebot"     content="index, follow" />
+    <meta name="bingbot"       content="index, follow" />
     <link rel="canonical"      href="https://knfcs.com/" />
 
-    <!-- ── Geographic / Local SEO ────────────────────────────────────── -->
+    <!-- ── Geographic / Local SEO ─────────────────────────────────────────  -->
     <meta name="geo.region"    content="IN" />
     <meta name="geo.placename" content="India" />
     <meta name="language"      content="en-IN" />
     <meta name="rating"        content="general" />
     <meta name="revisit-after" content="3 days" />
 
-    <!-- ── Open Graph (Facebook / WhatsApp / LinkedIn) ───────────────── -->
-    <meta property="og:type"         content="restaurant" />
+    <!-- ── Open Graph (Facebook / WhatsApp / LinkedIn) ────────────────────  -->
+    <meta property="og:type"         content="website" />
     <meta property="og:site_name"    content="KNFC Fried Chicken" />
     <meta property="og:title"        content="KNFC Fried Chicken — Fresh, Crispy &amp; Delivered Hot" />
     <meta property="og:description"  content="India's crispiest fried chicken. Order online for delivery, takeaway or dine-in. Fresh chicken, bold flavours, hot &amp; fast." />
@@ -38,40 +43,51 @@
     <meta property="og:image:alt"    content="KNFC Fried Chicken — crispy golden chicken" />
     <meta property="og:locale"       content="en_IN" />
 
-    <!-- ── Twitter / X Card ──────────────────────────────────────────── -->
+    <!-- ── Twitter / X Card ─────────────────────────────────────────────── -->
     <meta name="twitter:card"        content="summary_large_image" />
     <meta name="twitter:site"        content="@KNFCChicken" />
     <meta name="twitter:title"       content="KNFC Fried Chicken — Fresh, Crispy &amp; Delivered Hot" />
     <meta name="twitter:description" content="India's crispiest fried chicken. Order online for delivery, takeaway or dine-in. Fresh chicken, bold flavours, hot &amp; fast." />
     <meta name="twitter:image"       content="https://knfcs.com/og-image.jpg" />
 
-    <!-- ── Apple / iOS ───────────────────────────────────────────────── -->
+    <!-- ── Apple / iOS / macOS ───────────────────────────────────────────── -->
     <meta name="mobile-web-app-capable"                content="yes" />
     <meta name="apple-mobile-web-app-capable"          content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title"            content="KNFC" />
-    <link rel="apple-touch-icon"    href="%PUBLIC_URL%/apple-touch-icon.png" />
+    <link rel="apple-touch-icon"              href="%PUBLIC_URL%/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/apple-touch-icon.png" />
+    <!-- Safari pinned tab (macOS) -->
+    <link rel="mask-icon" href="%PUBLIC_URL%/safari-pinned-tab.svg" color="#E8521A" />
 
-    <!-- ── Microsoft / Windows ───────────────────────────────────────── -->
+    <!-- ── Microsoft / Windows ───────────────────────────────────────────── -->
     <meta name="msapplication-TileColor"   content="#E8521A" />
     <meta name="msapplication-TileImage"   content="%PUBLIC_URL%/android-chrome-192x192.png" />
     <meta name="msapplication-config"      content="%PUBLIC_URL%/browserconfig.xml" />
+    <meta name="application-name"          content="KNFC Fried Chicken" />
 
-    <!-- ── Theme & Brand colour ──────────────────────────────────────── -->
+    <!-- ── Theme & Brand colour ──────────────────────────────────────────── -->
     <meta name="theme-color"               content="#E8521A" />
 
-    <!-- ── Favicons ──────────────────────────────────────────────────── -->
+    <!-- ── Favicons ──────────────────────────────────────────────────────── -->
     <link rel="icon"       type="image/x-icon" href="%PUBLIC_URL%/favicon.ico" />
     <link rel="icon"       type="image/png" sizes="32x32" href="%PUBLIC_URL%/favicon-32x32.png" />
     <link rel="icon"       type="image/png" sizes="16x16" href="%PUBLIC_URL%/favicon-16x16.png" />
     <link rel="manifest"   href="%PUBLIC_URL%/site.webmanifest" />
 
-    <!-- ── Preconnect for performance (helps Core Web Vitals → ranking) ─ -->
+    <!-- ── Preconnect / DNS prefetch for performance (Core Web Vitals) ───── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="dns-prefetch" href="https://api.knfcs.com" />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
 
-    <!-- ── JSON-LD: Restaurant + LocalBusiness structured data ───────── -->
+    <!-- ── Google Search Console verification ─────────────────────────────  -->
+    <!-- Replace token value after verifying in Google Search Console -->
+    <!-- <meta name="google-site-verification" content="REPLACE_WITH_YOUR_TOKEN" /> -->
+
+    <!-- ── JSON-LD: Restaurant + LocalBusiness + FAQ structured data ───────  -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -80,14 +96,18 @@
           "@type": ["Restaurant", "LocalBusiness", "FoodEstablishment"],
           "@id": "https://knfcs.com/#restaurant",
           "name": "KNFC Fried Chicken",
-          "alternateName": "KNFC",
+          "alternateName": ["KNFC", "KNFC Chicken", "KNFC Fried Chicken"],
           "description": "India's crispiest fried chicken. Fresh, bold flavours. Order online for delivery, takeaway or dine-in.",
           "url": "https://knfcs.com/",
-          "logo": "https://knfcs.com/android-chrome-512x512.png",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://knfcs.com/android-chrome-512x512.png",
+            "width": 512,
+            "height": 512
+          },
           "image": "https://knfcs.com/og-image.jpg",
-          "telephone": "",
           "email": "CustomerSupportKNFC@gmail.com",
-          "servesCuisine": ["Fried Chicken", "Fast Food", "American", "Indian Fast Food"],
+          "servesCuisine": ["Fried Chicken", "Fast Food", "American", "Indian Fast Food", "Chicken Burgers", "Snacks"],
           "priceRange": "₹₹",
           "currenciesAccepted": "INR",
           "paymentAccepted": ["Cash", "UPI", "Credit Card", "Debit Card"],
@@ -110,7 +130,9 @@
               "urlTemplate": "https://knfcs.com/menu",
               "actionPlatform": [
                 "https://schema.org/DesktopWebPlatform",
-                "https://schema.org/MobileWebPlatform"
+                "https://schema.org/MobileWebPlatform",
+                "https://schema.org/IOSPlatform",
+                "https://schema.org/AndroidPlatform"
               ]
             },
             "deliveryMethod": ["http://purl.org/goodrelations/v1#DeliveryModePickUp"],
@@ -132,13 +154,71 @@
             "target": "https://knfcs.com/menu/all?search={search_term_string}",
             "query-input": "required name=search_term_string"
           }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Home",   "item": "https://knfcs.com/" },
+            { "@type": "ListItem", "position": 2, "name": "Menu",   "item": "https://knfcs.com/menu" },
+            { "@type": "ListItem", "position": 3, "name": "Offers", "item": "https://knfcs.com/offers" }
+          ]
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is KNFC Fried Chicken?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "KNFC Fried Chicken is India's crispy fried chicken brand. We serve fresh, golden-fried chicken — burgers, combos, snacks, and cold drinks — available for delivery, takeaway, and dine-in."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I order from KNFC?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "You can order directly on our website at knfcs.com. Browse the menu, add items to your cart, and place your order online for quick delivery or pickup."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What does KNFC stand for?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "KNFC stands for KNFC Fried Chicken — our brand name. We are a multi-branch fried chicken chain serving fresh, crispy chicken across India."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What items are on the KNFC menu?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "KNFC menu includes crispy fried chicken, chicken burgers, combo meals, snacks, cold drinks, and hot deals. Visit knfcs.com/menu to see all items and current offers."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What are KNFC's opening hours?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "KNFC is open every day from 9:00 AM to 10:00 PM. You can order online anytime on our website at knfcs.com."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is KNFC better than KFC?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "KNFC Fried Chicken is an Indian fried chicken brand known for its fresh, crispy chicken made with bold Indian flavours. Try it yourself at knfcs.com and taste the difference!"
+              }
+            }
+          ]
         }
       ]
     }
     </script>
-
-    <!-- ── Google Search Console verification (replace token) ────────── -->
-    <!-- <meta name="google-site-verification" content="REPLACE_WITH_YOUR_TOKEN" /> -->
   </head>
   <style>
     /* ── Prevent white flash before React CSS loads ── */

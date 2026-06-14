@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Chicken drumstick — monochrome, Safari uses fill colour from mask-icon attribute -->
+  <path fill="#000" d="
+    M72,8
+    C80,4 94,8 96,22
+    C98,34 88,44 78,50
+    L58,78
+    C54,86 44,92 34,88
+    C24,84 20,74 24,64
+    C28,56 38,52 48,56
+    L68,28
+    C66,18 64,12 72,8 Z
+  "/>
+  <ellipse fill="#000" cx="30" cy="78" rx="12" ry="8" transform="rotate(-20 30 78)"/>
+</svg>

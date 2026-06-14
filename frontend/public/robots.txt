@@ -15,6 +15,14 @@ Disallow: /spin
 # Allow key public pages explicitly
 Allow: /menu
 Allow: /menu/
+Allow: /menu/all
+Allow: /menu/category/
+Allow: /menu/category/chicken
+Allow: /menu/category/burgers
+Allow: /menu/category/combos
+Allow: /menu/category/snacks
+Allow: /menu/category/cold-drinks
+Allow: /menu/category/hot-deals
 Allow: /offers
 Allow: /about
 Allow: /contact
