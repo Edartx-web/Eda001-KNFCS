@@ -18,6 +18,7 @@ export const searchItems       = (q) => axiosClient.get(`/menu/search/?branch_id
 export const getFavourites     = () => axiosClient.get("/menu/favourites/");
 export const getHomeSections   = () => axiosClient.get(`/menu/home-sections/?branch_id=${BID()}`);
 export const getHomeBundle     = () => axiosClient.get(`/menu/home-bundle/?branch_id=${BID()}`);
+export const getMenuBundle     = (params) => axiosClient.get("/menu/menu-bundle/", { params: { branch_id: BID(), ...params } });
 export const toggleFavourite   = (id) => axiosClient.post("/menu/favourites/toggle/", { menu_item_id: id });
 
 export const submitReview = (menuItemId, rating, comment = '', photoFile = null, orderId = null) => {

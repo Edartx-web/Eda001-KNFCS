@@ -15,7 +15,7 @@ import useSEO from "../../hooks/useSEO";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { gsap } from "gsap";
 import AppLayout from "../../components/layout/AppLayout";
-import { getCategoryDetail, getCategories, getItems } from "../../api/menu";
+import { getMenuBundle } from "../../api/menu";
 import { formatPrice, formatUnit } from "../../utils/format";
 import { SORT_OPTIONS, DIETARY_DOT } from "../../utils/constants";
 import useCartStore from "../../store/cartStore";
@@ -365,26 +365,24 @@ export default function ProductListPage() {
   const cartCount = useCartStore(s => s.items.reduce((a, i) => a + i.quantity, 0));
   const cartTotal = useCartStore(s => s.items.reduce((a, i) => a + i.lineTotal, 0));
 
-  useEffect(() => {
-    getCategories().then(r => setAllCats(r.data.categories || [])).catch(() => {});
-  }, []);
-
+  // Single bundle call — replaces separate getCategories + getCategoryDetail + getItems.
+  // Reduces 2–3 HTTP round trips to 1 per page visit.
   useEffect(() => {
     const cacheKey = `plp:${slug}:${sort}:${isAllMode}:${sectionFilter}`;
     const cached   = _sc_get(cacheKey);
 
-    const applyData = (list, cat) => {
-      if (cat) setCategory(cat);
+    const applyData = (list, cat, cats) => {
+      if (cats?.length) setAllCats(cats);
+      if (cat)          setCategory(cat);
       setItems(list);
       setFiltered(list);
       setSwipeList(list);
     };
 
     if (cached) {
-      applyData(cached.items, cached.category);
+      applyData(cached.items, cached.category, cached.allCats);
       isInitialLoad.current = false;
       setLoading(false);
-      // silently re-fetch in background to keep cache fresh
     }
 
     const load = async () => {
@@ -394,14 +392,13 @@ export default function ProductListPage() {
         if (!isAllMode) params.category = slug;
         if (sectionFilter) params[sectionFilter] = "true";
 
-        const [catR, itemR] = await Promise.all([
-          isAllMode ? Promise.resolve(null) : getCategoryDetail(slug).catch(() => null),
-          getItems(params).catch(() => ({ data:{ items:[] } })),
-        ]);
-        const cat  = catR?.data?.category || null;
-        const list = itemR.data.items || [];
-        applyData(list, cat);
-        _sc_set(cacheKey, { items: list, category: cat });
+        const r    = await getMenuBundle(params).catch(() => null);
+        const cats = r?.data?.categories || [];
+        const cat  = r?.data?.category   || null;
+        const list = r?.data?.items       || [];
+
+        applyData(list, cat, cats);
+        _sc_set(cacheKey, { items: list, category: cat, allCats: cats });
       } finally {
         isInitialLoad.current = false;
         setLoading(false);

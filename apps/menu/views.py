@@ -55,10 +55,12 @@ def _bust_menu_cache(branch_id):
         cache.delete_pattern(f"menu:cat_detail:{branch_id}:*")
         cache.delete_pattern(f"menu:item_detail:{branch_id}:*")
         cache.delete_pattern(f"admin:menu:items:{branch_id}:*")
+        cache.delete_pattern(f"menu:menu_bundle:{branch_id}:*")
     except Exception:
         for sort in ("popular", "price_asc", "price_desc", "new"):
             cache.delete(f"menu:items:{branch_id}::{sort}:true:")
             cache.delete(f"menu:items:{branch_id}::{sort}:true:false")
+            cache.delete(f"menu:menu_bundle:{branch_id}::{sort}:")
 
 
 def _bust_all_branch_caches():
@@ -577,6 +579,104 @@ class HomeBundleView(APIView):
             "hours":       cache.get(f"branches:hours:{branch_id}") or {},
             "site_config": cache.get("site:config") or {},
         }, f"menu:home_bundle:{branch_id}", ttl=55)
+
+
+class MenuBundleView(APIView):
+    """
+    GET /api/v1/menu/menu-bundle/
+    Replaces 2–3 concurrent ProductListPage requests with a single round trip.
+
+    Params:
+      branch_id   — required
+      category    — category slug (optional; omit for all-items mode)
+      sort        — popular | price_asc | price_desc | new  (default: popular)
+      is_hotdeals / is_chicken / is_snacks / is_cold_drinks /
+      is_buckets  / is_combo  = true   (optional section filter)
+
+    Returns:
+      categories  — all active categories (used by the sticky category strip)
+      items       — sorted, filtered items (used by the product grid)
+      category    — category metadata dict (only included when ?category= provided)
+    """
+    permission_classes = [AllowAny]
+
+    SORT_MAP = {
+        "popular":    "-avg_rating",
+        "price_asc":  "price",
+        "price_desc": "-price",
+        "new":        "-created_at",
+    }
+    SECTION_FLAGS = (
+        "is_hotdeals", "is_chicken", "is_snacks",
+        "is_cold_drinks", "is_buckets", "is_combo",
+    )
+
+    def get(self, request):
+        branch_id = request.query_params.get("branch_id") or get_request_branch_id(request)
+        if not branch_id:
+            return err("branch_id is required.")
+
+        cat_slug = request.query_params.get("category", "")
+        sort     = request.query_params.get("sort", "popular")
+        flags    = ":".join(
+            f for f in self.SECTION_FLAGS
+            if request.query_params.get(f, "").lower() == "true"
+        )
+
+        cache_key = f"menu:menu_bundle:{branch_id}:{cat_slug}:{sort}:{flags}"
+        cached    = cache.get(cache_key)
+        if cached is not None:
+            return cached_ok(cached, cache_key, ttl=60)
+
+        # ── 1. Categories — reuse shared categories cache when warm ──────
+        cats_key   = f"menu:categories:{branch_id}"
+        categories = cache.get(cats_key)
+        if categories is None:
+            cat_qs = MenuCategory.objects.filter(
+                Q(branch_id=branch_id) | Q(all_branches=True),
+                is_active=True,
+            ).prefetch_related("items")
+            categories = list(
+                MenuCategoryListSerializer(cat_qs, many=True, context={"request": request}).data
+            )
+            cache.set(cats_key, categories, 120)
+
+        # ── 2. Items ─────────────────────────────────────────────────────
+        qs = MenuItem.objects.filter(
+            Q(branch_id=branch_id) | Q(all_branches=True),
+            is_available=True,
+        ).select_related("category").prefetch_related("offers", "stock_records")
+
+        # Dedup: branch-specific items take precedence over all_branches copies
+        branch_names = list(
+            MenuItem.objects.filter(branch_id=branch_id, all_branches=False)
+            .values_list("name", flat=True)
+        )
+        if branch_names:
+            qs = qs.exclude(all_branches=True, name__in=branch_names)
+
+        if cat_slug:
+            qs = qs.filter(category__slug=cat_slug)
+
+        for flag in self.SECTION_FLAGS:
+            if request.query_params.get(flag, "").lower() == "true":
+                qs = qs.filter(**{flag: True})
+
+        qs    = qs.order_by(self.SORT_MAP.get(sort, "display_order"))
+        items = list(MenuItemListSerializer(qs, many=True, context={"request": request}).data)
+
+        # ── 3. Category metadata — free: find in already-fetched list ────
+        category = (
+            next((c for c in categories if c.get("slug") == cat_slug), None)
+            if cat_slug else None
+        )
+
+        result = {"categories": categories, "items": items}
+        if category is not None:
+            result["category"] = category
+
+        cache.set(cache_key, result, 60)
+        return cached_ok(result, cache_key, ttl=60)
 
 
 class FavouriteToggleView(APIView):
